@@ -34,7 +34,7 @@ function GoogleAuthButtonActive({ onSuccess, disabled }: GoogleBtnProps) {
   // Em dev build (expo run:android / expo run:ios) o scheme "road-events" é registrado
   // e o Google Console deve ter "road-events://" como URI de redirecionamento autorizada.
   // No Expo Go use apenas e-mail/senha pois exp:// é rejeitado pelo Google OAuth.
-  const redirectUri = AuthSession.makeRedirectUri();
+  const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
 
   const [, response, promptAsync] = Google.useAuthRequest({
     webClientId:     web,
