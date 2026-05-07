@@ -1,0 +1,196 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useEventsStore } from '../store/eventsStore';
+import { RoadEvent, EVENT_CATEGORIES } from '../types';
+import { getCurrentUserId } from '../services/authService';
+import { timeAgo, timeLeft } from '../utils/time';
+import { t } from '../utils/i18n';
+import { useAppStore } from '../store/appStore';
+import { useUserLocation } from '../hooks/useUserLocation';
+import { rw, rh, rf, isTablet } from '../utils/responsive';
+
+function RoadEventCard({ event, onConfirm, onDeny }: {
+  event: RoadEvent;
+  onConfirm: (id: string) => void;
+  onDeny: (id: string) => void;
+}) {
+  const meta = EVENT_CATEGORIES[event.category];
+  const myUid = getCurrentUserId();
+  const alreadyVoted = event.voters.includes(myUid);
+  const isOwner = event.userId === myUid;
+  const blocked = alreadyVoted || isOwner;
+
+  return (
+    <View style={[styles.card, { borderLeftColor: meta.color }]}>
+      <View style={styles.cardHeader}>
+        <View style={[styles.iconBadge, { backgroundColor: meta.color + '22' }]}>
+          <Text style={styles.cardEmoji}>{meta.emoji}</Text>
+        </View>
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardTitle}>{event.title}</Text>
+          <Text style={styles.cardMeta}>
+            {meta.label}
+            {event.cityName ? ` · ${event.cityName}` : ''}
+            {event.stateUF ? ` — ${event.stateUF}` : ''}
+          </Text>
+        </View>
+      </View>
+
+      {event.description ? <Text style={styles.cardDesc}>{event.description}</Text> : null}
+
+      <View style={styles.cardFooter}>
+        <Text style={styles.cardTime}>{timeAgo(event.createdAt)}</Text>
+        <Text style={styles.cardExpiry}>{timeLeft(event.expiresAt)}</Text>
+      </View>
+
+      {alreadyVoted && (
+        <Text style={styles.votedLabel}>✅ {t('road_voted')}</Text>
+      )}
+      {isOwner && !alreadyVoted && (
+        <Text style={styles.votedLabel}>📌 {t('road_own')}</Text>
+      )}
+
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.confirmBtn, blocked && styles.disabledBtn]}
+          onPress={() => !blocked && onConfirm(event.id)}
+          disabled={blocked}
+        >
+          <Text style={[styles.actionText, blocked && styles.disabledText]}>
+            {t('road_confirm')} ({event.confirmations})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.denyBtn, blocked && styles.disabledBtn]}
+          onPress={() => !blocked && onDeny(event.id)}
+          disabled={blocked}
+        >
+          <Text style={[styles.actionText, blocked && styles.disabledText]}>
+            {t('road_deny')} ({event.denials})
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+export function RoadEventsScreen() {
+  useAppStore((s) => s.langVersion); // re-render on language change
+  const { top: topInset } = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = useState(false);
+  const { loading, subscribeToEvents, getFilteredEvents, confirmEvent, denyEvent } = useEventsStore();
+  const userStateUF  = useAppStore((s) => s.userStateUF);
+  const filterStateUF = useEventsStore((s) => s.filterStateUF);
+
+  // Detecta estado do usuário automaticamente ao montar
+  const { detecting, locationDenied } = useUserLocation();
+
+  // Filtro: só eventos do estado do usuário (ou sem estado definido — legado)
+  // · filtro manual (FilterModal) tem precedência
+  // · se GPS negado/falhou/sem região: exibe tudo
+  // · enquanto detecta: spinner
+  const events = getFilteredEvents()
+    .filter((e) => {
+      if (filterStateUF) return true;          // filtro manual tem precedência
+      if (locationDenied || !userStateUF) return true; // GPS indisponível ou detectando
+      // Inclui eventos do estado do usuário E eventos sem stateUF (legado)
+      return !e.stateUF || e.stateUF === userStateUF;
+    })
+    .sort((a, b) => b.createdAt - a.createdAt);
+
+  useEffect(() => {
+    const unsub = subscribeToEvents();
+    return unsub;
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await new Promise((r) => setTimeout(r, 600));
+    setRefreshing(false);
+  }, []);
+
+  // Exibe spinner apenas enquanto o GPS ainda não retornou (sem resultado ainda)
+  const isLoading = loading || (detecting && !userStateUF);
+
+  return (
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: topInset + 12 }]}>
+        <Text style={styles.headerTitle}>🚗 {t('road_title')}</Text>
+        {events.length > 0 && (
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{events.length} ativo{events.length !== 1 ? 's' : ''}</Text>
+          </View>
+        )}
+      </View>
+
+      {isLoading ? (
+        <View style={styles.loaderWrap}>
+          <ActivityIndicator color="#E53935" />
+          <Text style={styles.loaderText}>{t('map_checking')}</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={events}
+          keyExtractor={(e) => e.id}
+          contentContainerStyle={styles.list}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          renderItem={({ item }) => (
+            <RoadEventCard event={item} onConfirm={confirmEvent} onDeny={denyEvent} />
+          )}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyEmoji}>✅</Text>
+              <Text style={styles.emptyText}>{t('road_empty')}</Text>
+              <Text style={styles.emptyHint}>{t('road_empty_hint')}</Text>
+            </View>
+          }
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F1F5F9' },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: rw(16), paddingBottom: rh(12),
+    backgroundColor: '#1E293B', borderBottomWidth: 0,
+  },
+  headerTitle: { fontSize: rf(20), fontWeight: '800', color: '#fff' },
+  countBadge: { backgroundColor: '#FF5722', paddingHorizontal: rw(10), paddingVertical: rh(4), borderRadius: rw(12) },
+  countText: { fontSize: rf(13), fontWeight: '700', color: '#fff' },
+  loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: rh(12) },
+  loaderText: { fontSize: rf(13), color: '#888' },
+  list: { padding: rw(12), gap: rh(12), paddingBottom: rh(24) },
+  card: {
+    backgroundColor: '#fff', borderRadius: rw(16), padding: rw(14), borderLeftWidth: 4,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3,
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: rw(10), marginBottom: rh(8) },
+  iconBadge: { width: rw(44), height: rw(44), borderRadius: rw(22), alignItems: 'center', justifyContent: 'center' },
+  cardEmoji: { fontSize: rf(24) },
+  cardInfo: { flex: 1 },
+  cardTitle: { fontSize: rf(15), fontWeight: '700', color: '#1E293B' },
+  cardMeta: { fontSize: rf(12), color: '#94A3B8', marginTop: rh(2) },
+  cardDesc: { fontSize: rf(13), color: '#555', marginBottom: rh(8) },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: rh(8) },
+  cardTime: { fontSize: rf(12), color: '#94A3B8' },
+  cardExpiry: { fontSize: rf(12), color: '#FF5722' },
+  votedLabel: { fontSize: rf(12), color: '#94A3B8', fontStyle: 'italic', marginBottom: rh(8) },
+  actions: { flexDirection: 'row', gap: rw(10) },
+  actionBtn: { flex: 1, paddingVertical: rh(11), borderRadius: rw(12), alignItems: 'center' },
+  confirmBtn: { backgroundColor: '#E8F5E9' },
+  denyBtn: { backgroundColor: '#FBE9E7' },
+  disabledBtn: { backgroundColor: '#F1F5F9' },
+  actionText: { fontSize: rf(13), fontWeight: '700', color: '#333' },
+  disabledText: { color: '#CBD5E1' },
+  empty: { alignItems: 'center', marginTop: rh(80), gap: rh(8) },
+  emptyEmoji: { fontSize: rf(52) },
+  emptyText: { fontSize: rf(16), fontWeight: '600', color: '#555' },
+  emptyHint: { fontSize: rf(13), color: '#aaa', textAlign: 'center', paddingHorizontal: rw(32) },
+});

@@ -1,0 +1,43 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Marker } from 'react-native-maps';
+import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
+
+interface Props {
+  event: EntertainmentEvent;
+  onPress: (event: EntertainmentEvent) => void;
+}
+
+export function EntertainmentMarker({ event, onPress }: Props) {
+  const meta = ENTERTAINMENT_CATEGORIES[event.category];
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setTracksViewChanges(false), 500);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <Marker
+      coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+      anchor={{ x: 0.5, y: 0.5 }}
+      onPress={() => onPress(event)}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <View style={[styles.pin, { backgroundColor: meta.color }]}>
+        <Text style={styles.emoji}>{meta.emoji}</Text>
+      </View>
+    </Marker>
+  );
+}
+
+const styles = StyleSheet.create({
+  pin: {
+    width: 42, height: 42, borderRadius: 21,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2.5, borderColor: '#fff',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35, shadowRadius: 4, elevation: 6,
+  },
+  emoji: { fontSize: 22 },
+});

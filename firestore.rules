@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Perfis de usuário ──────────────────────────────────────────────────
+    match /users/{userId} {
+      // Qualquer autenticado pode criar seu próprio perfil
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // Só o próprio usuário pode editar seu perfil
+      allow update: if request.auth != null && request.auth.uid == userId;
+      // Qualquer autenticado pode ler perfis (para ranking futuro)
+      allow read: if request.auth != null;
+    }
+
+    // ── Eventos de estrada ─────────────────────────────────────────────────
+    match /events/{eventId} {
+      // Qualquer autenticado pode ler e criar
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      // Só o dono pode editar/deletar, ou qualquer um pode confirmar/negar
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null &&
+        (request.auth.uid == resource.data.userId || resource.data.denials >= 9);
+    }
+
+    // ── Eventos de entretenimento ──────────────────────────────────────────
+    match /entertainment_events/{eventId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+
+      // Comentários
+      match /comments/{commentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      }
+    }
+  }
+}
