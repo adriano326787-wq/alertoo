@@ -53,6 +53,7 @@ module.exports = {
     ],
     'react-native-edge-to-edge',
     'expo-web-browser',
+    '@react-native-google-signin/google-signin',
   ],
   web: {
     favicon: './assets/favicon.png',

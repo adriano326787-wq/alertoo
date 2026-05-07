@@ -3,9 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert, Modal,
 } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import * as AuthSession from 'expo-auth-session';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   signInWithEmail,
@@ -20,68 +18,41 @@ import { useAppStore } from '../store/appStore';
 import { t } from '../utils/i18n';
 import { User } from 'firebase/auth';
 
-WebBrowser.maybeCompleteAuthSession();
+// ─── Google Sign-In (nativo) ─────────────────────────────────────────────────
+GoogleSignin.configure({
+  webClientId: GOOGLE_CLIENT_IDS.webClientId,
+  offlineAccess: false,
+});
 
-// ─── Google Sign-In ───────────────────────────────────────────────────────────
 interface GoogleBtnProps {
   onSuccess: (idToken: string | null, accessToken?: string | null) => void;
   disabled: boolean;
 }
 
-function GoogleAuthButtonActive({ onSuccess, disabled }: GoogleBtnProps) {
-  const web = GOOGLE_CLIENT_IDS.webClientId || undefined;
-
-  // Em dev build (expo run:android / expo run:ios) o scheme "road-events" é registrado
-  // e o Google Console deve ter "road-events://" como URI de redirecionamento autorizada.
-  // No Expo Go use apenas e-mail/senha pois exp:// é rejeitado pelo Google OAuth.
-  const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
-
-  const [, response, promptAsync] = Google.useAuthRequest({
-    webClientId:     web,
-    androidClientId: GOOGLE_CLIENT_IDS.androidClientId || web,
-    iosClientId:     GOOGLE_CLIENT_IDS.iosClientId     || web,
-    redirectUri,
-  });
-
-  React.useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token, access_token } = response.params;
-      onSuccess(id_token ?? null, access_token ?? null);
-    } else if (response?.type === 'error') {
+function GoogleAuthButton({ onSuccess, disabled }: GoogleBtnProps) {
+  async function handlePress() {
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken ?? null;
+      onSuccess(idToken, null);
+    } catch (error: any) {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) return;
+      if (error.code === statusCodes.IN_PROGRESS) return;
       Alert.alert('Erro Google', 'Não foi possível autenticar com Google. Tente novamente.');
     }
-  }, [response]);
+  }
 
   return (
     <TouchableOpacity
       style={[styles.socialBtn, disabled && styles.socialBtnDisabled]}
-      onPress={() => promptAsync()}
+      onPress={handlePress}
       disabled={disabled}
     >
       <Text style={styles.googleIcon}>G</Text>
       <Text style={styles.socialBtnText}>{t('auth_google')}</Text>
     </TouchableOpacity>
   );
-}
-
-// Wrapper: qualquer clientId configurado habilita o botão
-function GoogleAuthButton({ onSuccess, disabled }: GoogleBtnProps) {
-  const canUse = !!(
-    GOOGLE_CLIENT_IDS.webClientId ||
-    GOOGLE_CLIENT_IDS.androidClientId ||
-    GOOGLE_CLIENT_IDS.iosClientId
-  );
-
-  if (!canUse) {
-    return (
-      <View style={[styles.socialBtn, styles.socialBtnDisabled]}>
-        <Text style={styles.googleIcon}>G</Text>
-        <Text style={styles.socialBtnText}>{t('auth_google')}</Text>
-      </View>
-    );
-  }
-
-  return <GoogleAuthButtonActive onSuccess={onSuccess} disabled={disabled} />;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,7 +88,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
-  async function handleGoogleToken(idToken: string | null, accessToken?: string | null) {
+  async function handleGoogleToken(idToken: string | null, accessToken?: string | null | undefined) {
     setLoading(true);
     try {
       const user = await signInWithGoogleToken(idToken, accessToken);
