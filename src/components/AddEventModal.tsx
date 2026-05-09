@@ -73,11 +73,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
             )}
 
             <Text style={styles.label}>Tipo de ocorrência</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chips}
-            >
+            <View style={styles.chips}>
               {(Object.entries(EVENT_CATEGORIES) as [EventCategory, typeof EVENT_CATEGORIES[EventCategory]][]).map(
                 ([key, meta]) => (
                   <TouchableOpacity
@@ -96,7 +92,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
                   </TouchableOpacity>
                 )
               )}
-            </ScrollView>
+            </View>
 
             <Text style={styles.label}>Descrição (opcional)</Text>
             <TextInput
@@ -146,13 +142,16 @@ const styles = StyleSheet.create({
   },
   locationBadgeText: { fontSize: 13, color: '#1565C0', fontWeight: '600' },
   label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
-  chips: { gap: 8, paddingVertical: 2, marginBottom: 16 },
+  chips: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
+    marginBottom: 16,
+  },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
     borderWidth: 2, backgroundColor: '#fff',
   },
-  chipEmoji: { fontSize: 18 },
+  chipEmoji: { fontSize: 16 },
   chipLabel: { fontSize: 13, fontWeight: '600', color: '#333' },
   chipLabelSelected: { color: '#fff' },
   input: {
