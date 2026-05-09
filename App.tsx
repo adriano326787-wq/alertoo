@@ -149,19 +149,19 @@ function AppTabs({ profile }: { profile: any }) {
       }}
     >
           <Tab.Screen
-            name="Estrada"
-            component={RoadEventsScreen}
-            options={{
-              tabBarLabel: t('tab_road'),
-              tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>🚗</Text>,
-            }}
-          />
-          <Tab.Screen
             name="Mapa"
             component={MapScreen}
             options={{
               tabBarLabel: t('tab_map'),
               tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>🗺️</Text>,
+            }}
+          />
+          <Tab.Screen
+            name="Estrada"
+            component={RoadEventsScreen}
+            options={{
+              tabBarLabel: t('tab_road'),
+              tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>🚗</Text>,
             }}
           />
           <Tab.Screen

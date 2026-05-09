@@ -57,9 +57,14 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
       >
-        <View style={styles.sheet}>
+        <ScrollView
+          contentContainerStyle={styles.sheet}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.handle} />
           <Text style={styles.title}>Reportar evento</Text>
 
@@ -126,7 +131,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -136,7 +141,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
     backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 20, paddingBottom: 36,
+    padding: 20, paddingBottom: 36, flexGrow: 1,
   },
   handle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   title: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
