@@ -18,6 +18,8 @@ import { getCurrentUserId } from '../services/authService';
 import { awardPoints } from '../services/userService';
 import { RoadEvent, EventCategory, EVENT_CATEGORIES } from '../types';
 import { POINTS } from '../types/user';
+import { notifyIfNearby } from '../services/notificationService';
+import { useAppStore } from './appStore';
 
 const EVENTS_COLLECTION = 'events';
 const FILTER_KEY = 'road_events_filter';
@@ -136,10 +138,37 @@ export const useEventsStore = create<EventsState>((set, get) => ({
       };
     }
 
+    let knownIds = new Set<string>();
+    let isFirstLoad = true;
+
     const unsub = onSnapshot(q, (snapshot) => {
       const events: RoadEvent[] = snapshot.docs
         .map(docToEvent)
         .filter((e): e is RoadEvent => e !== null);
+
+      // Notifica novos eventos após a primeira carga
+      if (!isFirstLoad) {
+        const { userLat, userLon } = useAppStore.getState();
+        if (userLat != null && userLon != null) {
+          events.forEach((e) => {
+            if (!knownIds.has(e.id)) {
+              const meta = EVENT_CATEGORIES[e.category];
+              notifyIfNearby({
+                eventTitle: e.title,
+                eventEmoji: meta.emoji,
+                eventType: 'road',
+                eventLat: e.latitude,
+                eventLon: e.longitude,
+                userLat,
+                userLon,
+              }).catch(() => {});
+            }
+          });
+        }
+      }
+
+      knownIds = new Set(events.map((e) => e.id));
+      isFirstLoad = false;
       set({ events, loading: false });
     });
 

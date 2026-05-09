@@ -8,6 +8,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from './src/services/firebase';
+import { requestNotificationPermission } from './src/services/notificationService';
 import { setCurrentUser } from './src/services/authService';
 import { useUserStore } from './src/store/userStore';
 import { useEventsStore } from './src/store/eventsStore';
@@ -28,9 +29,10 @@ export default function App() {
   const { profile, loadProfile, subscribeToProfile, clearProfile } = useUserStore();
   const profileUnsubRef = useRef<(() => void) | null>(null);
 
-  // Carrega filtro persistido na inicialização
+  // Carrega filtro persistido na inicialização + solicita permissão de notificação
   useEffect(() => {
     useEventsStore.getState().loadFilter();
+    requestNotificationPermission().catch(() => {});
   }, []);
 
   useEffect(() => {

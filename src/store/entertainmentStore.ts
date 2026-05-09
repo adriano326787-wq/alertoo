@@ -29,6 +29,9 @@ import {
   ENTERTAINMENT_TTL_HOURS,
 } from '../types/entertainment';
 import { POINTS } from '../types/user';
+import { notifyIfNearby } from '../services/notificationService';
+import { useAppStore } from './appStore';
+import { ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 
 const COLLECTION = 'entertainment_events';
 const PAGE_SIZE = 20;
@@ -106,11 +109,37 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
       limit(PAGE_SIZE)
     );
 
+    let knownIds = new Set<string>();
+    let isFirstLoad = true;
+
     const unsub = onSnapshot(q, (snapshot) => {
       const events = snapshot.docs
         .map(docToEvent)
         .filter((e): e is EntertainmentEvent => e !== null);
       const lastDoc = snapshot.docs[snapshot.docs.length - 1] ?? null;
+
+      if (!isFirstLoad) {
+        const { userLat, userLon } = useAppStore.getState();
+        if (userLat != null && userLon != null) {
+          events.forEach((e) => {
+            if (!knownIds.has(e.id)) {
+              const meta = ENTERTAINMENT_CATEGORIES[e.category];
+              notifyIfNearby({
+                eventTitle: e.title,
+                eventEmoji: meta.emoji,
+                eventType: 'entertainment',
+                eventLat: e.latitude,
+                eventLon: e.longitude,
+                userLat,
+                userLon,
+              }).catch(() => {});
+            }
+          });
+        }
+      }
+
+      knownIds = new Set(events.map((e) => e.id));
+      isFirstLoad = false;
       set({
         events,
         loading: false,

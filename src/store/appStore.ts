@@ -4,18 +4,18 @@ import { updateLangFromCountry } from '../utils/i18n';
 type AuthTab = 'login' | 'register';
 
 interface AppState {
-  /** Aba que o AuthScreen deve abrir ao ser montado (vindo do perfil anônimo) */
   pendingAuthTab: AuthTab | null;
-  /** Código ISO do país do usuário, detectado via reverseGeocodeAsync */
   userCountryCode: string | null;
-  /** Estado/região do usuário detectado via GPS (ex: "SP", "CA", "IDF") */
   userStateUF: string | null;
-  /** Incrementado sempre que o idioma muda via GPS — componentes subscrevem para re-renderizar */
   langVersion: number;
+  /** Última localização conhecida do usuário (para notificações de proximidade) */
+  userLat: number | null;
+  userLon: number | null;
 
   setPendingAuthTab: (tab: AuthTab | null) => void;
   setUserCountryCode: (code: string | null) => void;
   setUserStateUF: (stateUF: string | null) => void;
+  setUserLocation: (lat: number, lon: number) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -23,6 +23,8 @@ export const useAppStore = create<AppState>((set) => ({
   userCountryCode: null,
   userStateUF: null,
   langVersion: 0,
+  userLat: null,
+  userLon: null,
   setPendingAuthTab: (tab) => set({ pendingAuthTab: tab }),
   setUserCountryCode: (code) => {
     set({ userCountryCode: code });
@@ -32,4 +34,5 @@ export const useAppStore = create<AppState>((set) => ({
     }
   },
   setUserStateUF: (stateUF) => set({ userStateUF: stateUF }),
+  setUserLocation: (lat, lon) => set({ userLat: lat, userLon: lon }),
 }));

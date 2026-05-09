@@ -62,6 +62,7 @@ export function MapScreen() {
   const isAdmin = useUserStore((s) => s.isAdmin);
   const setUserCountryCode = useAppStore((s) => s.setUserCountryCode);
   const setUserStateUF = useAppStore((s) => s.setUserStateUF);
+  const setUserLocation = useAppStore((s) => s.setUserLocation);
   // Mapa exibe TODOS os pins, sem filtro de estado
   const roadEvents = allRoadEvents;
 
@@ -76,9 +77,11 @@ export function MapScreen() {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return;
     const loc = await getUserLocation();
+    const { latitude, longitude } = loc.coords;
+    setUserLocation(latitude, longitude);
     mapRef.current?.animateToRegion({
-      latitude: loc.coords.latitude,
-      longitude: loc.coords.longitude,
+      latitude,
+      longitude,
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     }, 800);

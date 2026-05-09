@@ -54,6 +54,14 @@ module.exports = {
     'react-native-edge-to-edge',
     'expo-web-browser',
     '@react-native-google-signin/google-signin',
+    [
+      'expo-notifications',
+      {
+        icon: './assets/icon.png',
+        color: '#FF5722',
+        sounds: [],
+      },
+    ],
   ],
   web: {
     favicon: './assets/favicon.png',
