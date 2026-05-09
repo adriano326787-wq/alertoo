@@ -23,7 +23,7 @@ import { resolveStateUF } from '../utils/brazilGeo';
 import { useAppStore } from '../store/appStore';
 import { t } from '../utils/i18n';
 
-const MAX_REPORT_RADIUS_KM = 10;
+const MAX_REPORT_RADIUS_KM = 1;
 
 const INITIAL_REGION = {
   latitude: -23.5505,
