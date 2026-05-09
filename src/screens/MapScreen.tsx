@@ -79,8 +79,8 @@ export function MapScreen() {
     mapRef.current?.animateToRegion({
       latitude: loc.coords.latitude,
       longitude: loc.coords.longitude,
-      latitudeDelta: 0.05,
-      longitudeDelta: 0.05,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
     }, 800);
   };
 
