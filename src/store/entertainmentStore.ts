@@ -86,6 +86,11 @@ function docToEvent(d: QueryDocumentSnapshot<DocumentData>): EntertainmentEvent 
     cityName: data.cityName ?? undefined,
     countryCode: data.countryCode ?? undefined,
     isFeatured: data.isFeatured ?? false,
+    promotionTier: data.promotionTier ?? null,
+    promotionEndDate: data.promotionEndDate
+      ? (data.promotionEndDate as Timestamp).toMillis()
+      : null,
+    promotionPhotoUrl: data.promotionPhotoUrl ?? null,
   };
 }
 
@@ -108,6 +113,10 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
       orderBy('expiresAt', 'desc'),
       limit(PAGE_SIZE)
     );
+
+    // Marca loading ANTES de registrar o listener
+    // (evita race condition se o snapshot disparar do cache sincronamente)
+    set({ loading: true });
 
     let knownIds = new Set<string>();
     let isFirstLoad = true;
@@ -146,6 +155,9 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
         hasMore: snapshot.docs.length === PAGE_SIZE,
         _lastDoc: lastDoc,
       });
+    }, (error) => {
+      console.error('[EntStore] Erro Firestore:', error.code, error.message);
+      set({ loading: false });
     });
 
     // Timer: remove eventos expirados do estado a cada 60 segundos,
@@ -159,7 +171,7 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
       });
     }, 60_000);
 
-    set({ _unsub: unsub, loading: true });
+    set({ _unsub: unsub });
     return () => {
       clearInterval(expiryTimer);
       unsub();
@@ -218,6 +230,10 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
       stateUF: stateUF ?? null,
       cityName: cityName ?? null,
       countryCode: countryCode ?? null,
+      isFeatured: false,
+      promotionTier: null,
+      promotionEndDate: null,
+      promotionPhotoUrl: null,
     });
 
     set({ _lastEventAt: now });

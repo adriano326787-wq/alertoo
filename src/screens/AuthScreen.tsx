@@ -18,12 +18,14 @@ import { useAppStore } from '../store/appStore';
 import { t } from '../utils/i18n';
 import { User } from 'firebase/auth';
 
-// ─── Google Sign-In (nativo) ─────────────────────────────────────────────────
+// webClientId = cliente tipo 3 (web) do mesmo projeto Firebase
+console.log('=== CONFIGURANDO GOOGLE SIGNIN ===');
+console.log('webClientId:', GOOGLE_CLIENT_IDS.webClientId);
 GoogleSignin.configure({
   webClientId: GOOGLE_CLIENT_IDS.webClientId,
-  androidClientId: GOOGLE_CLIENT_IDS.androidClientId,
   offlineAccess: false,
 });
+console.log('Google SignIn configurado com sucesso');
 
 interface GoogleBtnProps {
   onSuccess: (idToken: string | null, accessToken?: string | null) => void;
@@ -35,14 +37,25 @@ function GoogleAuthButton({ onSuccess, disabled }: GoogleBtnProps) {
     try {
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
-      const idToken = userInfo.data?.idToken ?? null;
+
+      // Na v16, a estrutura é userInfo.user.idToken
+      const idToken = userInfo.user?.idToken ?? userInfo.idToken ?? null;
+
+      if (!idToken) {
+        Alert.alert('Erro', 'Não foi possível obter o ID token do Google');
+        return;
+      }
+
       onSuccess(idToken, null);
     } catch (error: any) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) return;
       if (error.code === statusCodes.IN_PROGRESS) return;
       const code = error.code ?? 'sem código';
       const msg = error.message ?? 'erro desconhecido';
-      Alert.alert('Erro Google', `Código: ${code}\n\n${msg}`);
+      Alert.alert(
+        'Erro Google',
+        `Código: ${code}\n\nMensagem: ${msg}`,
+      );
     }
   }
 

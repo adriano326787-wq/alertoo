@@ -1,8 +1,9 @@
 import React from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo } from '../utils/time';
+import { PROMOTION_TIERS } from '../types/promotion';
 
 interface Props {
   event: EntertainmentEvent | null;
@@ -19,17 +20,33 @@ export function EntertainmentInfoModal({ event, isAdmin, onLike, onToggleFeature
   const myUid = getCurrentUserId();
   const liked = event.likes.includes(myUid);
   const isOwner = event.userId === myUid;
+  const isPromoted = !!(event.promotionTier && event.promotionEndDate && event.promotionEndDate > Date.now());
+  const tierConfig = isPromoted && event.promotionTier ? PROMOTION_TIERS[event.promotionTier] : null;
+  const accentColor = tierConfig ? tierConfig.pinColor : event.isFeatured ? '#F9A825' : meta.color;
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.card}>
-          {/* Barra colorida — dourada se em destaque */}
-          <View style={[styles.accent, { backgroundColor: event.isFeatured ? '#F9A825' : meta.color }]} />
-          <View style={styles.body}>
+          {/* Foto da promoção (se houver) ou barra de cor */}
+          {isPromoted && event.promotionPhotoUrl ? (
+            <Image source={{ uri: event.promotionPhotoUrl }} style={styles.promoPhoto} resizeMode="cover" />
+          ) : (
+            <View style={[styles.accent, { backgroundColor: accentColor }]} />
+          )}
 
-            {/* Badge de destaque */}
-            {event.isFeatured && (
+          <View style={styles.body}>
+            {/* Badge de tier */}
+            {isPromoted && tierConfig && (
+              <View style={[styles.featuredBanner, { backgroundColor: tierConfig.pinColor + '22', borderColor: tierConfig.pinColor + '55' }]}>
+                <Text style={[styles.featuredBannerText, { color: tierConfig.pinColor }]}>
+                  {tierConfig.emoji} Patrocinado · {tierConfig.label}
+                </Text>
+              </View>
+            )}
+
+            {/* Badge de destaque admin (quando não há tier) */}
+            {!isPromoted && event.isFeatured && (
               <View style={styles.featuredBanner}>
                 <Text style={styles.featuredBannerText}>⭐ Evento em Destaque</Text>
               </View>
@@ -90,6 +107,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 },
   card: { backgroundColor: '#fff', borderRadius: 16, width: '100%', overflow: 'hidden', elevation: 8 },
   accent: { height: 6 },
+  promoPhoto: { width: '100%', height: 160 },
   body: { padding: 18 },
   category: { fontSize: 12, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   title: { fontSize: 17, fontWeight: '800', color: '#1a1a1a', marginBottom: 6 },

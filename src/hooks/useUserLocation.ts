@@ -59,7 +59,7 @@ export function useUserLocation() {
 
         if (cancelled) return;
 
-        const stateUF     = resolveStateUF(place?.region) ?? place?.region ?? null;
+        const stateUF     = resolveStateUF(place?.region) ?? null;
         const countryCode = place?.isoCountryCode ?? null;
 
         if (countryCode) setUserCountryCode(countryCode);

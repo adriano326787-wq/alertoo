@@ -1,6 +1,8 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 // As variáveis EXPO_PUBLIC_* são substituídas em build time pelo Expo.
 // Em desenvolvimento: crie um arquivo .env na raiz (veja .env.example).
@@ -16,5 +18,17 @@ export const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-export const db = getFirestore(app);
-export const auth = getAuth(app);
+// Inicializa Auth com persistência via AsyncStorage (evita login a cada sessão)
+// try/catch evita erro "auth/already-initialized" em hot-reloads
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+  });
+} catch {
+  auth = getAuth(app);
+}
+export { auth };
+
+export const db      = getFirestore(app);
+export const storage = getStorage(app);

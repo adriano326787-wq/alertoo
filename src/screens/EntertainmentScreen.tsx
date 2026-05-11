@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, ScrollView, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -21,6 +21,7 @@ import { rw, rh, rf } from '../utils/responsive';
 import { AdBanner } from '../components/AdBanner';
 import { BannerAdSize } from 'react-native-google-mobile-ads';
 import { useNavigation } from '@react-navigation/native';
+import { PROMOTION_TIERS } from '../types/promotion';
 
 interface PendingAdd {
   coordinate: { latitude: number; longitude: number };
@@ -45,16 +46,25 @@ function EventCard({
   const liked = event.likes.includes(myUid);
   const isOwner = event.userId === myUid;
 
+  const isPromoted = !!(event.promotionTier && event.promotionEndDate && event.promotionEndDate > Date.now());
+  const tierConfig = isPromoted ? PROMOTION_TIERS[event.promotionTier!] : null;
+
   return (
     <TouchableOpacity
-      style={[styles.card, { borderLeftColor: meta.color }, event.isFeatured && styles.featuredCard]}
+      style={[
+        styles.card,
+        { borderLeftColor: isPromoted ? tierConfig!.pinColor : meta.color },
+        isPromoted && styles.promotedCard,
+      ]}
       activeOpacity={0.92}
       onPress={() => onOpenComments(event)}
     >
-      {/* Badge de destaque */}
-      {event.isFeatured && (
-        <View style={styles.featuredBadge}>
-          <Text style={styles.featuredBadgeText}>⭐ Destaque</Text>
+      {/* Badge de promoção */}
+      {isPromoted && tierConfig && (
+        <View style={[styles.featuredBadge, { backgroundColor: tierConfig.pinColor + '22', borderColor: tierConfig.pinColor + '55' }]}>
+          <Text style={[styles.featuredBadgeText, { color: tierConfig.pinColor }]}>
+            {tierConfig.emoji} {tierConfig.label}
+          </Text>
         </View>
       )}
 
@@ -100,6 +110,51 @@ function EventCard({
   );
 }
 
+// ─── Carrossel de eventos patrocinados ───────────────────────────────────────
+function FeaturedStrip({
+  events,
+  onPress,
+}: {
+  events: EntertainmentEvent[];
+  onPress: (event: EntertainmentEvent) => void;
+}) {
+  if (events.length === 0) return null;
+
+  return (
+    <View style={styles.stripWrap}>
+      <Text style={styles.stripTitle}>🌟 Em Destaque</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stripScroll}>
+        {events.map((ev) => {
+          const meta = ENTERTAINMENT_CATEGORIES[ev.category];
+          const tierConfig = ev.promotionTier ? PROMOTION_TIERS[ev.promotionTier] : null;
+          return (
+            <TouchableOpacity key={ev.id} style={styles.stripCard} onPress={() => onPress(ev)} activeOpacity={0.88}>
+              {/* Foto ou cor sólida de fundo */}
+              {ev.promotionPhotoUrl ? (
+                <Image source={{ uri: ev.promotionPhotoUrl }} style={styles.stripPhoto} resizeMode="cover" />
+              ) : (
+                <View style={[styles.stripPhoto, { backgroundColor: tierConfig?.pinColor ?? meta.color, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ fontSize: 32 }}>{meta.emoji}</Text>
+                </View>
+              )}
+              {/* Tier badge */}
+              {tierConfig && (
+                <View style={[styles.stripTierBadge, { backgroundColor: tierConfig.pinColor }]}>
+                  <Text style={styles.stripTierText}>{tierConfig.emoji} {tierConfig.label}</Text>
+                </View>
+              )}
+              <View style={styles.stripInfo}>
+                <Text style={styles.stripCardTitle} numberOfLines={1}>{ev.title}</Text>
+                {ev.cityName ? <Text style={styles.stripCardCity}>{ev.cityName}</Text> : null}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
 export function EntertainmentScreen() {
   const { top: topInset } = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -139,12 +194,25 @@ export function EntertainmentScreen() {
       filtered = allEvents.filter((e) => !e.stateUF || e.stateUF === userStateUF);
     }
 
+    const tierWeight = (e: typeof allEvents[0]) => {
+      if (!e.promotionTier || !e.promotionEndDate || e.promotionEndDate <= Date.now()) return 0;
+      return e.promotionTier === 'ouro' ? 3 : e.promotionTier === 'prata' ? 2 : 1;
+    };
     return [...filtered].sort((a, b) => {
+      const wa = tierWeight(a);
+      const wb = tierWeight(b);
+      if (wa !== wb) return wb - wa;
       if (a.isFeatured && !b.isFeatured) return -1;
       if (!a.isFeatured && b.isFeatured) return 1;
       return b.createdAt - a.createdAt;
     });
   })();
+
+  // Eventos em destaque Prata/Ouro para o carrossel
+  const featuredEvents = events.filter(
+    (e) => e.promotionTier && ['prata', 'ouro'].includes(e.promotionTier)
+      && e.promotionEndDate && e.promotionEndDate > Date.now()
+  );
 
   useEffect(() => {
     const unsub = subscribe();
@@ -239,6 +307,7 @@ export function EntertainmentScreen() {
           contentContainerStyle={styles.list}
           refreshing={refreshing}
           onRefresh={handleRefresh}
+          ListHeaderComponent={<FeaturedStrip events={featuredEvents} onPress={setSelectedEvent} />}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
           renderItem={({ item }) => {
@@ -332,6 +401,9 @@ const styles = StyleSheet.create({
     borderLeftColor: '#F9A825',
     shadowColor: '#F9A825', shadowOpacity: 0.22, shadowRadius: 10, elevation: 5,
   },
+  promotedCard: {
+    shadowOpacity: 0.18, shadowRadius: 10, elevation: 5,
+  },
   featuredBadge: {
     alignSelf: 'flex-start', backgroundColor: '#FFF8E1', borderRadius: rw(6),
     paddingHorizontal: rw(8), paddingVertical: rh(3), marginBottom: rh(8),
@@ -377,4 +449,22 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
   adLabel: { fontSize: rf(10), color: '#bbb', marginBottom: rh(4), textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // ─── FeaturedStrip ───────────────────────────────────────────────────────
+  stripWrap: { marginBottom: rh(8) },
+  stripTitle: { fontSize: rf(13), fontWeight: '800', color: '#1E293B', marginBottom: rh(10), paddingHorizontal: rw(2) },
+  stripScroll: { gap: rw(10), paddingBottom: rh(4) },
+  stripCard: {
+    width: rw(160), borderRadius: rw(14), backgroundColor: '#fff', overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.10, shadowRadius: 6, elevation: 4,
+  },
+  stripPhoto: { width: '100%', height: rh(90) },
+  stripTierBadge: {
+    position: 'absolute', top: rh(6), left: rw(6),
+    borderRadius: rw(8), paddingHorizontal: rw(7), paddingVertical: rh(3),
+  },
+  stripTierText: { fontSize: rf(10), fontWeight: '800', color: '#fff' },
+  stripInfo: { padding: rw(10) },
+  stripCardTitle: { fontSize: rf(13), fontWeight: '700', color: '#1E293B' },
+  stripCardCity: { fontSize: rf(11), color: '#94A3B8', marginTop: rh(2) },
 });

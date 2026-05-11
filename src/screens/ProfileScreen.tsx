@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, Image, Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateProfile } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useUserStore } from '../store/userStore';
 import { useAppStore } from '../store/appStore';
 import { getRank, POINTS } from '../types/user';
@@ -16,6 +16,11 @@ import { t } from '../utils/i18n';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MercadoPagoModal } from '../components/MercadoPagoModal';
+import { PromoteEventModal } from '../components/PromoteEventModal';
+import { BuyCreditsScreen } from './BuyCreditsScreen';
+import { getUserCredits, daysRemaining } from '../services/promotionService';
+import { PROMOTION_TIERS } from '../types/promotion';
+import { EntertainmentEvent } from '../types/entertainment';
 
 export function ProfileScreen() {
   const { top } = useSafeAreaInsets();
@@ -29,6 +34,66 @@ export function ProfileScreen() {
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(false);
   const [donateVisible, setDonateVisible] = useState(false);
+
+  // ─── Promoção ────────────────────────────────────────────────────────────────
+  const [userCredits, setUserCredits] = useState(0);
+  const [userEvents, setUserEvents] = useState<EntertainmentEvent[]>([]);
+  const [promoteModalVisible, setPromoteModalVisible] = useState(false);
+  const [buyCreditsVisible, setBuyCreditsVisible] = useState(false);
+  const [selectedEventForPromo, setSelectedEventForPromo] = useState<EntertainmentEvent | null>(null);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
+  const loadCreditsAndEvents = useCallback(async () => {
+    if (!currentUser || currentUser.isAnonymous) return;
+    try {
+      const credits = await getUserCredits(currentUser.uid);
+      setUserCredits(credits);
+    } catch {}
+
+    setLoadingEvents(true);
+    try {
+      // Busca apenas por userId (sem índice), ordena e filtra localmente
+      const snap = await getDocs(
+        query(
+          collection(db, 'entertainment_events'),
+          where('userId', '==', currentUser.uid),
+        )
+      );
+      const now = Date.now();
+      const events: EntertainmentEvent[] = snap.docs
+        .map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            category: data.category,
+            title: data.title,
+            description: data.description ?? undefined,
+            address: data.address ?? undefined,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            createdAt: data.createdAt?.toMillis?.() ?? now,
+            expiresAt: data.expiresAt?.toMillis?.() ?? now,
+            userId: data.userId,
+            likes: data.likes ?? [],
+            commentCount: data.commentCount ?? 0,
+            isFeatured: data.isFeatured ?? false,
+            promotionTier: data.promotionTier ?? null,
+            promotionEndDate: data.promotionEndDate?.toMillis?.() ?? null,
+            promotionPhotoUrl: data.promotionPhotoUrl ?? null,
+          } as EntertainmentEvent;
+        })
+        .filter((e) => e.expiresAt > now)
+        .sort((a, b) => b.expiresAt - a.expiresAt); // mais recentes primeiro
+      setUserEvents(events);
+    } catch (err) {
+      console.error('[ProfileScreen] erro ao carregar eventos:', err);
+    }
+    setLoadingEvents(false);
+  }, [currentUser]);
+
+  useEffect(() => {
+    loadCreditsAndEvents();
+  }, [loadCreditsAndEvents]);
 
 
   async function handleSignOut() {
@@ -231,6 +296,62 @@ export function ProfileScreen() {
         <AllRanksLegend />
       </View>
 
+      {/* ── Widget de Créditos ───────────────────────────────────────────────── */}
+      <View style={styles.creditsCard}>
+        <View style={styles.creditsLeft}>
+          <Text style={styles.creditsEmoji}>🪙</Text>
+          <View>
+            <Text style={styles.creditsCount}>{isAdmin ? '∞' : userCredits}</Text>
+            <Text style={styles.creditsLabel}>{isAdmin ? 'créditos ilimitados (Admin)' : `crédito${userCredits !== 1 ? 's' : ''} disponível${userCredits !== 1 ? 'is' : ''}`}</Text>
+          </View>
+        </View>
+        {!isAdmin && (
+          <TouchableOpacity style={styles.buyCreditsBtn} onPress={() => setBuyCreditsVisible(true)}>
+            <Text style={styles.buyCreditsText}>+ Comprar</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── Meus Eventos Ativos ──────────────────────────────────────────────── */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>🎉 Meus Eventos Ativos</Text>
+        {loadingEvents ? (
+          <ActivityIndicator color="#E53935" style={{ marginVertical: 16 }} />
+        ) : userEvents.length === 0 ? (
+          <Text style={styles.noEventsText}>Você não tem eventos ativos no momento.</Text>
+        ) : (
+          userEvents.map((ev) => {
+            const isPromoted = !!(ev.promotionTier && ev.promotionEndDate && ev.promotionEndDate > Date.now());
+            const tierConfig = isPromoted ? PROMOTION_TIERS[ev.promotionTier!] : null;
+            const days = isPromoted && ev.promotionEndDate ? daysRemaining(ev.promotionEndDate) : null;
+            return (
+              <View key={ev.id} style={styles.eventItem}>
+                <View style={styles.eventItemLeft}>
+                  <Text style={styles.eventItemTitle} numberOfLines={1}>{ev.title}</Text>
+                  {isPromoted && tierConfig ? (
+                    <View style={styles.promoTag}>
+                      <Text style={styles.promoTagText}>
+                        {tierConfig.emoji} {tierConfig.label} · {days}d restantes
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.eventItemSub}>Sem promoção ativa</Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={[styles.promoteBtn, isPromoted && styles.promoteBtnActive]}
+                  onPress={() => { setSelectedEventForPromo(ev); setPromoteModalVisible(true); }}
+                >
+                  <Text style={[styles.promoteBtnText, isPromoted && styles.promoteBtnTextActive]}>
+                    {isPromoted ? '⚙️ Gerenciar' : '🚀 Promover'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })
+        )}
+      </View>
+
       {/* Doação */}
       <TouchableOpacity style={styles.donateBtn} onPress={() => setDonateVisible(true)}>
         <Text style={styles.donateBtnEmoji}>💛</Text>
@@ -247,6 +368,32 @@ export function ProfileScreen() {
       </TouchableOpacity>
 
       <MercadoPagoModal visible={donateVisible} onClose={() => setDonateVisible(false)} />
+
+      {/* Modais de promoção */}
+      {selectedEventForPromo && (
+        <PromoteEventModal
+          visible={promoteModalVisible}
+          event={selectedEventForPromo}
+          userCredits={userCredits}
+          isAdmin={isAdmin}
+          onClose={() => { setPromoteModalVisible(false); setSelectedEventForPromo(null); }}
+          onPromoted={() => {
+            setPromoteModalVisible(false);
+            setSelectedEventForPromo(null);
+            loadCreditsAndEvents();
+          }}
+          onCreditsUpdated={(newCredits) => setUserCredits(newCredits)}
+        />
+      )}
+
+      <BuyCreditsScreen
+        visible={buyCreditsVisible}
+        onClose={() => setBuyCreditsVisible(false)}
+        onPurchased={(credits) => {
+          setUserCredits((prev) => prev + credits);
+          setBuyCreditsVisible(false);
+        }}
+      />
 
       {/* Modal editar nome */}
       <Modal visible={editVisible} transparent animationType="fade" onRequestClose={() => setEditVisible(false)}>
@@ -406,4 +553,45 @@ const styles = StyleSheet.create({
   },
   modalSaveDisabled: { backgroundColor: '#ccc' },
   modalSaveText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // ─── Créditos ─────────────────────────────────────────────────────────────
+  creditsCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#FFF8E1', borderRadius: 16, padding: 16, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#FFD54F',
+    shadowColor: '#FFC107', shadowOpacity: 0.15, shadowRadius: 6, elevation: 2,
+  },
+  creditsLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  creditsEmoji: { fontSize: 32 },
+  creditsCount: { fontSize: 28, fontWeight: '900', color: '#5D4037' },
+  creditsLabel: { fontSize: 12, color: '#8D6E63', marginTop: 1 },
+  buyCreditsBtn: {
+    backgroundColor: '#FF5722', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 8,
+  },
+  buyCreditsText: { fontSize: 13, fontWeight: '800', color: '#fff' },
+
+  // ─── Meus Eventos ─────────────────────────────────────────────────────────
+  noEventsText: { fontSize: 13, color: '#aaa', textAlign: 'center', paddingVertical: 12 },
+  eventItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', gap: 8,
+  },
+  eventItemLeft: { flex: 1 },
+  eventItemTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
+  eventItemSub: { fontSize: 12, color: '#bbb', marginTop: 2 },
+  promoTag: {
+    marginTop: 3, alignSelf: 'flex-start',
+    backgroundColor: '#FFF3E0', borderRadius: 6,
+    paddingHorizontal: 7, paddingVertical: 2,
+    borderWidth: 1, borderColor: '#FFCC80',
+  },
+  promoTagText: { fontSize: 11, fontWeight: '700', color: '#E65100' },
+  promoteBtn: {
+    borderRadius: 9, paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1.5, borderColor: '#E53935',
+  },
+  promoteBtnActive: { borderColor: '#FF9800', backgroundColor: '#FFF3E0' },
+  promoteBtnText: { fontSize: 12, fontWeight: '700', color: '#E53935' },
+  promoteBtnTextActive: { color: '#E65100' },
 });

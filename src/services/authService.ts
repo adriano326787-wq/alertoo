@@ -17,9 +17,10 @@ import { auth } from './firebase';
 // Get them from: https://console.cloud.google.com → APIs & Services → Credentials
 // For Expo Go testing, use the Web Client ID as expoClientId.
 export const GOOGLE_CLIENT_IDS = {
-  androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? '136365940808-mgo9fgd3fd44uh1rhq00sab7l953q5eg.apps.googleusercontent.com',
-  iosClientId:     process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID     ?? '',
-  webClientId:     process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID     ?? '136365940808-1d9hl82rasbjgjfn6ai822cra31ueqlq.apps.googleusercontent.com',
+  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '',
+  // webClientId = Web Client do Firebase (projeto 657066902706 / lei-seca---eventos)
+  // O cliente Android (type=1) com SHA-1 já está no google-services.json
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '657066902706-t8tsomtaqqjctmpme5fei1c904mtscp6.apps.googleusercontent.com',
 };
 // ──────────────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 export type EntertainmentCategory = 'bar' | 'restaurant' | 'party' | 'show' | 'festival' | 'club';
 
-export const ENTERTAINMENT_TTL_HOURS = 4;
+export const ENTERTAINMENT_TTL_HOURS = 48;
 
 export interface EntertainmentEvent {
   id: string;
@@ -18,7 +18,10 @@ export interface EntertainmentEvent {
   stateUF?: string;
   cityName?: string;
   countryCode?: string; // ex: 'BR', 'US', 'PT'
-  isFeatured?: boolean; // destaque pago — aparece fixado no topo
+  isFeatured?: boolean;           // destaque pago — aparece fixado no topo
+  promotionTier?: 'bronze' | 'prata' | 'ouro' | null;
+  promotionEndDate?: number | null; // unix ms
+  promotionPhotoUrl?: string | null;
 }
 
 export interface EventComment {
