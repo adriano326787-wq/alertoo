@@ -8,8 +8,10 @@ interface Props {
   onPress: (event: EntertainmentEvent) => void;
 }
 
+const FALLBACK_META = { color: '#607D8B', emoji: '📍' };
+
 export function EntertainmentMarker({ event, onPress }: Props) {
-  const meta = ENTERTAINMENT_CATEGORIES[event.category];
+  const meta = ENTERTAINMENT_CATEGORIES[event.category] ?? FALLBACK_META;
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
   useEffect(() => {

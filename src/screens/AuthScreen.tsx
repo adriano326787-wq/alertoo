@@ -21,6 +21,7 @@ import { User } from 'firebase/auth';
 // ─── Google Sign-In (nativo) ─────────────────────────────────────────────────
 GoogleSignin.configure({
   webClientId: GOOGLE_CLIENT_IDS.webClientId,
+  androidClientId: GOOGLE_CLIENT_IDS.androidClientId,
   offlineAccess: false,
 });
 
@@ -39,7 +40,9 @@ function GoogleAuthButton({ onSuccess, disabled }: GoogleBtnProps) {
     } catch (error: any) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) return;
       if (error.code === statusCodes.IN_PROGRESS) return;
-      Alert.alert('Erro Google', 'Não foi possível autenticar com Google. Tente novamente.');
+      const code = error.code ?? 'sem código';
+      const msg = error.message ?? 'erro desconhecido';
+      Alert.alert('Erro Google', `Código: ${code}\n\n${msg}`);
     }
   }
 

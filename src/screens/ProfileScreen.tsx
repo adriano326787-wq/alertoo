@@ -15,6 +15,7 @@ import { db } from '../services/firebase';
 import { t } from '../utils/i18n';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { MercadoPagoModal } from '../components/MercadoPagoModal';
 
 export function ProfileScreen() {
   const { top } = useSafeAreaInsets();
@@ -27,6 +28,8 @@ export function ProfileScreen() {
   const [editVisible, setEditVisible] = useState(false);
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [donateVisible, setDonateVisible] = useState(false);
+
 
   async function handleSignOut() {
     Alert.alert(
@@ -117,7 +120,20 @@ export function ProfileScreen() {
               </View>
             ))}
           </View>
+
+          <View style={[styles.divider, { marginTop: 24 }]} />
+
+          <TouchableOpacity style={[styles.donateBtn, { width: '100%' }]} onPress={() => setDonateVisible(true)}>
+            <Text style={styles.donateBtnEmoji}>💛</Text>
+            <View style={styles.donateBtnTexts}>
+              <Text style={styles.donateBtnTitle}>Apoie o Alertoo</Text>
+              <Text style={styles.donateBtnSub}>Ajude a manter a plataforma gratuita</Text>
+            </View>
+            <Text style={styles.donateBtnArrow}>›</Text>
+          </TouchableOpacity>
         </View>
+
+        <MercadoPagoModal visible={donateVisible} onClose={() => setDonateVisible(false)} />
       </ScrollView>
     );
   }
@@ -215,10 +231,22 @@ export function ProfileScreen() {
         <AllRanksLegend />
       </View>
 
+      {/* Doação */}
+      <TouchableOpacity style={styles.donateBtn} onPress={() => setDonateVisible(true)}>
+        <Text style={styles.donateBtnEmoji}>💛</Text>
+        <View style={styles.donateBtnTexts}>
+          <Text style={styles.donateBtnTitle}>Apoie o Alertoo</Text>
+          <Text style={styles.donateBtnSub}>Ajude a manter a plataforma gratuita</Text>
+        </View>
+        <Text style={styles.donateBtnArrow}>›</Text>
+      </TouchableOpacity>
+
       {/* Sair */}
       <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
         <Text style={styles.signOutText}>{t('profile_sign_out')}</Text>
       </TouchableOpacity>
+
+      <MercadoPagoModal visible={donateVisible} onClose={() => setDonateVisible(false)} />
 
       {/* Modal editar nome */}
       <Modal visible={editVisible} transparent animationType="fade" onRequestClose={() => setEditVisible(false)}>
@@ -338,6 +366,20 @@ const styles = StyleSheet.create({
     paddingVertical: 14, alignItems: 'center', marginTop: 4, marginBottom: 8,
   },
   signOutText: { color: '#E53935', fontSize: 15, fontWeight: '700' },
+
+  // ─── Doação ────────────────────────────────────────────────────────────────
+  donateBtn: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF8E1',
+    borderRadius: 16, padding: 16, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#FFD54F',
+    shadowColor: '#FFC107', shadowOpacity: 0.2, shadowRadius: 6, elevation: 2,
+  },
+  donateBtnEmoji: { fontSize: 28, marginRight: 12 },
+  donateBtnTexts: { flex: 1 },
+  donateBtnTitle: { fontSize: 15, fontWeight: '800', color: '#5D4037' },
+  donateBtnSub: { fontSize: 12, color: '#8D6E63', marginTop: 2 },
+  donateBtnArrow: { fontSize: 24, color: '#FFC107', fontWeight: '700' },
+
 
   // ─── Modal editar nome ─────────────────────────────────────────────────────
   modalOverlay: {

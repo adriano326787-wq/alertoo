@@ -7,7 +7,7 @@ module.exports = {
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'light',
-  newArchEnabled: false,
+  newArchEnabled: true,
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
@@ -44,6 +44,13 @@ module.exports = {
     },
   },
   plugins: [
+    [
+      'react-native-google-mobile-ads',
+      {
+        androidAppId: process.env.ADMOB_APP_ID_ANDROID ?? 'ca-app-pub-4349309505537394~6456788249',
+        iosAppId:     process.env.ADMOB_APP_ID_IOS     ?? 'ca-app-pub-3940256099942544~1458002511',
+      },
+    ],
     [
       'expo-location',
       {

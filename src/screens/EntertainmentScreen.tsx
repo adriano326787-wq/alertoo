@@ -18,6 +18,9 @@ import { useAppStore } from '../store/appStore';
 import { t } from '../utils/i18n';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { rw, rh, rf } from '../utils/responsive';
+import { AdBanner } from '../components/AdBanner';
+import { BannerAdSize } from 'react-native-google-mobile-ads';
+import { useNavigation } from '@react-navigation/native';
 
 interface PendingAdd {
   coordinate: { latitude: number; longitude: number };
@@ -30,10 +33,12 @@ function EventCard({
   event,
   onLike,
   onOpenComments,
+  onGoToMap,
 }: {
   event: EntertainmentEvent;
   onLike: (id: string) => void;
   onOpenComments: (event: EntertainmentEvent) => void;
+  onGoToMap: (event: EntertainmentEvent) => void;
 }) {
   const meta = ENTERTAINMENT_CATEGORIES[event.category];
   const myUid = getCurrentUserId();
@@ -87,12 +92,23 @@ function EventCard({
       </View>
 
       <Text style={styles.tapHint}>Toque para ver comentários</Text>
+
+      <TouchableOpacity style={styles.goToMapBtn} onPress={(e) => { e.stopPropagation?.(); onGoToMap(event); }}>
+        <Text style={styles.goToMapText}>🗺️ Ir para o evento no mapa</Text>
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 }
 
 export function EntertainmentScreen() {
   const { top: topInset } = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
+  const focusOnMap = useAppStore((s) => s.focusOnMap);
+
+  function handleGoToMap(event: EntertainmentEvent) {
+    focusOnMap({ lat: event.latitude, lon: event.longitude, title: event.title });
+    navigation.navigate('Mapa');
+  }
   const [addVisible, setAddVisible] = useState(false);
   const [pending, setPending] = useState<PendingAdd | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<EntertainmentEvent | null>(null);
@@ -191,6 +207,17 @@ export function EntertainmentScreen() {
     }
   }, []);
 
+  // Injeta um marcador de anúncio a cada 5 eventos
+  type ListItem = EntertainmentEvent | { __ad: true; id: string };
+  const AD_INTERVAL = 5;
+  const listData: ListItem[] = [];
+  events.forEach((ev, i) => {
+    listData.push(ev);
+    if ((i + 1) % AD_INTERVAL === 0) {
+      listData.push({ __ad: true, id: `ad-ent-${i}` });
+    }
+  });
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: topInset + 12 }]}>
@@ -207,20 +234,31 @@ export function EntertainmentScreen() {
         </View>
       ) : (
         <FlatList
-          data={events}
+          data={listData}
           keyExtractor={(e) => e.id}
           contentContainerStyle={styles.list}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
-          renderItem={({ item }) => (
-            <EventCard
-              event={item}
-              onLike={toggleLike}
-              onOpenComments={setSelectedEvent}
-            />
-          )}
+          renderItem={({ item }) => {
+            if ('__ad' in item) {
+              return (
+                <View style={styles.adCard}>
+                  <Text style={styles.adLabel}>Publicidade</Text>
+                  <AdBanner size={BannerAdSize.MEDIUM_RECTANGLE} />
+                </View>
+              );
+            }
+            return (
+              <EventCard
+                event={item}
+                onLike={toggleLike}
+                onOpenComments={setSelectedEvent}
+                onGoToMap={handleGoToMap}
+              />
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyEmoji}>🎪</Text>
@@ -327,4 +365,16 @@ const styles = StyleSheet.create({
   footerLoader: { marginVertical: rh(16) },
   loadMoreBtn: { alignItems: 'center', paddingVertical: rh(14) },
   loadMoreText: { fontSize: rf(14), fontWeight: '600', color: '#FF5722' },
+  goToMapBtn: {
+    marginTop: rh(10), paddingVertical: rh(9), borderRadius: rw(10),
+    backgroundColor: '#EEF2FF', alignItems: 'center',
+    borderWidth: 1, borderColor: '#C7D2FE',
+  },
+  goToMapText: { fontSize: rf(13), fontWeight: '700', color: '#4F46E5' },
+  adCard: {
+    backgroundColor: '#fff', borderRadius: rw(16), overflow: 'hidden',
+    alignItems: 'center', paddingTop: rh(6),
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+  },
+  adLabel: { fontSize: rf(10), color: '#bbb', marginBottom: rh(4), textTransform: 'uppercase', letterSpacing: 0.5 },
 });

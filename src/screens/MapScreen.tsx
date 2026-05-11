@@ -22,6 +22,7 @@ import { haversineDistance } from '../utils/geo';
 import { resolveStateUF } from '../utils/brazilGeo';
 import { useAppStore } from '../store/appStore';
 import { t } from '../utils/i18n';
+import { AdBanner } from '../components/AdBanner';
 
 const MAX_REPORT_RADIUS_KM = 1;
 
@@ -63,8 +64,22 @@ export function MapScreen() {
   const setUserCountryCode = useAppStore((s) => s.setUserCountryCode);
   const setUserStateUF = useAppStore((s) => s.setUserStateUF);
   const setUserLocation = useAppStore((s) => s.setUserLocation);
+  const pendingMapFocus = useAppStore((s) => s.pendingMapFocus);
+  const clearMapFocus = useAppStore((s) => s.clearMapFocus);
   // Mapa exibe TODOS os pins, sem filtro de estado
   const roadEvents = allRoadEvents;
+
+  // Anima câmera para evento quando solicitado por outra aba
+  useEffect(() => {
+    if (!pendingMapFocus || !mapReady || !mapRef.current) return;
+    mapRef.current.animateToRegion({
+      latitude: pendingMapFocus.lat,
+      longitude: pendingMapFocus.lon,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    }, 800);
+    clearMapFocus();
+  }, [pendingMapFocus, mapReady]);
 
   useEffect(() => {
     const unsubRoad = subscribeToEvents();
@@ -174,6 +189,7 @@ export function MapScreen() {
         onMapLoadingError={() => setMapError(true)}
         showsUserLocation
         showsMyLocationButton={false}
+        showsTraffic
         clusterColor="#FF5722"
         clusterTextColor="#fff"
         clusterFontFamily={undefined}
@@ -283,6 +299,11 @@ export function MapScreen() {
           onClose={() => setCommentTarget(null)}
         />
       )}
+
+      {/* Banner AdMob fixo na parte inferior do mapa */}
+      <View style={styles.adContainer}>
+        <AdBanner />
+      </View>
     </View>
   );
 }
@@ -290,6 +311,10 @@ export function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
+  adContainer: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    alignItems: 'center', backgroundColor: 'transparent',
+  },
   loadingOverlay: {
     position: 'absolute', alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 20,

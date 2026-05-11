@@ -8,8 +8,10 @@ interface Props {
   onPress: (event: RoadEvent) => void;
 }
 
+const FALLBACK_META = { color: '#607D8B', emoji: '📍' };
+
 export function EventMarker({ event, onPress }: Props) {
-  const meta = EVENT_CATEGORIES[event.category];
+  const meta = EVENT_CATEGORIES[event.category] ?? FALLBACK_META;
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
   // Permite renderizar o emoji e depois para de rastrear para economizar performance
