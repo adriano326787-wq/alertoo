@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   Modal, SafeAreaView, Linking, Alert,
 } from 'react-native';
+import { useT } from '../hooks/useT';
 
 // ─── Links de pagamento do Mercado Pago ────────────────────────────────────────
 // Crie os links em: https://www.mercadopago.com.br/links
@@ -51,6 +52,7 @@ interface Props {
 }
 
 export function MercadoPagoModal({ visible, onClose }: Props) {
+  const t = useT();
   function handleSelect(url: string) {
     onClose();
     Linking.openURL(url).catch(() =>
@@ -75,7 +77,7 @@ export function MercadoPagoModal({ visible, onClose }: Props) {
           <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
             <Text style={styles.backIcon}>✕</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>💛 Apoie o Alertoo</Text>
+          <Text style={styles.headerTitle}>{t('support_modal_title')}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -83,17 +85,17 @@ export function MercadoPagoModal({ visible, onClose }: Props) {
         <View style={styles.content}>
             <View style={styles.heroSection}>
               <Text style={styles.heroEmoji}>💛</Text>
-              <Text style={styles.heroTitle}>Ajude a manter o Alertoo gratuito</Text>
+              <Text style={styles.heroTitle}>{t('support_modal_hero')}</Text>
               <Text style={styles.heroDesc}>
                 O Alertoo é desenvolvido com muito carinho e mantido sem anúncios intrusivos.
                 Sua doação ajuda a pagar servidores, mapas e novidades.
               </Text>
               <View style={styles.mpBadge}>
-                <Text style={styles.mpBadgeText}>🔒 Pagamento seguro via Mercado Pago</Text>
+                <Text style={styles.mpBadgeText}>{t('support_modal_secure')}</Text>
               </View>
             </View>
 
-            <Text style={styles.chooseLabel}>Escolha um valor:</Text>
+            <Text style={styles.chooseLabel}>{t('support_choose_value')}</Text>
 
             <View style={styles.grid}>
               {DONATE_OPTIONS.map((opt) => (
@@ -112,7 +114,7 @@ export function MercadoPagoModal({ visible, onClose }: Props) {
             </View>
 
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-              <Text style={styles.cancelText}>Agora não</Text>
+              <Text style={styles.cancelText}>{t('support_not_now')}</Text>
             </TouchableOpacity>
           </View>
       </SafeAreaView>

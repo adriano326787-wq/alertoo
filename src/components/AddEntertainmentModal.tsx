@@ -5,6 +5,9 @@ import {
 } from 'react-native';
 import { EntertainmentCategory, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { useEntertainmentStore } from '../store/entertainmentStore';
+import { validateEventContent } from '../utils/contentFilter';
+import { useT } from '../hooks/useT';
+import { tEntCat } from '../utils/i18n';
 
 interface Props {
   visible: boolean;
@@ -16,6 +19,7 @@ interface Props {
 }
 
 export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, countryCode, onClose }: Props) {
+  const t = useT();
   const [category, setCategory] = useState<EntertainmentCategory>('bar');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -25,6 +29,13 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
 
   const handleSubmit = async () => {
     if (!title.trim()) return;
+
+    const contentError = validateEventContent({ title, description, address });
+    if (contentError) {
+      Alert.alert('Conteúdo inadequado', contentError);
+      return;
+    }
+
     setSaving(true);
     try {
       await addEvent({
@@ -62,7 +73,7 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
             keyboardShouldPersistTaps="handled"
             automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           >
-            <Text style={styles.title}>Adicionar evento</Text>
+            <Text style={styles.title}>{t('add_event_title')}</Text>
 
             {(cityName || stateUF) && (
               <View style={styles.locationBadge}>
@@ -70,7 +81,7 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
               </View>
             )}
 
-            <Text style={styles.label}>Categoria</Text>
+            <Text style={styles.label}>{t('add_category')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
               {(Object.entries(ENTERTAINMENT_CATEGORIES) as [EntertainmentCategory, typeof ENTERTAINMENT_CATEGORIES[EntertainmentCategory]][]).map(([key, meta]) => (
                 <TouchableOpacity
@@ -79,25 +90,25 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
                   onPress={() => setCategory(key)}
                 >
                   <Text style={styles.chipEmoji}>{meta.emoji}</Text>
-                  <Text style={[styles.chipLabel, category === key && styles.chipLabelSelected]}>{meta.label}</Text>
+                  <Text style={[styles.chipLabel, category === key && styles.chipLabelSelected]}>{tEntCat(key)}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            <Text style={styles.label}>Nome do evento *</Text>
+            <Text style={styles.label}>{t('add_event_name')} *</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ex: Noite do Samba no Bar do João"
+              placeholder={t('add_ent_name_ph')}
               placeholderTextColor="#aaa"
               value={title}
               onChangeText={setTitle}
               maxLength={80}
             />
 
-            <Text style={styles.label}>Descrição (opcional)</Text>
+            <Text style={styles.label}>{t('add_description')}</Text>
             <TextInput
               style={[styles.input, styles.multiline]}
-              placeholder="Detalhes, horário, entrada..."
+              placeholder={t('add_ent_desc_ph')}
               placeholderTextColor="#aaa"
               value={description}
               onChangeText={setDescription}
@@ -105,10 +116,10 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
               maxLength={300}
             />
 
-            <Text style={styles.label}>Endereço (opcional)</Text>
+            <Text style={styles.label}>{t('add_address')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ex: Rua das Flores, 123"
+              placeholder={t('add_ent_addr_ph')}
               placeholderTextColor="#aaa"
               value={address}
               onChangeText={setAddress}
@@ -117,7 +128,7 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
 
             <View style={styles.footer}>
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                <Text style={styles.cancelText}>Cancelar</Text>
+                <Text style={styles.cancelText}>{t('filter_cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.submitBtn, (!title.trim() || saving) && styles.submitBtnDisabled]}
@@ -127,7 +138,7 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.submitText}>Publicar</Text>
+                  <Text style={styles.submitText}>{t('add_publish')}</Text>
                 )}
               </TouchableOpacity>
             </View>

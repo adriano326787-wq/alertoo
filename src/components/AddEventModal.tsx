@@ -14,6 +14,9 @@ import {
 } from 'react-native';
 import { EventCategory, EVENT_CATEGORIES } from '../types';
 import { useEventsStore } from '../store/eventsStore';
+import { validateEventContent } from '../utils/contentFilter';
+import { useT } from '../hooks/useT';
+import { tRoadCat } from '../utils/i18n';
 
 interface Props {
   visible: boolean;
@@ -25,12 +28,19 @@ interface Props {
 }
 
 export function AddEventModal({ visible, coordinate, stateUF, cityName, countryCode, onClose }: Props) {
+  const t = useT();
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>('drunkcheck');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const addEvent = useEventsStore((s) => s.addEvent);
 
   const handleSubmit = async () => {
+    const contentError = validateEventContent({ description });
+    if (contentError) {
+      Alert.alert('Conteúdo inadequado', contentError);
+      return;
+    }
+
     setSaving(true);
     try {
       const meta = EVENT_CATEGORIES[selectedCategory];
@@ -62,7 +72,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <Text style={styles.title}>Reportar alerta</Text>
+            <Text style={styles.title}>{t('add_road_title')}</Text>
 
             {(cityName || stateUF) && (
               <View style={styles.locationBadge}>
@@ -72,7 +82,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
               </View>
             )}
 
-            <Text style={styles.label}>Tipo de ocorrência</Text>
+            <Text style={styles.label}>{t('add_road_type')}</Text>
             <View style={styles.chips}>
               {(Object.entries(EVENT_CATEGORIES) as [EventCategory, typeof EVENT_CATEGORIES[EventCategory]][]).map(
                 ([key, meta]) => (
@@ -87,17 +97,17 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
                   >
                     <Text style={styles.chipEmoji}>{meta.emoji}</Text>
                     <Text style={[styles.chipLabel, selectedCategory === key && styles.chipLabelSelected]}>
-                      {meta.label}
+                      {tRoadCat(key)}
                     </Text>
                   </TouchableOpacity>
                 )
               )}
             </View>
 
-            <Text style={styles.label}>Descrição (opcional)</Text>
+            <Text style={styles.label}>{t('add_description')}</Text>
             <TextInput
               style={[styles.input, styles.multiline]}
-              placeholder="Ex: faixa da direita bloqueada..."
+              placeholder={t('add_road_desc_ph')}
               placeholderTextColor="#aaa"
               value={description}
               onChangeText={setDescription}
@@ -107,7 +117,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
 
             <View style={styles.footer}>
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose} disabled={saving}>
-                <Text style={styles.cancelText}>Cancelar</Text>
+                <Text style={styles.cancelText}>{t('filter_cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
@@ -117,7 +127,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.submitText}>Reportar</Text>
+                  <Text style={styles.submitText}>{t('add_road_report')}</Text>
                 )}
               </TouchableOpacity>
             </View>

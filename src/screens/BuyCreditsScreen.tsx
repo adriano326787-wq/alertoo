@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Modal, SafeAreaView, Alert, ActivityIndicator, Linking,
 } from 'react-native';
+import { useT } from '../hooks/useT';
 import { CREDIT_PACKAGES, CreditPackage } from '../types/promotion';
 import { addCredits } from '../services/promotionService';
 import { getCurrentUserId } from '../services/authService';
@@ -67,6 +68,7 @@ interface Props {
 }
 
 export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
+  const t = useT();
   const [selected, setSelected] = useState<CreditPackage | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -140,7 +142,7 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
           <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
             <Text style={styles.closeIcon}>✕</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>🪙 Comprar Créditos</Text>
+          <Text style={styles.headerTitle}>{t('buy_credits_title')}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -148,14 +150,14 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
           {/* Hero */}
           <View style={styles.hero}>
             <Text style={styles.heroEmoji}>🚀</Text>
-            <Text style={styles.heroTitle}>Destaque seu evento</Text>
+            <Text style={styles.heroTitle}>{t('buy_credits_hero')}</Text>
             <Text style={styles.heroDesc}>
               Use créditos para promover seus restaurantes, bares e eventos no mapa com destaque especial.
             </Text>
           </View>
 
           {/* Pacotes */}
-          <Text style={styles.sectionLabel}>ESCOLHA UM PACOTE</Text>
+          <Text style={styles.sectionLabel}>{t('buy_credits_choose')}</Text>
 
           <View style={styles.packages}>
             {CREDIT_PACKAGES.map((pkg) => {
@@ -176,7 +178,7 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
                   <View style={styles.packageTop}>
                     <Text style={styles.packageCredits}>🪙 {pkg.credits}</Text>
                     <Text style={styles.packageCreditLabel}>
-                      {pkg.credits === 1 ? 'crédito' : 'créditos'}
+                      {pkg.credits === 1 ? t('pkg_credits').replace('{n}', '').trim() : t('pkg_credits_pl').replace('{n}', '').trim()}
                     </Text>
                   </View>
                   <Text style={styles.packagePrice}>R$ {pkg.price.toFixed(2)}</Text>
@@ -194,7 +196,7 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
 
           {/* O que são créditos */}
           <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>💡 O que são créditos?</Text>
+            <Text style={styles.infoTitle}>{t('buy_credits_what')}</Text>
             <Text style={styles.infoText}>
               {'• 1 crédito = 1 promoção Bronze (7 dias)\n'}
               {'• 2 créditos = 1 promoção Prata (14 dias)\n'}
@@ -204,7 +206,7 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
           </View>
 
           {/* Pagamento */}
-          <Text style={styles.sectionLabel}>MÉTODO DE PAGAMENTO</Text>
+          <Text style={styles.sectionLabel}>{t('buy_credits_payment')}</Text>
 
           <TouchableOpacity
             style={[styles.payBtn, !selected && styles.payBtnDisabled]}
@@ -229,7 +231,7 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
           </TouchableOpacity>
 
           <View style={styles.secureRow}>
-            <Text style={styles.secureText}>🔒 Pagamento seguro via Mercado Pago</Text>
+            <Text style={styles.secureText}>{t('buy_credits_secure')}</Text>
           </View>
         </ScrollView>
       </SafeAreaView>

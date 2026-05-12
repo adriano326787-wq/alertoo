@@ -1,18 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, Image, Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateProfile } from 'firebase/auth';
-import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import {
+  doc, updateDoc, collection, query, where, onSnapshot, Timestamp,
+} from 'firebase/firestore';
+import * as ImagePicker from 'expo-image-picker';
+import { useNavigation } from '@react-navigation/native';
 import { useUserStore } from '../store/userStore';
 import { useAppStore } from '../store/appStore';
 import { getRank, POINTS } from '../types/user';
 import { RankBadge, RankProgressBar, AllRanksLegend } from '../components/RankBadge';
 import { signOut, getCurrentUser } from '../services/authService';
 import { db } from '../services/firebase';
-import { t } from '../utils/i18n';
+import { useT } from '../hooks/useT';
+import { tEntCat, tTier } from '../utils/i18n';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MercadoPagoModal } from '../components/MercadoPagoModal';
@@ -21,12 +26,17 @@ import { BuyCreditsScreen } from './BuyCreditsScreen';
 import { getUserCredits, daysRemaining } from '../services/promotionService';
 import { PROMOTION_TIERS } from '../types/promotion';
 import { EntertainmentEvent } from '../types/entertainment';
+import { uploadProfilePhoto } from '../services/storageService';
+import { ShareSheet } from '../components/ShareSheet';
+import { LanguagePicker } from '../components/LanguagePicker';
+import { ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 
 export function ProfileScreen() {
   const { top } = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const { profile, clearProfile, updateDisplayName, isAdmin } = useUserStore();
+  const t = useT();
   const setPendingAuthTab = useAppStore((s) => s.setPendingAuthTab);
-  useAppStore((s) => s.langVersion); // re-render on language change
   const currentUser = getCurrentUser();
   const isAnonymous = currentUser?.isAnonymous ?? true;
 
@@ -41,24 +51,39 @@ export function ProfileScreen() {
   const [promoteModalVisible, setPromoteModalVisible] = useState(false);
   const [buyCreditsVisible, setBuyCreditsVisible] = useState(false);
   const [selectedEventForPromo, setSelectedEventForPromo] = useState<EntertainmentEvent | null>(null);
-  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(true);
 
-  const loadCreditsAndEvents = useCallback(async () => {
+  // ─── Foto de perfil ──────────────────────────────────────────────────────────
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // ─── Compartilhar ────────────────────────────────────────────────────────────
+  const [shareEvent, setShareEvent] = useState<EntertainmentEvent | null>(null);
+
+  // Carrega créditos uma vez
+  const loadCredits = useCallback(async () => {
     if (!currentUser || currentUser.isAnonymous) return;
     try {
       const credits = await getUserCredits(currentUser.uid);
       setUserCredits(credits);
     } catch {}
+  }, [currentUser]);
 
+  useEffect(() => { loadCredits(); }, [loadCredits]);
+
+  // ─── Assinatura em tempo real dos eventos do usuário ─────────────────────────
+  const unsubEventsRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.isAnonymous) {
+      setLoadingEvents(false);
+      return;
+    }
     setLoadingEvents(true);
-    try {
-      // Busca apenas por userId (sem índice), ordena e filtra localmente
-      const snap = await getDocs(
-        query(
-          collection(db, 'entertainment_events'),
-          where('userId', '==', currentUser.uid),
-        )
-      );
+    const q = query(
+      collection(db, 'entertainment_events'),
+      where('userId', '==', currentUser.uid),
+    );
+    const unsub = onSnapshot(q, (snap) => {
       const now = Date.now();
       const events: EntertainmentEvent[] = snap.docs
         .map((d) => {
@@ -71,29 +96,57 @@ export function ProfileScreen() {
             address: data.address ?? undefined,
             latitude: data.latitude,
             longitude: data.longitude,
-            createdAt: data.createdAt?.toMillis?.() ?? now,
-            expiresAt: data.expiresAt?.toMillis?.() ?? now,
+            createdAt: (data.createdAt as Timestamp)?.toMillis?.() ?? now,
+            expiresAt: (data.expiresAt as Timestamp)?.toMillis?.() ?? now,
             userId: data.userId,
             likes: data.likes ?? [],
             commentCount: data.commentCount ?? 0,
             isFeatured: data.isFeatured ?? false,
             promotionTier: data.promotionTier ?? null,
-            promotionEndDate: data.promotionEndDate?.toMillis?.() ?? null,
+            promotionEndDate: data.promotionEndDate
+              ? (data.promotionEndDate as Timestamp).toMillis()
+              : null,
             promotionPhotoUrl: data.promotionPhotoUrl ?? null,
           } as EntertainmentEvent;
         })
         .filter((e) => e.expiresAt > now)
-        .sort((a, b) => b.expiresAt - a.expiresAt); // mais recentes primeiro
+        .sort((a, b) => b.expiresAt - a.expiresAt);
       setUserEvents(events);
-    } catch (err) {
-      console.error('[ProfileScreen] erro ao carregar eventos:', err);
-    }
-    setLoadingEvents(false);
+      setLoadingEvents(false);
+    }, () => setLoadingEvents(false));
+
+    unsubEventsRef.current = unsub;
+    return () => { unsub(); unsubEventsRef.current = null; };
   }, [currentUser]);
 
-  useEffect(() => {
-    loadCreditsAndEvents();
-  }, [loadCreditsAndEvents]);
+  // ─── Foto de perfil ───────────────────────────────────────────────────────────
+  const handlePickPhoto = useCallback(async () => {
+    if (!currentUser) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Permita o acesso à galeria para escolher uma foto.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.75,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadProfilePhoto(currentUser.uid, result.assets[0].uri);
+      await updateProfile(currentUser, { photoURL: url });
+      await updateDoc(doc(db, 'users', currentUser.uid), { photoURL: url });
+      useUserStore.getState().updatePhotoURL(url);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível salvar a foto. Tente novamente.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }, [currentUser]);
 
 
   async function handleSignOut() {
@@ -188,11 +241,13 @@ export function ProfileScreen() {
 
           <View style={[styles.divider, { marginTop: 24 }]} />
 
+          <LanguagePicker />
+
           <TouchableOpacity style={[styles.donateBtn, { width: '100%' }]} onPress={() => setDonateVisible(true)}>
             <Text style={styles.donateBtnEmoji}>💛</Text>
             <View style={styles.donateBtnTexts}>
-              <Text style={styles.donateBtnTitle}>Apoie o Alertoo</Text>
-              <Text style={styles.donateBtnSub}>Ajude a manter a plataforma gratuita</Text>
+              <Text style={styles.donateBtnTitle}>{t('support_title')}</Text>
+              <Text style={styles.donateBtnSub}>{t('support_desc')}</Text>
             </View>
             <Text style={styles.donateBtnArrow}>›</Text>
           </TouchableOpacity>
@@ -216,13 +271,20 @@ export function ProfileScreen() {
     >
       {/* Avatar + info */}
       <View style={styles.avatarSection}>
-        {profile.photoURL ? (
-          <Image source={{ uri: profile.photoURL }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatarPlaceholder, { backgroundColor: rank.color }]}>
-            <Text style={styles.avatarEmoji}>{rank.emoji}</Text>
+        <TouchableOpacity onPress={handlePickPhoto} style={styles.avatarWrap} disabled={uploadingPhoto}>
+          {profile.photoURL ? (
+            <Image source={{ uri: profile.photoURL }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatarPlaceholder, { backgroundColor: rank.color }]}>
+              <Text style={styles.avatarEmoji}>{rank.emoji}</Text>
+            </View>
+          )}
+          <View style={styles.avatarEditBadge}>
+            {uploadingPhoto
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={styles.avatarEditIcon}>📷</Text>}
           </View>
-        )}
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.nameRow}
@@ -242,7 +304,7 @@ export function ProfileScreen() {
         <RankBadge points={profile.points} size="large" />
         {isAdmin && (
           <View style={styles.adminBadge}>
-            <Text style={styles.adminBadgeText}>⚙️ Administrador</Text>
+            <Text style={styles.adminBadgeText}>⚙️ {t('admin_label')}</Text>
           </View>
         )}
       </View>
@@ -307,18 +369,18 @@ export function ProfileScreen() {
         </View>
         {!isAdmin && (
           <TouchableOpacity style={styles.buyCreditsBtn} onPress={() => setBuyCreditsVisible(true)}>
-            <Text style={styles.buyCreditsText}>+ Comprar</Text>
+            <Text style={styles.buyCreditsText}>+ {t('buy_credits')}</Text>
           </TouchableOpacity>
         )}
       </View>
 
       {/* ── Meus Eventos Ativos ──────────────────────────────────────────────── */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>🎉 Meus Eventos Ativos</Text>
+        <Text style={styles.cardTitle}>🎉 {t('my_active_events')}</Text>
         {loadingEvents ? (
           <ActivityIndicator color="#E53935" style={{ marginVertical: 16 }} />
         ) : userEvents.length === 0 ? (
-          <Text style={styles.noEventsText}>Você não tem eventos ativos no momento.</Text>
+          <Text style={styles.noEventsText}>{t('no_active_events')}</Text>
         ) : (
           userEvents.map((ev) => {
             const isPromoted = !!(ev.promotionTier && ev.promotionEndDate && ev.promotionEndDate > Date.now());
@@ -331,21 +393,35 @@ export function ProfileScreen() {
                   {isPromoted && tierConfig ? (
                     <View style={styles.promoTag}>
                       <Text style={styles.promoTagText}>
-                        {tierConfig.emoji} {tierConfig.label} · {days}d restantes
+                        {tierConfig.emoji} {tTier(tierConfig.id)} · {days}{t('days_remaining')}
                       </Text>
                     </View>
                   ) : (
-                    <Text style={styles.eventItemSub}>Sem promoção ativa</Text>
+                    <Text style={styles.eventItemSub}>{t('no_promo')}</Text>
                   )}
                 </View>
-                <TouchableOpacity
-                  style={[styles.promoteBtn, isPromoted && styles.promoteBtnActive]}
-                  onPress={() => { setSelectedEventForPromo(ev); setPromoteModalVisible(true); }}
-                >
-                  <Text style={[styles.promoteBtnText, isPromoted && styles.promoteBtnTextActive]}>
-                    {isPromoted ? '⚙️ Gerenciar' : '🚀 Promover'}
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.eventItemActions}>
+                  <TouchableOpacity
+                    style={styles.shareBtn}
+                    onPress={() => setShareEvent(ev)}
+                  >
+                    <Text style={styles.shareBtnText}>↗</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.goToEventBtn}
+                    onPress={() => navigation.navigate('Entretenimento', { eventId: ev.id })}
+                  >
+                    <Text style={styles.goToEventText}>📍 {t('view')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.promoteBtn, isPromoted && styles.promoteBtnActive]}
+                    onPress={() => { setSelectedEventForPromo(ev); setPromoteModalVisible(true); }}
+                  >
+                    <Text style={[styles.promoteBtnText, isPromoted && styles.promoteBtnTextActive]}>
+                      {isPromoted ? `⚙️ ${t('manage')}` : `🚀 ${t('promote')}`}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           })
@@ -356,11 +432,14 @@ export function ProfileScreen() {
       <TouchableOpacity style={styles.donateBtn} onPress={() => setDonateVisible(true)}>
         <Text style={styles.donateBtnEmoji}>💛</Text>
         <View style={styles.donateBtnTexts}>
-          <Text style={styles.donateBtnTitle}>Apoie o Alertoo</Text>
-          <Text style={styles.donateBtnSub}>Ajude a manter a plataforma gratuita</Text>
+          <Text style={styles.donateBtnTitle}>{t('support_title')}</Text>
+          <Text style={styles.donateBtnSub}>{t('support_desc')}</Text>
         </View>
         <Text style={styles.donateBtnArrow}>›</Text>
       </TouchableOpacity>
+
+      {/* Idioma */}
+      <LanguagePicker />
 
       {/* Sair */}
       <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
@@ -368,6 +447,20 @@ export function ProfileScreen() {
       </TouchableOpacity>
 
       <MercadoPagoModal visible={donateVisible} onClose={() => setDonateVisible(false)} />
+
+      {/* Compartilhar evento */}
+      {shareEvent && (
+        <ShareSheet
+          visible={!!shareEvent}
+          onClose={() => setShareEvent(null)}
+          title={shareEvent.title}
+          description={shareEvent.description}
+          category={`${ENTERTAINMENT_CATEGORIES[shareEvent.category]?.emoji ?? '🎉'} ${tEntCat(shareEvent.category)}`}
+          location={[shareEvent.cityName, shareEvent.stateUF].filter(Boolean).join(' — ')}
+          eventId={shareEvent.id}
+          eventType="entertainment"
+        />
+      )}
 
       {/* Modais de promoção */}
       {selectedEventForPromo && (
@@ -468,12 +561,22 @@ const styles = StyleSheet.create({
 
   // ─── Autenticado ───────────────────────────────────────────────────────────
   avatarSection: { alignItems: 'center', marginBottom: 20, gap: 6 },
-  avatar: { width: 88, height: 88, borderRadius: 44, marginBottom: 4 },
+  avatarWrap: { position: 'relative', marginBottom: 4 },
+  avatar: { width: 88, height: 88, borderRadius: 44 },
   avatarPlaceholder: {
     width: 88, height: 88, borderRadius: 44,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+    alignItems: 'center', justifyContent: 'center',
   },
   avatarEmoji: { fontSize: 40 },
+  avatarEditBadge: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#1E293B',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#fff',
+    elevation: 3,
+  },
+  avatarEditIcon: { fontSize: 14 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   displayName: { fontSize: 22, fontWeight: '800', color: '#1a1a1a' },
   editIcon: { fontSize: 16 },
@@ -580,6 +683,12 @@ const styles = StyleSheet.create({
   eventItemLeft: { flex: 1 },
   eventItemTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
   eventItemSub: { fontSize: 12, color: '#bbb', marginTop: 2 },
+  eventItemActions: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  goToEventBtn: {
+    borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7,
+    borderWidth: 1.5, borderColor: '#1565C0', backgroundColor: '#E3F2FD',
+  },
+  goToEventText: { fontSize: 12, fontWeight: '700', color: '#1565C0' },
   promoTag: {
     marginTop: 3, alignSelf: 'flex-start',
     backgroundColor: '#FFF3E0', borderRadius: 6,
@@ -587,6 +696,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#FFCC80',
   },
   promoTagText: { fontSize: 11, fontWeight: '700', color: '#E65100' },
+  shareBtn: {
+    borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7,
+    borderWidth: 1.5, borderColor: '#64748B', backgroundColor: '#F8FAFC',
+  },
+  shareBtnText: { fontSize: 13, fontWeight: '800', color: '#64748B' },
   promoteBtn: {
     borderRadius: 9, paddingHorizontal: 12, paddingVertical: 7,
     borderWidth: 1.5, borderColor: '#E53935',

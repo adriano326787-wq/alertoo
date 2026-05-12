@@ -7,6 +7,7 @@ import { useEntertainmentStore } from '../store/entertainmentStore';
 import { EventComment } from '../types/entertainment';
 import { timeAgo } from '../utils/time';
 import { getCurrentUserId } from '../services/authService';
+import { useT } from '../hooks/useT';
 
 interface Props {
   visible: boolean;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function CommentsModal({ visible, eventId, eventTitle, onClose }: Props) {
+  const t = useT();
   const [comments, setComments] = useState<EventComment[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,7 +48,7 @@ export function CommentsModal({ visible, eventId, eventTitle, onClose }: Props) 
           <View style={styles.handle} />
           <View style={styles.header}>
             <View style={styles.headerText}>
-              <Text style={styles.title}>Comentários</Text>
+              <Text style={styles.title}>{t('comments_title')}</Text>
               <Text style={styles.subtitle} numberOfLines={1}>{eventTitle}</Text>
             </View>
             <TouchableOpacity onPress={onClose}>
@@ -58,8 +60,8 @@ export function CommentsModal({ visible, eventId, eventTitle, onClose }: Props) 
             <ActivityIndicator style={styles.loader} color="#6A1B9A" />
           ) : comments.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>Nenhum comentário ainda.</Text>
-              <Text style={styles.emptyHint}>Seja o primeiro a comentar!</Text>
+              <Text style={styles.emptyText}>{t('comments_empty')}</Text>
+              <Text style={styles.emptyHint}>{t('comments_empty_hint')}</Text>
             </View>
           ) : (
             <FlatList

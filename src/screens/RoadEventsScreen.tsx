@@ -7,7 +7,8 @@ import { useEventsStore } from '../store/eventsStore';
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo, timeLeft } from '../utils/time';
-import { t } from '../utils/i18n';
+import { tRoadCat } from '../utils/i18n';
+import { useT } from '../hooks/useT';
 import { useAppStore } from '../store/appStore';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { rw, rh, rf, isTablet } from '../utils/responsive';
@@ -21,6 +22,7 @@ function RoadEventCard({ event, onConfirm, onDeny, onGoToMap }: {
   onDeny: (id: string) => void;
   onGoToMap: (event: RoadEvent) => void;
 }) {
+  const t = useT();
   const meta = EVENT_CATEGORIES[event.category];
   const myUid = getCurrentUserId();
   const alreadyVoted = event.voters.includes(myUid);
@@ -36,7 +38,7 @@ function RoadEventCard({ event, onConfirm, onDeny, onGoToMap }: {
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle}>{event.title}</Text>
           <Text style={styles.cardMeta}>
-            {meta.label}
+            {tRoadCat(event.category)}
             {event.cityName ? ` · ${event.cityName}` : ''}
             {event.stateUF ? ` — ${event.stateUF}` : ''}
           </Text>
@@ -79,14 +81,14 @@ function RoadEventCard({ event, onConfirm, onDeny, onGoToMap }: {
       </View>
 
       <TouchableOpacity style={styles.goToMapBtn} onPress={() => onGoToMap(event)}>
-        <Text style={styles.goToMapText}>🗺️ Ir para o evento no mapa</Text>
+        <Text style={styles.goToMapText}>🗺️ {t('go_to_map_event')}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 export function RoadEventsScreen() {
-  useAppStore((s) => s.langVersion); // re-render on language change
+  const t = useT();
   const { top: topInset } = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const focusOnMap = useAppStore((s) => s.focusOnMap);
@@ -168,7 +170,7 @@ export function RoadEventsScreen() {
             if ('__ad' in item) {
               return (
                 <View style={styles.adCard}>
-                  <Text style={styles.adLabel}>Publicidade</Text>
+                  <Text style={styles.adLabel}>{t('advertising')}</Text>
                   <AdBanner size={BannerAdSize.MEDIUM_RECTANGLE} />
                 </View>
               );

@@ -25,6 +25,7 @@ interface AppState {
   setUserCountryCode: (code: string | null) => void;
   setUserStateUF: (stateUF: string | null) => void;
   setUserLocation: (lat: number, lon: number) => void;
+  bumpLangVersion: () => void;
   focusOnMap: (focus: MapFocus) => void;
   clearMapFocus: () => void;
 }
@@ -47,6 +48,7 @@ export const useAppStore = create<AppState>((set) => ({
   },
   setUserStateUF: (stateUF) => set({ userStateUF: stateUF }),
   setUserLocation: (lat, lon) => set({ userLat: lat, userLon: lon }),
+  bumpLangVersion: () => set((s) => ({ langVersion: s.langVersion + 1 })),
   focusOnMap: (focus) => set({ pendingMapFocus: focus }),
   clearMapFocus: () => set({ pendingMapFocus: null }),
 }));

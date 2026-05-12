@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { StyleSheet, View, TouchableOpacity, Text, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ClusteredMapView from 'react-native-map-clustering';
-import { MapPressEvent, PROVIDER_GOOGLE } from 'react-native-maps';
+import { Marker, MapPressEvent, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useEventsStore } from '../store/eventsStore';
 import { useEntertainmentStore } from '../store/entertainmentStore';
@@ -22,7 +22,14 @@ import { haversineDistance } from '../utils/geo';
 import { resolveStateUF } from '../utils/brazilGeo';
 import { useAppStore } from '../store/appStore';
 import { t } from '../utils/i18n';
+import { useT } from '../hooks/useT';
 import { AdBanner } from '../components/AdBanner';
+import {
+  ZoomTier,
+  getZoomTier,
+  filterRoadEvents,
+  filterEntEvents,
+} from '../utils/mapZoom';
 
 const MAX_REPORT_RADIUS_KM = 1;
 
@@ -33,6 +40,112 @@ const INITIAL_REGION = {
   longitudeDelta: 0.05,
 };
 
+// ─── Configuração de cluster por tier ────────────────────────────────────────
+const CLUSTER_CONFIG: Record<ZoomTier, { radius: number; minPoints: number }> = {
+  distant: { radius: 80, minPoints: 2 },  // agrupa muito — visão macro
+  medium:  { radius: 50, minPoints: 2 },  // agrupa moderadamente
+  close:   { radius: 28, minPoints: 3 },  // agrupa pouco — mostra pins individuais
+};
+
+// ─── Aparência do cluster por tier ────────────────────────────────────────────
+const CLUSTER_STYLE: Record<ZoomTier, { bg: string; border: string; text: string }> = {
+  distant: { bg: '#6366F1', border: '#4F46E5', text: '#fff' }, // roxo — visão ampla
+  medium:  { bg: '#0EA5E9', border: '#0284C7', text: '#fff' }, // azul — bairro
+  close:   { bg: '#FF5722', border: '#E64A19', text: '#fff' }, // laranja — rua
+};
+
+// ─── Tamanho do cluster por quantidade ───────────────────────────────────────
+function clusterSize(count: number): number {
+  if (count >= 50) return 72;
+  if (count >= 20) return 62;
+  if (count >= 10) return 54;
+  if (count >= 5)  return 48;
+  return 42;
+}
+
+function clusterLabel(count: number): string {
+  if (count >= 999) return '999+';
+  if (count >= 99)  return '99+';
+  return String(count);
+}
+
+// ─── Cluster inteligente ──────────────────────────────────────────────────────
+interface SmartClusterProps {
+  cluster: any;
+  zoomTier: ZoomTier;
+  onPress: (cluster: any) => void;
+}
+
+function SmartCluster({ cluster, zoomTier, onPress }: SmartClusterProps) {
+  const count: number = cluster.properties.point_count;
+  const [lon, lat] = cluster.geometry.coordinates;
+  const style = CLUSTER_STYLE[zoomTier];
+  const size = clusterSize(count);
+  const fontSize = size >= 62 ? 16 : size >= 48 ? 14 : 13;
+  const ringSize = size + 14;
+
+  return (
+    <Marker
+      coordinate={{ latitude: lat, longitude: lon }}
+      anchor={{ x: 0.5, y: 0.5 }}
+      onPress={() => onPress(cluster)}
+      tracksViewChanges={false}
+    >
+      {/* Anel externo */}
+      <View style={[
+        clusterStyles.ring,
+        { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: style.border + '55' },
+      ]}>
+        {/* Corpo do cluster */}
+        <View style={[
+          clusterStyles.body,
+          {
+            width: size, height: size, borderRadius: size / 2,
+            backgroundColor: style.bg,
+            borderColor: style.border,
+          },
+        ]}>
+          {/* Brilho interno */}
+          <View style={clusterStyles.shine} />
+          <Text style={[clusterStyles.count, { fontSize, color: style.text }]}>
+            {clusterLabel(count)}
+          </Text>
+          {/* Ícone de tipo abaixo do número para clusters grandes */}
+          {size >= 54 && (
+            <Text style={clusterStyles.typeIcon}>
+              {zoomTier === 'distant' ? '🌍' : zoomTier === 'medium' ? '🏙️' : '📍'}
+            </Text>
+          )}
+        </View>
+      </View>
+    </Marker>
+  );
+}
+
+const clusterStyles = StyleSheet.create({
+  ring: {
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+  },
+  body: {
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2.5,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25, shadowRadius: 6, elevation: 8,
+    overflow: 'hidden',
+  },
+  shine: {
+    position: 'absolute', top: 5, left: 8,
+    width: 14, height: 8, borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    transform: [{ rotate: '-20deg' }],
+  },
+  count: { fontWeight: '800', lineHeight: 18 },
+  typeIcon: { fontSize: 10, marginTop: -2, opacity: 0.9 },
+});
+
+// ─── Tela ─────────────────────────────────────────────────────────────────────
 interface PendingCoord {
   coordinate: { latitude: number; longitude: number };
   stateUF?: string;
@@ -41,6 +154,7 @@ interface PendingCoord {
 }
 
 export function MapScreen() {
+  const t = useT();
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
@@ -57,6 +171,34 @@ export function MapScreen() {
   const [selectedEntEvent, setSelectedEntEvent] = useState<EntertainmentEvent | null>(null);
   const { top: topInset } = useSafeAreaInsets();
 
+  // Zoom inteligente
+  const [zoomTier, setZoomTier] = useState<ZoomTier>(
+    () => getZoomTier(INITIAL_REGION.latitudeDelta)
+  );
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleRegionChange = useCallback((region: Region) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setZoomTier((prev) => {
+        const next = getZoomTier(region.latitudeDelta);
+        return next !== prev ? next : prev;
+      });
+    }, 120);
+  }, []);
+
+  // Quando o cluster é pressionado: dá zoom para revelar os pins
+  const handleClusterPress = useCallback((cluster: any) => {
+    if (!mapRef.current) return;
+    const [lon, lat] = cluster.geometry.coordinates;
+    mapRef.current.animateToRegion({
+      latitude: lat,
+      longitude: lon,
+      latitudeDelta: INITIAL_REGION.latitudeDelta / 3,
+      longitudeDelta: INITIAL_REGION.longitudeDelta / 3,
+    }, 500);
+  }, []);
+
   // Stores
   const { loading: roadLoading, events: allRoadEvents, subscribeToEvents, confirmEvent, denyEvent, filterStateUF } = useEventsStore();
   const { events: entertainmentEvents, subscribe: subscribeEntertainment, toggleLike, toggleFeatured } = useEntertainmentStore();
@@ -66,10 +208,14 @@ export function MapScreen() {
   const setUserLocation = useAppStore((s) => s.setUserLocation);
   const pendingMapFocus = useAppStore((s) => s.pendingMapFocus);
   const clearMapFocus = useAppStore((s) => s.clearMapFocus);
-  // Mapa exibe TODOS os pins, sem filtro de estado
-  const roadEvents = allRoadEvents;
 
-  // Anima câmera para evento quando solicitado por outra aba
+  // Pins filtrados por tier
+  const roadEvents = filterRoadEvents(allRoadEvents, zoomTier);
+  const visibleEntEvents = filterEntEvents(entertainmentEvents, zoomTier);
+
+  // Config de cluster dinâmica
+  const { radius, minPoints } = CLUSTER_CONFIG[zoomTier];
+
   useEffect(() => {
     if (!pendingMapFocus || !mapReady || !mapRef.current) return;
     mapRef.current.animateToRegion({
@@ -94,12 +240,7 @@ export function MapScreen() {
     const loc = await getUserLocation();
     const { latitude, longitude } = loc.coords;
     setUserLocation(latitude, longitude);
-    mapRef.current?.animateToRegion({
-      latitude,
-      longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    }, 800);
+    mapRef.current?.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 800);
   };
 
   const getUserLocation = async () => {
@@ -119,21 +260,15 @@ export function MapScreen() {
         Alert.alert('Permissão negada', 'Ative a localização para reportar eventos.');
         return;
       }
-
       const userLoc = await getUserLocation();
       const { latitude: uLat, longitude: uLon } = userLoc.coords;
-
       if (!isAdmin) {
         const distKm = haversineDistance(uLat, uLon, tapped.latitude, tapped.longitude);
         if (distKm > MAX_REPORT_RADIUS_KM) {
-          Alert.alert(
-            'Muito longe',
-            `Você só pode reportar eventos num raio de ${MAX_REPORT_RADIUS_KM} km.\n\nDistância: ${distKm.toFixed(1)} km.`
-          );
+          Alert.alert('Muito longe', `Você só pode reportar eventos num raio de ${MAX_REPORT_RADIUS_KM} km.\n\nDistância: ${distKm.toFixed(1)} km.`);
           return;
         }
       }
-
       let stateUF: string | undefined;
       let cityName: string | undefined;
       let countryCode: string | undefined;
@@ -145,7 +280,6 @@ export function MapScreen() {
         if (countryCode) setUserCountryCode(countryCode);
         if (stateUF) setUserStateUF(stateUF);
       } catch (_) {}
-
       setPendingCoord({ coordinate: tapped, stateUF, cityName, countryCode });
       setPickerVisible(true);
     } catch (err) {
@@ -155,30 +289,21 @@ export function MapScreen() {
     }
   }, [isAdmin]);
 
-  const handleSelectRoad = useCallback(() => {
-    setPickerVisible(false);
-    setRoadModalVisible(true);
-  }, []);
-
-  const handleSelectEntertainment = useCallback(() => {
-    setPickerVisible(false);
-    setEntertainmentModalVisible(true);
-  }, []);
+  const handleSelectRoad = useCallback(() => { setPickerVisible(false); setRoadModalVisible(true); }, []);
+  const handleSelectEntertainment = useCallback(() => { setPickerVisible(false); setEntertainmentModalVisible(true); }, []);
 
   return (
     <View style={styles.container}>
-      {/* Tela de erro se o Google Maps não inicializar */}
       {mapError && (
         <View style={styles.mapErrorWrap}>
           <Text style={styles.mapErrorEmoji}>🗺️</Text>
-          <Text style={styles.mapErrorTitle}>Mapa indisponível</Text>
+          <Text style={styles.mapErrorTitle}>{t('map_unavailable')}</Text>
           <Text style={styles.mapErrorText}>
             Verifique se a chave da API do Google Maps está correta e se o serviço "Maps SDK for Android" está ativado no Google Cloud Console.
           </Text>
         </View>
       )}
 
-      {/* ClusteredMapView agrupa pins próximos automaticamente */}
       <ClusteredMapView
         ref={mapRef}
         style={[styles.map, mapError && { opacity: 0 }]}
@@ -187,49 +312,45 @@ export function MapScreen() {
         onPress={handleMapPress}
         onMapReady={() => setMapReady(true)}
         onMapLoadingError={() => setMapError(true)}
+        onRegionChange={handleRegionChange}
+        onRegionChangeComplete={handleRegionChange}
         showsUserLocation
         showsMyLocationButton={false}
         showsTraffic
-        clusterColor="#FF5722"
-        clusterTextColor="#fff"
-        clusterFontFamily={undefined}
+        zoomEnabled
+        scrollEnabled
+        rotateEnabled={false}
+        pitchEnabled={false}
+        zoomTapEnabled
+        // Cluster dinâmico por tier
+        radius={radius}
+        minPoints={minPoints}
         animationEnabled
-        radius={40}
-        minPoints={3}
+        // Cluster visual customizado
+        renderCluster={(cluster: any) => (
+          <SmartCluster
+            key={`cluster-${cluster.id}`}
+            cluster={cluster}
+            zoomTier={zoomTier}
+            onPress={handleClusterPress}
+          />
+        )}
       >
-        {/* Pins de estrada */}
         {roadEvents.map((event) => (
-          <EventMarker
-            key={`road-${event.id}`}
-            event={event}
-            onPress={setSelectedRoadEvent}
-          />
+          <EventMarker key={`road-${event.id}`} event={event} onPress={setSelectedRoadEvent} />
         ))}
-
-        {/* Pins de entretenimento */}
-        {entertainmentEvents.map((event) => (
-          <EntertainmentMarker
-            key={`ent-${event.id}`}
-            event={event}
-            onPress={setSelectedEntEvent}
-          />
+        {visibleEntEvents.map((event) => (
+          <EntertainmentMarker key={`ent-${event.id}`} event={event} onPress={setSelectedEntEvent} />
         ))}
       </ClusteredMapView>
 
-      {/* Loading */}
       {(roadLoading || checkingLocation) && (
         <View style={[styles.loadingOverlay, { top: topInset + 8 }]}>
           <ActivityIndicator size="small" color="#FF5722" />
-          {checkingLocation && <Text style={styles.loadingText}>Verificando localização...</Text>}
+          {checkingLocation && <Text style={styles.loadingText}>{t('map_checking')}</Text>}
         </View>
       )}
 
-      {/* Dica no topo */}
-      <View style={[styles.hint, { top: topInset + 8 }]}>
-        <Text style={styles.hintText}>{t('map_tap_hint')}</Text>
-      </View>
-
-      {/* Botão filtro */}
       <TouchableOpacity
         style={[styles.mapBtn, styles.filterBtn, filterStateUF && styles.filterBtnActive]}
         onPress={() => setFilterVisible(true)}
@@ -238,12 +359,10 @@ export function MapScreen() {
         {filterStateUF && <View style={styles.filterDot} />}
       </TouchableOpacity>
 
-      {/* Botão localização */}
       <TouchableOpacity style={[styles.mapBtn, styles.locationBtn]} onPress={centerOnUser}>
         <Text style={styles.mapBtnIcon}>📍</Text>
       </TouchableOpacity>
 
-      {/* Seletor de tipo */}
       <EventTypePicker
         visible={pickerVisible}
         onSelectRoad={handleSelectRoad}
@@ -288,6 +407,7 @@ export function MapScreen() {
         onLike={toggleLike}
         onToggleFeatured={toggleFeatured}
         onComment={(ev) => { setSelectedEntEvent(null); setCommentTarget(ev); }}
+        onGoToMap={(ev) => { setSelectedEntEvent(null); mapRef.current?.animateToRegion({ latitude: ev.latitude, longitude: ev.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 }, 800); }}
         onClose={() => setSelectedEntEvent(null)}
       />
 
@@ -300,7 +420,6 @@ export function MapScreen() {
         />
       )}
 
-      {/* Banner AdMob fixo na parte inferior do mapa */}
       <View style={styles.adContainer}>
         <AdBanner />
       </View>
@@ -321,22 +440,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 8,
   },
   loadingText: { fontSize: 13, color: '#555' },
-  hint: {
-    position: 'absolute', alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-  },
-  hintText: { color: '#fff', fontSize: 13 },
   mapBtn: {
     position: 'absolute', right: 16,
     width: 48, height: 48, borderRadius: 24,
     alignItems: 'center', justifyContent: 'center', elevation: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4,
+    backgroundColor: '#fff',
   },
   mapBtnIcon: { fontSize: 22 },
-  filterBtn: { bottom: 170, backgroundColor: '#fff' },
+  filterBtn: { bottom: 170 },
   filterBtnActive: { backgroundColor: '#FBE9E7' },
   filterDot: { position: 'absolute', top: 6, right: 6, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF5722' },
-  locationBtn: { bottom: 110, backgroundColor: '#fff' },
+  locationBtn: { bottom: 110 },
   mapErrorWrap: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center',

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
-import { PROMOTION_TIERS } from '../types/promotion';
+import { FloatingPin } from './EventMarker';
 
 interface Props {
   event: EntertainmentEvent;
@@ -11,139 +11,407 @@ interface Props {
 
 const FALLBACK_META = { color: '#607D8B', emoji: '📍' };
 
-export function EntertainmentMarker({ event, onPress }: Props) {
-  const meta = ENTERTAINMENT_CATEGORIES[event.category] ?? FALLBACK_META;
-  const [tracksViewChanges, setTracksViewChanges] = useState(true);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+const BRONZE = '#CD7F32';
+const PRATA  = '#9EA3AE';
+const OURO   = '#FFD700';
+const OURO_DK = '#A67C00';
 
-  const isPromoted = !!(
-    event.promotionTier &&
-    event.promotionEndDate &&
-    event.promotionEndDate > Date.now()
+// ─── Normal ───────────────────────────────────────────────────────────────────
+function NormalMarker({ event, meta, onPress, tracks }: any) {
+  return (
+    <Marker
+      coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+      anchor={{ x: 0.5, y: 1 }}
+      onPress={() => onPress(event)}
+      tracksViewChanges={tracks}
+      zIndex={1}
+    >
+      <FloatingPin color={meta.color} emoji={meta.emoji} size={44} />
+    </Marker>
   );
-  const tierConfig = isPromoted ? PROMOTION_TIERS[event.promotionTier!] : null;
+}
 
-  // Para o Ouro: anima o pin
-  useEffect(() => {
-    if (!tierConfig?.animated) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.2, duration: 600, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.9, duration: 600, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [tierConfig?.animated]);
+// ─── Promoted base: anel colorido + centro branco + emoji grande ──────────────
+//
+//   ┌──────────────────────────────────────────┐
+//   │  [tier-ring]  [white-bg]  [emoji large]  │
+//   │              [tier-badge bottom-right]   │
+//   └──────────────────────────────────────────┘
+//
+// O emoji fica sobre fundo branco — sempre legível.
+// O anel e o badge identificam o tier.
 
-  // Para de rastrear mudanças de view após 1s (performance)
-  useEffect(() => {
-    if (!isPromoted) {
-      // Pins normais: parar tracking rápido
-      const t = setTimeout(() => setTracksViewChanges(false), 500);
-      return () => clearTimeout(t);
-    }
-    // Pins promovidos animados: manter tracking (necessário para animação)
-    if (!tierConfig?.animated) {
-      const t = setTimeout(() => setTracksViewChanges(false), 1000);
-      return () => clearTimeout(t);
-    }
-  }, [isPromoted, tierConfig?.animated]);
+interface PromoPinProps {
+  emoji: string;
+  tierColor: string;
+  tierLabel: string;
+  tierBadge: string;      // ex: "🥉" "🥈" "🥇"
+  size: number;           // diâmetro total do pin
+  ringWidth: number;      // espessura do anel do tier
+  labelColor: string;     // bg do label abaixo
+  children?: React.ReactNode; // halos/animações extras (passados pelo wrapper)
+  animated?: boolean;
+  scaleAnim?: Animated.Value;
+}
 
-  const pinSize = isPromoted ? 42 * (tierConfig!.pinScale) : 42;
-  const pinColor = isPromoted ? tierConfig!.pinColor : meta.color;
-  const pinBorderColor = isPromoted ? '#fff' : '#fff';
-  const pinBorderWidth = isPromoted ? 3 : 2.5;
+function PromoPin({
+  emoji, tierColor, tierLabel, tierBadge,
+  size, ringWidth, labelColor,
+  children, animated, scaleAnim,
+}: PromoPinProps) {
+  const innerSize = size - ringWidth * 2;
+  const tipW = size * 0.24;
+  const tipH = size * 0.20;
 
-  const pinView = (
-    <View style={styles.container}>
-      <Animated.View
-        style={[
-          styles.pin,
-          {
-            backgroundColor: pinColor,
-            width: pinSize,
-            height: pinSize,
-            borderRadius: pinSize / 2,
-            borderWidth: pinBorderWidth,
-            borderColor: pinBorderColor,
-            transform: [{ scale: tierConfig?.animated ? pulseAnim : 1 }],
-          },
-          isPromoted && styles.pinPromoted,
-        ]}
-      >
-        <Text style={[styles.emoji, { fontSize: isPromoted ? 20 + (tierConfig!.pinScale - 1) * 10 : 22 }]}>
-          {meta.emoji}
-        </Text>
-      </Animated.View>
+  const BodyView = animated && scaleAnim ? Animated.View : View;
+  const bodyStyle: any = animated && scaleAnim
+    ? { transform: [{ scale: scaleAnim }] }
+    : {};
 
-      {/* Badge do tier */}
-      {isPromoted && (
-        <View style={[styles.tierBadge, { backgroundColor: tierConfig!.pinColor }]}>
-          <Text style={styles.tierBadgeText}>{tierConfig!.emoji}</Text>
+  return (
+    <View style={s.wrapper}>
+      {/* Halos extras (anel de glow) ficam atrás do pin */}
+      {children}
+
+      {/* Anel de tier + corpo branco */}
+      <BodyView style={[
+        s.ring,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: tierColor,
+          shadowColor: tierColor,
+        },
+        bodyStyle,
+      ]}>
+        {/* Centro branco onde o emoji vai */}
+        <View style={[
+          s.inner,
+          { width: innerSize, height: innerSize, borderRadius: innerSize / 2 },
+        ]}>
+          <Text style={[s.emoji, { fontSize: innerSize * 0.52 }]}>{emoji}</Text>
         </View>
-      )}
 
-      {/* Ponteiro do pin */}
-      <View style={[styles.pointer, { borderTopColor: pinColor }]} />
+        {/* Badge do tier — canto inferior direito */}
+        <View style={[s.badge, { borderColor: tierColor, backgroundColor: '#fff' }]}>
+          <Text style={s.badgeEmoji}>{tierBadge}</Text>
+        </View>
+      </BodyView>
+
+      {/* Ponta */}
+      <View style={[s.tip, {
+        borderLeftWidth: tipW / 2,
+        borderRightWidth: tipW / 2,
+        borderTopWidth: tipH,
+        borderTopColor: tierColor,
+        marginTop: -2,
+      }]} />
+
+      {/* Label do tier */}
+      <View style={[s.label, { backgroundColor: labelColor }]}>
+        <Text style={s.labelText}>{tierLabel}</Text>
+      </View>
+
+      {/* Sombra no chão */}
+      <View style={[s.ground, { width: size * 0.55, backgroundColor: tierColor }]} />
     </View>
   );
+}
+
+// ─── Bronze ───────────────────────────────────────────────────────────────────
+function BronzeMarker({ event, meta, onPress, tracks }: any) {
+  const glow = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(glow, { toValue: 1,    duration: 1300, useNativeDriver: true }),
+      Animated.timing(glow, { toValue: 0.45, duration: 1300, useNativeDriver: true }),
+    ])).start();
+  }, []);
+
+  const size = 58;
 
   return (
     <Marker
       coordinate={{ latitude: event.latitude, longitude: event.longitude }}
       anchor={{ x: 0.5, y: 1 }}
       onPress={() => onPress(event)}
-      tracksViewChanges={tracksViewChanges}
-      zIndex={isPromoted ? (tierConfig!.pinScale * 10) : 1}
+      tracksViewChanges={tracks}
+      zIndex={10}
     >
-      {pinView}
+      <PromoPin
+        emoji={meta.emoji}
+        tierColor={BRONZE}
+        tierLabel="BRONZE"
+        tierBadge="🥉"
+        size={size}
+        ringWidth={7}
+        labelColor="#A0522D"
+      >
+        {/* Halo de glow simples */}
+        <Animated.View style={[s.halo, {
+          width: size + 18, height: size + 18,
+          borderRadius: (size + 18) / 2,
+          borderColor: BRONZE,
+          opacity: glow,
+          top: -9,
+        }]} />
+      </PromoPin>
     </Marker>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+// ─── Prata ────────────────────────────────────────────────────────────────────
+function PrataMarker({ event, meta, onPress, tracks }: any) {
+  const h1 = useRef(new Animated.Value(0.65)).current;
+  const h2 = useRef(new Animated.Value(0.25)).current;
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(h1, { toValue: 1,    duration: 950,  useNativeDriver: true }),
+      Animated.timing(h1, { toValue: 0.65, duration: 950,  useNativeDriver: true }),
+    ])).start();
+    setTimeout(() => {
+      Animated.loop(Animated.sequence([
+        Animated.timing(h2, { toValue: 0.75, duration: 1150, useNativeDriver: true }),
+        Animated.timing(h2, { toValue: 0.25, duration: 1150, useNativeDriver: true }),
+      ])).start();
+    }, 475);
+  }, []);
+
+  const size = 68;
+
+  return (
+    <Marker
+      coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+      anchor={{ x: 0.5, y: 1 }}
+      onPress={() => onPress(event)}
+      tracksViewChanges={tracks}
+      zIndex={20}
+    >
+      <PromoPin
+        emoji={meta.emoji}
+        tierColor={PRATA}
+        tierLabel="✦ PRATA ✦"
+        tierBadge="🥈"
+        size={size}
+        ringWidth={8}
+        labelColor="#5A6070"
+      >
+        <Animated.View style={[s.halo, {
+          width: size + 30, height: size + 30,
+          borderRadius: (size + 30) / 2,
+          borderColor: PRATA, opacity: h2, top: -15,
+        }]} />
+        <Animated.View style={[s.halo, {
+          width: size + 16, height: size + 16,
+          borderRadius: (size + 16) / 2,
+          borderColor: PRATA, borderWidth: 2, opacity: h1, top: -8,
+        }]} />
+      </PromoPin>
+    </Marker>
+  );
+}
+
+// ─── Ouro ─────────────────────────────────────────────────────────────────────
+function OuroMarker({ event, meta, onPress, tracks }: any) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const h1    = useRef(new Animated.Value(0.55)).current;
+  const h2    = useRef(new Animated.Value(0.20)).current;
+  const stars = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(scale, { toValue: 1.09, duration: 650,
+        easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 0.97, duration: 650,
+        easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ])).start();
+
+    Animated.loop(Animated.sequence([
+      Animated.timing(h1, { toValue: 1,    duration: 850, useNativeDriver: true }),
+      Animated.timing(h1, { toValue: 0.55, duration: 850, useNativeDriver: true }),
+    ])).start();
+    setTimeout(() => {
+      Animated.loop(Animated.sequence([
+        Animated.timing(h2, { toValue: 0.70, duration: 1050, useNativeDriver: true }),
+        Animated.timing(h2, { toValue: 0.20, duration: 1050, useNativeDriver: true }),
+      ])).start();
+    }, 420);
+
+    Animated.loop(Animated.sequence([
+      Animated.timing(stars, { toValue: 0.15, duration: 550, useNativeDriver: true }),
+      Animated.timing(stars, { toValue: 1,    duration: 550, useNativeDriver: true }),
+    ])).start();
+  }, []);
+
+  const size = 78;
+
+  return (
+    <Marker
+      coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+      anchor={{ x: 0.5, y: 1 }}
+      onPress={() => onPress(event)}
+      tracksViewChanges={tracks}
+      zIndex={30}
+    >
+      <PromoPin
+        emoji={meta.emoji}
+        tierColor={OURO}
+        tierLabel="★ OURO ★"
+        tierBadge="🥇"
+        size={size}
+        ringWidth={9}
+        labelColor={OURO_DK}
+        animated
+        scaleAnim={scale}
+      >
+        {/* Halos dourados */}
+        <Animated.View style={[s.halo, {
+          width: size + 40, height: size + 40,
+          borderRadius: (size + 40) / 2,
+          borderColor: OURO, opacity: h2, top: -20,
+        }]} />
+        <Animated.View style={[s.halo, {
+          width: size + 22, height: size + 22,
+          borderRadius: (size + 22) / 2,
+          borderColor: OURO, borderWidth: 2.5, opacity: h1, top: -11,
+        }]} />
+
+        {/* Estrelas piscando */}
+        <Animated.Text style={[s.starL, { opacity: stars }]}>★</Animated.Text>
+        <Animated.Text style={[s.starR, { opacity: stars }]}>★</Animated.Text>
+      </PromoPin>
+    </Marker>
+  );
+}
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  wrapper: { alignItems: 'center' },
+
+  // Anel colorido do tier (corpo externo)
+  ring: {
     alignItems: 'center',
     justifyContent: 'center',
+    // iOS
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    // Android
+    elevation: 14,
+    overflow: 'visible',
   },
-  pin: {
+
+  // Centro branco — onde o emoji vive
+  inner: {
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    // Sombra suave interna
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+  },
+
+  emoji: { lineHeight: undefined, textAlign: 'center' },
+
+  badge: {
+    position: 'absolute',
+    bottom: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 4,
-    elevation: 6,
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
   },
-  pinPromoted: {
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  emoji: { textAlign: 'center' },
-  tierBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#fff',
-    zIndex: 10,
-  },
-  tierBadgeText: { fontSize: 10 },
-  pointer: {
+  badgeEmoji: { fontSize: 11, lineHeight: 14 },
+
+  tip: {
     width: 0,
     height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 8,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    marginTop: -2,
+  },
+
+  label: {
+    marginTop: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 7,
+  },
+  labelText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: 0.7,
+  },
+
+  ground: {
+    height: 5,
+    borderRadius: 50,
+    opacity: 0.25,
+    marginTop: 3,
+  },
+
+  // Halo animado (glow ring)
+  halo: {
+    position: 'absolute',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+  },
+
+  starL: {
+    position: 'absolute',
+    top: -8,
+    left: -15,
+    fontSize: 15,
+    color: OURO,
+    textShadowColor: 'rgba(255,200,0,0.95)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 5,
+  },
+  starR: {
+    position: 'absolute',
+    top: -8,
+    right: -15,
+    fontSize: 15,
+    color: OURO,
+    textShadowColor: 'rgba(255,200,0,0.95)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 5,
   },
 });
+
+// ─── Export principal ─────────────────────────────────────────────────────────
+export function EntertainmentMarker({ event, onPress }: Props) {
+  const meta = ENTERTAINMENT_CATEGORIES[event.category] ?? FALLBACK_META;
+  const [tracks, setTracks] = useState(true);
+
+  const isPromoted = !!(
+    event.promotionTier &&
+    event.promotionEndDate &&
+    event.promotionEndDate > Date.now()
+  );
+  const tier = event.promotionTier;
+
+  useEffect(() => {
+    if (tier === 'ouro') return; // ouro mantém tracking (escala animada)
+    const t = setTimeout(() => setTracks(false), isPromoted ? 1200 : 500);
+    return () => clearTimeout(t);
+  }, [isPromoted, tier]);
+
+  if (!isPromoted)    return <NormalMarker event={event} meta={meta} onPress={onPress} tracks={tracks} />;
+  if (tier === 'bronze') return <BronzeMarker event={event} meta={meta} onPress={onPress} tracks={tracks} />;
+  if (tier === 'prata')  return <PrataMarker  event={event} meta={meta} onPress={onPress} tracks={tracks} />;
+  if (tier === 'ouro')   return <OuroMarker   event={event} meta={meta} onPress={onPress} tracks={tracks} />;
+  return <NormalMarker event={event} meta={meta} onPress={onPress} tracks={tracks} />;
+}

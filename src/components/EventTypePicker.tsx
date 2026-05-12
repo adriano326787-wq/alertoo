@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useT } from '../hooks/useT';
 
 interface Props {
   visible: boolean;
@@ -9,21 +10,22 @@ interface Props {
 }
 
 export function EventTypePicker({ visible, onSelectRoad, onSelectEntertainment, onClose }: Props) {
+  const t = useT();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.title}>O que deseja reportar?</Text>
-          <Text style={styles.subtitle}>Selecione o tipo de evento</Text>
+          <Text style={styles.title}>{t('picker_title')}</Text>
+          <Text style={styles.subtitle}>{t('picker_subtitle')}</Text>
 
           <TouchableOpacity style={styles.option} onPress={onSelectRoad} activeOpacity={0.8}>
             <View style={[styles.optionIcon, { backgroundColor: '#E53935' }]}>
               <Text style={styles.optionEmoji}>🚗</Text>
             </View>
             <View style={styles.optionText}>
-              <Text style={styles.optionTitle}>Alerta de Estrada</Text>
-              <Text style={styles.optionDesc}>Acidentes, obras, blitz, alagamentos...</Text>
+              <Text style={styles.optionTitle}>{t('picker_road_title')}</Text>
+              <Text style={styles.optionDesc}>{t('picker_road_desc')}</Text>
             </View>
             <Text style={styles.optionArrow}>›</Text>
           </TouchableOpacity>
@@ -33,14 +35,14 @@ export function EventTypePicker({ visible, onSelectRoad, onSelectEntertainment, 
               <Text style={styles.optionEmoji}>🎉</Text>
             </View>
             <View style={styles.optionText}>
-              <Text style={styles.optionTitle}>Evento de Entretenimento</Text>
-              <Text style={styles.optionDesc}>Bares, restaurantes, festas, shows...</Text>
+              <Text style={styles.optionTitle}>{t('picker_ent_title')}</Text>
+              <Text style={styles.optionDesc}>{t('picker_ent_desc')}</Text>
             </View>
             <Text style={styles.optionArrow}>›</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-            <Text style={styles.cancelText}>Cancelar</Text>
+            <Text style={styles.cancelText}>{t('filter_cancel')}</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>

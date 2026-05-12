@@ -26,9 +26,9 @@ export const PROMOTION_TIERS: Record<PromotionTier, PromotionTierConfig> = {
     animated: false,
     showFeatured: false,
     description: [
-      'Pin dourado no mapa',
-      'Badge Bronze visível',
-      'Válido por 7 dias',
+      'promo_bronze_desc_1',
+      'promo_bronze_desc_2',
+      'promo_bronze_desc_3',
     ],
   },
   prata: {
@@ -42,10 +42,10 @@ export const PROMOTION_TIERS: Record<PromotionTier, PromotionTierConfig> = {
     animated: false,
     showFeatured: true,
     description: [
-      'Pin prateado maior',
-      'Badge Prata visível',
-      'Destaque no topo da lista',
-      'Válido por 14 dias',
+      'promo_prata_desc_1',
+      'promo_prata_desc_2',
+      'promo_prata_desc_3',
+      'promo_prata_desc_4',
     ],
   },
   ouro: {
@@ -59,11 +59,11 @@ export const PROMOTION_TIERS: Record<PromotionTier, PromotionTierConfig> = {
     animated: true,
     showFeatured: true,
     description: [
-      'Pin dourado animado',
-      'Badge Ouro em destaque',
-      'Fixado no topo da lista',
-      'Destaque na home',
-      'Válido por 30 dias',
+      'promo_ouro_desc_1',
+      'promo_ouro_desc_2',
+      'promo_ouro_desc_3',
+      'promo_ouro_desc_4',
+      'promo_ouro_desc_5',
     ],
   },
 };

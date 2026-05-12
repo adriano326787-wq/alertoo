@@ -10,7 +10,8 @@ import {
 import { useEventsStore } from '../store/eventsStore';
 import { useAppStore } from '../store/appStore';
 import { BRAZIL_STATES } from '../utils/brazilGeo';
-import { t, getRegionLabel, getCityLabel } from '../utils/i18n';
+import { getRegionLabel, getCityLabel } from '../utils/i18n';
+import { useT } from '../hooks/useT';
 
 interface Props {
   visible: boolean;
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function FilterModal({ visible, onClose }: Props) {
+  const t = useT();
   const { events, filterStateUF, filterCityName, setFilter } = useEventsStore();
   const userCountryCode = useAppStore((s) => s.userCountryCode);
 

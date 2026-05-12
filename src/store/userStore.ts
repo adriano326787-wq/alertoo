@@ -15,6 +15,7 @@ interface UserState {
   subscribeToProfile: (uid: string) => () => void;
   clearProfile: () => void;
   updateDisplayName: (name: string) => void;
+  updatePhotoURL: (url: string) => void;
 }
 
 export const useUserStore = create<UserState>((set, get) => ({
@@ -57,5 +58,10 @@ export const useUserStore = create<UserState>((set, get) => ({
   updateDisplayName: (name: string) => {
     const current = get().profile;
     if (current) set({ profile: { ...current, displayName: name } });
+  },
+
+  updatePhotoURL: (url: string) => {
+    const current = get().profile;
+    if (current) set({ profile: { ...current, photoURL: url } });
   },
 }));

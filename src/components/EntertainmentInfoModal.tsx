@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo } from '../utils/time';
 import { PROMOTION_TIERS } from '../types/promotion';
+import { ShareSheet } from './ShareSheet';
+import { useT } from '../hooks/useT';
+import { tEntCat, tTier } from '../utils/i18n';
 
 interface Props {
   event: EntertainmentEvent | null;
@@ -11,10 +14,13 @@ interface Props {
   onLike: (id: string) => void;
   onToggleFeatured?: (id: string) => void;
   onComment: (event: EntertainmentEvent) => void;
+  onGoToMap?: (event: EntertainmentEvent) => void;
   onClose: () => void;
 }
 
-export function EntertainmentInfoModal({ event, isAdmin, onLike, onToggleFeatured, onComment, onClose }: Props) {
+export function EntertainmentInfoModal({ event, isAdmin, onLike, onToggleFeatured, onComment, onGoToMap, onClose }: Props) {
+  const t = useT();
+  const [shareVisible, setShareVisible] = useState(false);
   if (!event) return null;
   const meta = ENTERTAINMENT_CATEGORIES[event.category];
   const myUid = getCurrentUserId();
@@ -25,6 +31,7 @@ export function EntertainmentInfoModal({ event, isAdmin, onLike, onToggleFeature
   const accentColor = tierConfig ? tierConfig.pinColor : event.isFeatured ? '#F9A825' : meta.color;
 
   return (
+    <>
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.card}>
@@ -40,7 +47,7 @@ export function EntertainmentInfoModal({ event, isAdmin, onLike, onToggleFeature
             {isPromoted && tierConfig && (
               <View style={[styles.featuredBanner, { backgroundColor: tierConfig.pinColor + '22', borderColor: tierConfig.pinColor + '55' }]}>
                 <Text style={[styles.featuredBannerText, { color: tierConfig.pinColor }]}>
-                  {tierConfig.emoji} Patrocinado · {tierConfig.label}
+                  {tierConfig.emoji} {t('featured_event')} · {tTier(tierConfig.id)}
                 </Text>
               </View>
             )}
@@ -48,11 +55,11 @@ export function EntertainmentInfoModal({ event, isAdmin, onLike, onToggleFeature
             {/* Badge de destaque admin (quando não há tier) */}
             {!isPromoted && event.isFeatured && (
               <View style={styles.featuredBanner}>
-                <Text style={styles.featuredBannerText}>⭐ Evento em Destaque</Text>
+                <Text style={styles.featuredBannerText}>⭐ {t('featured_event')}</Text>
               </View>
             )}
 
-            <Text style={styles.category}>{meta.emoji} {meta.label}</Text>
+            <Text style={styles.category}>{meta.emoji} {tEntCat(event.category)}</Text>
             <Text style={styles.title}>{event.title}</Text>
             {event.description ? <Text style={styles.desc}>{event.description}</Text> : null}
             {event.address ? <Text style={styles.address}>📍 {event.address}</Text> : null}
@@ -63,7 +70,7 @@ export function EntertainmentInfoModal({ event, isAdmin, onLike, onToggleFeature
 
             {isOwner && (
               <View style={styles.ownerBanner}>
-                <Text style={styles.ownerText}>📌 Este é o seu evento</Text>
+                <Text style={styles.ownerText}>📌 {t('own_event')}</Text>
               </View>
             )}
 
@@ -85,6 +92,18 @@ export function EntertainmentInfoModal({ event, isAdmin, onLike, onToggleFeature
               </TouchableOpacity>
             </View>
 
+            {/* Compartilhar + Ir ao evento */}
+            <View style={styles.bottomRow}>
+              <TouchableOpacity style={styles.shareBtn} onPress={() => setShareVisible(true)}>
+                <Text style={styles.shareBtnText}>↗ {t('share')}</Text>
+              </TouchableOpacity>
+              {onGoToMap && (
+                <TouchableOpacity style={[styles.goToMapBtn, { flex: 1 }]} onPress={() => { onClose(); onGoToMap(event); }}>
+                  <Text style={styles.goToMapText}>🗺️ {t('go_to_event')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             {/* Botão de destaque — visível apenas para admin */}
             {isAdmin && onToggleFeatured && (
               <TouchableOpacity
@@ -100,6 +119,18 @@ export function EntertainmentInfoModal({ event, isAdmin, onLike, onToggleFeature
         </View>
       </TouchableOpacity>
     </Modal>
+
+    <ShareSheet
+      visible={shareVisible}
+      onClose={() => setShareVisible(false)}
+      title={event.title}
+      description={event.description}
+      category={`${meta.emoji} ${tEntCat(event.category)}`}
+      location={[event.cityName, event.stateUF].filter(Boolean).join(' — ')}
+      eventId={event.id}
+      eventType="entertainment"
+    />
+    </>
   );
 }
 
@@ -143,4 +174,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFEBEE', borderColor: '#EF9A9A',
   },
   adminBtnText: { fontSize: 13, fontWeight: '700', color: '#E65100' },
+  bottomRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  shareBtn: {
+    paddingVertical: 11, paddingHorizontal: 14, borderRadius: 10,
+    backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#CBD5E1',
+    alignItems: 'center',
+  },
+  shareBtnText: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  goToMapBtn: {
+    paddingVertical: 11, borderRadius: 10,
+    backgroundColor: '#EEF2FF', borderWidth: 1.5, borderColor: '#C7D2FE',
+    alignItems: 'center',
+  },
+  goToMapText: { fontSize: 13, fontWeight: '700', color: '#4F46E5' },
 });

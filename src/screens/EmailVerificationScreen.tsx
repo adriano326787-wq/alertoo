@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User } from 'firebase/auth';
 import { resendVerificationEmail, reloadUser, signOut } from '../services/authService';
+import { useT } from '../hooks/useT';
 
 interface Props {
   user: User;
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function EmailVerificationScreen({ user, onVerified }: Props) {
+  const t = useT();
   const { top } = useSafeAreaInsets();
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
@@ -85,7 +87,7 @@ export function EmailVerificationScreen({ user, onVerified }: Props) {
       </View>
 
       {/* Título */}
-      <Text style={styles.title}>Confirme seu e-mail</Text>
+      <Text style={styles.title}>{t('email_verify_title')}</Text>
       <Text style={styles.subtitle}>
         Enviamos um link de confirmação para:
       </Text>
@@ -103,7 +105,7 @@ export function EmailVerificationScreen({ user, onVerified }: Props) {
       >
         {checking
           ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.primaryBtnText}>✓ Já confirmei o e-mail</Text>}
+          : <Text style={styles.primaryBtnText}>{t('email_verified_btn')}</Text>}
       </TouchableOpacity>
 
       {/* Reenviar */}
@@ -121,15 +123,15 @@ export function EmailVerificationScreen({ user, onVerified }: Props) {
 
       {/* Dicas */}
       <View style={styles.tipsCard}>
-        <Text style={styles.tipsTitle}>Não recebeu o e-mail?</Text>
-        <Text style={styles.tip}>• Verifique a pasta de spam ou lixo eletrônico</Text>
-        <Text style={styles.tip}>• Aguarde alguns minutos e tente reenviar</Text>
-        <Text style={styles.tip}>• Confirme se o e-mail está correto</Text>
+        <Text style={styles.tipsTitle}>{t('email_not_received')}</Text>
+        <Text style={styles.tip}>{t('email_tip_spam')}</Text>
+        <Text style={styles.tip}>{t('email_tip_wait')}</Text>
+        <Text style={styles.tip}>{t('email_tip_check')}</Text>
       </View>
 
       {/* Usar conta errada */}
       <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-        <Text style={styles.signOutText}>Usar outro e-mail</Text>
+        <Text style={styles.signOutText}>{t('email_use_other')}</Text>
       </TouchableOpacity>
     </View>
   );

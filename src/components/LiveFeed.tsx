@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
 import { timeAgo, timeLeft } from '../utils/time';
 import { useEventsStore } from '../store/eventsStore';
+import { useT } from '../hooks/useT';
+import { tRoadCat } from '../utils/i18n';
 
 interface Props {
   events: RoadEvent[];
@@ -11,6 +13,7 @@ interface Props {
 }
 
 function FeedCard({ event, onNavigate }: { event: RoadEvent; onNavigate: (e: RoadEvent) => void }) {
+  const t = useT();
   const meta = EVENT_CATEGORIES[event.category];
   const confirmEvent = useEventsStore((s) => s.confirmEvent);
   const denyEvent = useEventsStore((s) => s.denyEvent);
@@ -24,7 +27,7 @@ function FeedCard({ event, onNavigate }: { event: RoadEvent; onNavigate: (e: Roa
           <Text style={styles.cardTime}>{timeAgo(event.createdAt)}</Text>
         </View>
         <View style={styles.navHint}>
-          <Text style={styles.navHintText}>📍 Ver</Text>
+          <Text style={styles.navHintText}>📍 {t('view')}</Text>
         </View>
       </View>
 
@@ -43,13 +46,13 @@ function FeedCard({ event, onNavigate }: { event: RoadEvent; onNavigate: (e: Roa
           style={styles.voteBtn}
           onPress={(e) => { e.stopPropagation?.(); confirmEvent(event.id); }}
         >
-          <Text style={styles.voteBtnText}>✓ Confirmar ({event.confirmations})</Text>
+          <Text style={styles.voteBtnText}>✓ {t('road_confirm')} ({event.confirmations})</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.voteBtn, styles.denyVoteBtn]}
           onPress={(e) => { e.stopPropagation?.(); denyEvent(event.id); }}
         >
-          <Text style={[styles.voteBtnText, styles.denyVoteBtnText]}>✗ Negar ({event.denials})</Text>
+          <Text style={[styles.voteBtnText, styles.denyVoteBtnText]}>✗ {t('road_deny')} ({event.denials})</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -57,6 +60,7 @@ function FeedCard({ event, onNavigate }: { event: RoadEvent; onNavigate: (e: Roa
 }
 
 export function LiveFeed({ events, onClose, onNavigate }: Props) {
+  const t = useT();
   const sorted = [...events].sort((a, b) => b.createdAt - a.createdAt);
   const { filterStateUF, filterCityName } = useEventsStore();
 
@@ -71,10 +75,10 @@ export function LiveFeed({ events, onClose, onNavigate }: Props) {
       <View style={styles.header}>
         <View style={styles.liveIndicator}>
           <View style={styles.liveDot} />
-          <Text style={styles.liveText}>AO VIVO</Text>
+          <Text style={styles.liveText}>{t('live')}</Text>
         </View>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Eventos</Text>
+          <Text style={styles.headerTitle}>{t('tab_events')}</Text>
           {filterLabel && (
             <Text style={styles.filterBadge}>📍 {filterLabel}</Text>
           )}
@@ -86,10 +90,8 @@ export function LiveFeed({ events, onClose, onNavigate }: Props) {
 
       {sorted.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>Nenhum evento ativo.</Text>
-          <Text style={styles.emptyHint}>
-            {filterLabel ? 'Tente remover o filtro ou toque no mapa!' : 'Toque no mapa para reportar um!'}
-          </Text>
+          <Text style={styles.emptyText}>{t('road_empty')}</Text>
+          <Text style={styles.emptyHint}>{t('road_empty_hint')}</Text>
         </View>
       ) : (
         <FlatList

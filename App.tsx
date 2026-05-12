@@ -19,7 +19,8 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
 import { RankBadge } from './src/components/RankBadge';
-import { t } from './src/utils/i18n';
+import { loadSavedLang } from './src/utils/i18n';
+import { useT } from './src/hooks/useT';
 
 const Tab = createBottomTabNavigator();
 
@@ -29,9 +30,10 @@ export default function App() {
   const { profile, loadProfile, subscribeToProfile, clearProfile } = useUserStore();
   const profileUnsubRef = useRef<(() => void) | null>(null);
 
-  // Carrega filtro persistido na inicialização + solicita permissão de notificação
+  // Carrega filtro persistido, idioma salvo e permissão de notificação
   useEffect(() => {
     useEventsStore.getState().loadFilter();
+    loadSavedLang().catch(() => {});
     requestNotificationPermission().catch(() => {});
   }, []);
 
@@ -130,6 +132,7 @@ export default function App() {
 
 // Componente separado para acessar useSafeAreaInsets dentro do SafeAreaProvider
 function AppTabs({ profile }: { profile: any }) {
+  const t = useT(); // re-renderiza as abas quando o idioma muda
   return (
     <Tab.Navigator
       screenOptions={{

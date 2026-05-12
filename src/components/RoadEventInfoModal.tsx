@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo, timeLeft } from '../utils/time';
+import { ShareSheet } from './ShareSheet';
+import { useT } from '../hooks/useT';
+import { tRoadCat } from '../utils/i18n';
 
 interface Props {
   event: RoadEvent | null;
@@ -12,6 +15,8 @@ interface Props {
 }
 
 export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props) {
+  const t = useT();
+  const [shareVisible, setShareVisible] = useState(false);
   if (!event) return null;
   const meta = EVENT_CATEGORIES[event.category];
   const myUid = getCurrentUserId();
@@ -20,6 +25,7 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
   const blocked = alreadyVoted || isOwner;
 
   return (
+    <>
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.card}>
@@ -35,12 +41,12 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
 
             {alreadyVoted && (
               <View style={styles.votedBanner}>
-                <Text style={styles.votedText}>✅ Você já votou neste evento</Text>
+                <Text style={styles.votedText}>✅ {t('road_voted')}</Text>
               </View>
             )}
             {isOwner && !alreadyVoted && (
               <View style={styles.ownerBanner}>
-                <Text style={styles.ownerText}>📌 Este é o seu evento</Text>
+                <Text style={styles.ownerText}>📌 {t('own_event')}</Text>
               </View>
             )}
 
@@ -64,10 +70,27 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {/* Compartilhar */}
+            <TouchableOpacity style={styles.shareBtn} onPress={() => setShareVisible(true)}>
+              <Text style={styles.shareBtnText}>↗ {t('share_alert')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
     </Modal>
+
+    <ShareSheet
+      visible={shareVisible}
+      onClose={() => setShareVisible(false)}
+      title={event.title}
+      description={event.description}
+      category={`${meta.emoji} ${tRoadCat(event.category)}`}
+      location={[event.cityName, event.stateUF].filter(Boolean).join(' — ')}
+      eventId={event.id}
+      eventType="road"
+    />
+    </>
   );
 }
 
@@ -91,7 +114,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6, marginBottom: 12,
   },
   ownerText: { fontSize: 13, color: '#1565C0', fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 10 },
+  actions: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  shareBtn: {
+    paddingVertical: 11, borderRadius: 10,
+    backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#CBD5E1',
+    alignItems: 'center',
+  },
+  shareBtnText: { fontSize: 13, fontWeight: '700', color: '#475569' },
   btn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   confirmBtn: { backgroundColor: '#43A047' },
   denyBtn: { backgroundColor: '#E53935' },

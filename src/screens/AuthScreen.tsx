@@ -15,7 +15,7 @@ import {
 } from '../services/authService';
 import { useUserStore } from '../store/userStore';
 import { useAppStore } from '../store/appStore';
-import { t } from '../utils/i18n';
+import { useT } from '../hooks/useT';
 import { User } from 'firebase/auth';
 
 // webClientId = cliente tipo 3 (web) do mesmo projeto Firebase
@@ -33,6 +33,7 @@ interface GoogleBtnProps {
 }
 
 function GoogleAuthButton({ onSuccess, disabled }: GoogleBtnProps) {
+  const t = useT();
   async function handlePress() {
     try {
       await GoogleSignin.hasPlayServices();
@@ -80,6 +81,7 @@ interface Props {
 type Mode = 'login' | 'register';
 
 export function AuthScreen({ onAuthenticated }: Props) {
+  const t = useT();
   const { top } = useSafeAreaInsets();
   const loadProfile = useUserStore((s) => s.loadProfile);
   const { pendingAuthTab, setPendingAuthTab } = useAppStore();
@@ -329,11 +331,8 @@ export function AuthScreen({ onAuthenticated }: Props) {
 
         {/* Rank teaser */}
         <View style={styles.teaser}>
-          <Text style={styles.teaserTitle}>🏆 Sistema de Ranks</Text>
-          <Text style={styles.teaserText}>
-            Reporte eventos, confirme alertas e ganhe pontos.{'\n'}
-            Suba de 🌱 Iniciante até 👑 Mestre!
-          </Text>
+          <Text style={styles.teaserTitle}>{t('auth_ranks_title')}</Text>
+          <Text style={styles.teaserText}>{t('auth_ranks_desc')}</Text>
         </View>
       </ScrollView>
 
@@ -344,7 +343,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
             {!resetSent ? (
               <>
                 <Text style={styles.modalIcon}>🔐</Text>
-                <Text style={styles.modalTitle}>Recuperar senha</Text>
+                <Text style={styles.modalTitle}>{t('auth_forgot_title')}</Text>
                 <Text style={styles.modalDesc}>
                   Informe seu e-mail e enviaremos um link para redefinir sua senha.
                 </Text>
@@ -366,16 +365,16 @@ export function AuthScreen({ onAuthenticated }: Props) {
                 >
                   {resetLoading
                     ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.modalBtnText}>Enviar link</Text>}
+                    : <Text style={styles.modalBtnText}>{t('auth_forgot_send')}</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalCancelBtn} onPress={handleCloseReset}>
-                  <Text style={styles.modalCancelText}>Cancelar</Text>
+                  <Text style={styles.modalCancelText}>{t('filter_cancel')}</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 <Text style={styles.modalIcon}>✅</Text>
-                <Text style={styles.modalTitle}>E-mail enviado!</Text>
+                <Text style={styles.modalTitle}>{t('auth_sent_title')}</Text>
                 <Text style={styles.modalDesc}>
                   Enviamos o link de recuperação para:{'\n'}
                   <Text style={styles.modalEmail}>{resetEmail}</Text>
@@ -384,7 +383,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
                   Verifique também a pasta de spam caso não encontre.
                 </Text>
                 <TouchableOpacity style={styles.modalBtn} onPress={handleCloseReset}>
-                  <Text style={styles.modalBtnText}>Fechar</Text>
+                  <Text style={styles.modalBtnText}>{t('auth_close')}</Text>
                 </TouchableOpacity>
               </>
             )}

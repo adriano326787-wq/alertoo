@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Modal, SafeAreaView, Alert, ActivityIndicator, Image, Animated,
+  Modal, SafeAreaView, Alert, ActivityIndicator, Image, Animated, Platform, StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import {
   PROMOTION_TIERS,
@@ -18,6 +19,8 @@ import {
 import { getCurrentUserId } from '../services/authService';
 import { EntertainmentEvent } from '../types/entertainment';
 import { BuyCreditsScreen } from '../screens/BuyCreditsScreen';
+import { useT } from '../hooks/useT';
+import { tf, tTier } from '../utils/i18n';
 
 interface Props {
   visible: boolean;
@@ -32,6 +35,8 @@ interface Props {
 export function PromoteEventModal({
   visible, event, userCredits, isAdmin = false, onClose, onPromoted, onCreditsUpdated,
 }: Props) {
+  const t = useT();
+  const { top } = useSafeAreaInsets();
   const [selectedTier, setSelectedTier] = useState<PromotionTier>('bronze');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -115,9 +120,9 @@ export function PromoteEventModal({
       }
 
       Alert.alert(
-        '🎉 Evento promovido!',
-        `Seu evento agora está destacado como ${tierConfig.emoji} ${tierConfig.label} por ${tierConfig.durationDays} dias!`,
-        [{ text: 'Ótimo!', onPress: () => { onPromoted(); handleClose(); } }],
+        t('promo_success_title'),
+        tf('promo_success_msg', { tier: `${tierConfig.emoji} ${tTier(tierConfig.id)}`, days: tierConfig.durationDays }),
+        [{ text: t('promo_great'), onPress: () => { onPromoted(); handleClose(); } }],
       );
     } catch (err: any) {
       Alert.alert('Erro', err.message ?? 'Não foi possível promover o evento.');
@@ -139,12 +144,12 @@ export function PromoteEventModal({
     <>
       <Modal visible={visible} animationType="slide" onRequestClose={handleClose} statusBarTranslucent>
         <SafeAreaView style={styles.safe}>
-          {/* Header */}
-          <View style={styles.header}>
+          {/* Header com padding para status bar */}
+          <View style={[styles.header, { paddingTop: Math.max(top, 16) }]}>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
               <Text style={styles.closeIcon}>✕</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>🚀 Promover Evento</Text>
+            <Text style={styles.headerTitle}>{t('promo_header')}</Text>
             <View style={styles.creditsChip}>
               <Text style={styles.creditsText}>🪙 {userCredits}</Text>
             </View>
@@ -153,7 +158,7 @@ export function PromoteEventModal({
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             {/* Evento selecionado */}
             <View style={styles.eventCard}>
-              <Text style={styles.eventCardLabel}>EVENTO A PROMOVER</Text>
+              <Text style={styles.eventCardLabel}>{t('promo_event_label')}</Text>
               <Text style={styles.eventCardTitle} numberOfLines={2}>{event.title}</Text>
               {event.address && (
                 <Text style={styles.eventCardAddress} numberOfLines={1}>📍 {event.address}</Text>
@@ -161,38 +166,38 @@ export function PromoteEventModal({
               {alreadyPromoted && (
                 <View style={styles.alreadyBadge}>
                   <Text style={styles.alreadyBadgeText}>
-                    {PROMOTION_TIERS[event.promotionTier!].emoji} Promovido — {daysRemaining(event.promotionEndDate!)}d restantes
+                    {PROMOTION_TIERS[event.promotionTier!].emoji} {tf('promo_already', { n: daysRemaining(event.promotionEndDate!) })}
                   </Text>
                 </View>
               )}
             </View>
 
             {/* Seção 1: Foto */}
-            <Text style={styles.sectionTitle}>1. FOTO DO EVENTO (OPCIONAL)</Text>
+            <Text style={styles.sectionTitle}>{t('promo_photo_section')}</Text>
             <TouchableOpacity style={styles.photoBox} onPress={handlePickPhoto} activeOpacity={0.8}>
               {photoUri ? (
                 <>
                   <Image source={{ uri: photoUri }} style={styles.photoPreview} />
                   <View style={styles.photoOverlay}>
-                    <Text style={styles.photoOverlayText}>✏️ Trocar foto</Text>
+                    <Text style={styles.photoOverlayText}>{t('promo_change_photo')}</Text>
                   </View>
                 </>
               ) : (
                 <>
                   <Text style={styles.photoIcon}>📷</Text>
-                  <Text style={styles.photoLabel}>Toque para adicionar uma foto</Text>
-                  <Text style={styles.photoHint}>Recomendado: 16:9, máx. 5MB</Text>
+                  <Text style={styles.photoLabel}>{t('promo_add_photo')}</Text>
+                  <Text style={styles.photoHint}>{t('promo_photo_hint')}</Text>
                 </>
               )}
             </TouchableOpacity>
             {photoUri && (
               <TouchableOpacity onPress={() => setPhotoUri(null)} style={styles.removePhoto}>
-                <Text style={styles.removePhotoText}>🗑️ Remover foto</Text>
+                <Text style={styles.removePhotoText}>{t('promo_remove_photo')}</Text>
               </TouchableOpacity>
             )}
 
             {/* Seção 2: Tier */}
-            <Text style={styles.sectionTitle}>2. NÍVEL DE DESTAQUE</Text>
+            <Text style={styles.sectionTitle}>{t('promo_tier_section')}</Text>
             <View style={styles.tiers}>
               {(Object.values(PROMOTION_TIERS)).map((tier) => {
                 const isSelected = selectedTier === tier.id;
@@ -219,24 +224,24 @@ export function PromoteEventModal({
                     </Animated.View>
 
                     <Text style={[styles.tierLabel, isSelected && styles.tierLabelSelected]}>
-                      {tier.label}
+                      {tTier(tier.id)}
                     </Text>
 
                     <View style={styles.tierCredits}>
                       <Text style={styles.tierCreditsText}>
-                        🪙 {tier.creditsRequired} {tier.creditsRequired === 1 ? 'crédito' : 'créditos'}
+                        🪙 {tier.creditsRequired} {tier.creditsRequired === 1 ? t('promo_credit') : t('promo_credits')}
                       </Text>
                     </View>
 
-                    <Text style={styles.tierDuration}>📅 {tier.durationDays} dias</Text>
+                    <Text style={styles.tierDuration}>📅 {tier.durationDays} {t('promo_days')}</Text>
 
                     {tier.description.map((d, i) => (
-                      <Text key={i} style={styles.tierBenefit}>✓ {d}</Text>
+                      <Text key={i} style={styles.tierBenefit}>✓ {t(d)}</Text>
                     ))}
 
                     {!affordable && (
                       <View style={styles.notAffordableTag}>
-                        <Text style={styles.notAffordableText}>Créditos insuficientes</Text>
+                        <Text style={styles.notAffordableText}>{t('promo_insufficient')}</Text>
                       </View>
                     )}
                     {isSelected && (
@@ -250,20 +255,20 @@ export function PromoteEventModal({
             </View>
 
             {/* Seção 3: Pagamento */}
-            <Text style={styles.sectionTitle}>3. USAR CRÉDITOS</Text>
+            <Text style={styles.sectionTitle}>{t('promo_credits_section')}</Text>
 
             {canAfford ? (
               <View style={styles.creditSummary}>
                 <Text style={styles.creditSummaryText}>
-                  🪙 Saldo atual: <Text style={styles.bold}>{isAdmin ? '∞ (Admin)' : `${userCredits} créditos`}</Text>
+                  {t('promo_balance')} <Text style={styles.bold}>{isAdmin ? '∞ (Admin)' : `${userCredits} ${t('promo_credits')}`}</Text>
                 </Text>
                 {!isAdmin && <>
                   <Text style={styles.creditSummaryText}>
-                    💸 Custo: <Text style={styles.bold}>-{tierConfig.creditsRequired} {tierConfig.creditsRequired === 1 ? 'crédito' : 'créditos'}</Text>
+                    {t('promo_cost')} <Text style={styles.bold}>-{tierConfig.creditsRequired} {tierConfig.creditsRequired === 1 ? t('promo_credit') : t('promo_credits')}</Text>
                   </Text>
                   <View style={styles.divider} />
                   <Text style={styles.creditSummaryText}>
-                    ✅ Restará: <Text style={styles.bold}>{userCredits - tierConfig.creditsRequired} créditos</Text>
+                    {t('promo_remaining_bal')} <Text style={styles.bold}>{userCredits - tierConfig.creditsRequired} {t('promo_credits')}</Text>
                   </Text>
                 </>}
               </View>
@@ -271,8 +276,8 @@ export function PromoteEventModal({
               <TouchableOpacity style={styles.buyMoreBtn} onPress={() => setShowBuyCredits(true)}>
                 <Text style={styles.buyMoreIcon}>🪙</Text>
                 <View>
-                  <Text style={styles.buyMoreLabel}>Você precisa de mais créditos</Text>
-                  <Text style={styles.buyMoreSub}>Toque para comprar um pacote</Text>
+                  <Text style={styles.buyMoreLabel}>{t('promo_need_more')}</Text>
+                  <Text style={styles.buyMoreSub}>{t('promo_buy_package')}</Text>
                 </View>
                 <Text style={styles.buyMoreArrow}>›</Text>
               </TouchableOpacity>
@@ -289,17 +294,17 @@ export function PromoteEventModal({
                 <View style={styles.loadingRow}>
                   <ActivityIndicator color="#fff" />
                   {uploadProgress > 0 && uploadProgress < 100 && (
-                    <Text style={styles.loadingText}>Enviando foto... {uploadProgress}%</Text>
+                    <Text style={styles.loadingText}>{tf('promo_uploading', { n: uploadProgress })}</Text>
                   )}
                   {(uploadProgress === 0 || uploadProgress === 100) && (
-                    <Text style={styles.loadingText}>Promovendo evento...</Text>
+                    <Text style={styles.loadingText}>{t('promo_promoting')}</Text>
                   )}
                 </View>
               ) : (
                 <Text style={styles.promoteBtnText}>
                   {canAfford
-                    ? `${tierConfig.emoji} Promover como ${tierConfig.label}`
-                    : '🪙 Comprar créditos primeiro'}
+                    ? tf('promo_btn_promote', { emoji: tierConfig.emoji, tier: tTier(tierConfig.id) })
+                    : t('promo_btn_buy')}
                 </Text>
               )}
             </TouchableOpacity>

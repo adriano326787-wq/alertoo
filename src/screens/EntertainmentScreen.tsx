@@ -15,13 +15,15 @@ import { useUserStore } from '../store/userStore';
 import { timeAgo, timeLeft } from '../utils/time';
 import { resolveStateUF } from '../utils/brazilGeo';
 import { useAppStore } from '../store/appStore';
-import { t } from '../utils/i18n';
+import { useT } from '../hooks/useT';
+import { tEntCat, tTier } from '../utils/i18n';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { rw, rh, rf } from '../utils/responsive';
 import { AdBanner } from '../components/AdBanner';
 import { BannerAdSize } from 'react-native-google-mobile-ads';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PROMOTION_TIERS } from '../types/promotion';
+import { ShareSheet } from '../components/ShareSheet';
 
 interface PendingAdd {
   coordinate: { latitude: number; longitude: number };
@@ -35,12 +37,15 @@ function EventCard({
   onLike,
   onOpenComments,
   onGoToMap,
+  onShare,
 }: {
   event: EntertainmentEvent;
   onLike: (id: string) => void;
   onOpenComments: (event: EntertainmentEvent) => void;
   onGoToMap: (event: EntertainmentEvent) => void;
+  onShare: (event: EntertainmentEvent) => void;
 }) {
+  const t = useT();
   const meta = ENTERTAINMENT_CATEGORIES[event.category];
   const myUid = getCurrentUserId();
   const liked = event.likes.includes(myUid);
@@ -63,7 +68,7 @@ function EventCard({
       {isPromoted && tierConfig && (
         <View style={[styles.featuredBadge, { backgroundColor: tierConfig.pinColor + '22', borderColor: tierConfig.pinColor + '55' }]}>
           <Text style={[styles.featuredBadgeText, { color: tierConfig.pinColor }]}>
-            {tierConfig.emoji} {tierConfig.label}
+            {tierConfig.emoji} {tTier(tierConfig.id)}
           </Text>
         </View>
       )}
@@ -75,7 +80,7 @@ function EventCard({
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle}>{event.title}</Text>
           <Text style={styles.cardMeta}>
-            {meta.label}{event.cityName ? ` · ${event.cityName}` : ''} · {timeAgo(event.createdAt)}
+            {tEntCat(event.category)}{event.cityName ? ` · ${event.cityName}` : ''} · {timeAgo(event.createdAt)}
           </Text>
         </View>
       </View>
@@ -101,11 +106,14 @@ function EventCard({
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.tapHint}>Toque para ver comentários</Text>
-
-      <TouchableOpacity style={styles.goToMapBtn} onPress={(e) => { e.stopPropagation?.(); onGoToMap(event); }}>
-        <Text style={styles.goToMapText}>🗺️ Ir para o evento no mapa</Text>
-      </TouchableOpacity>
+      <View style={styles.cardBottom}>
+        <TouchableOpacity style={styles.shareCardBtn} onPress={(e) => { e.stopPropagation?.(); onShare(event); }}>
+          <Text style={styles.shareCardBtnText}>↗ {t('share')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.goToMapBtn, { flex: 1 }]} onPress={(e) => { e.stopPropagation?.(); onGoToMap(event); }}>
+          <Text style={styles.goToMapText}>🗺️ {t('go_to_event')}</Text>
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -118,11 +126,12 @@ function FeaturedStrip({
   events: EntertainmentEvent[];
   onPress: (event: EntertainmentEvent) => void;
 }) {
+  const t = useT();
   if (events.length === 0) return null;
 
   return (
     <View style={styles.stripWrap}>
-      <Text style={styles.stripTitle}>🌟 Em Destaque</Text>
+      <Text style={styles.stripTitle}>🌟 {t('featured')}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stripScroll}>
         {events.map((ev) => {
           const meta = ENTERTAINMENT_CATEGORIES[ev.category];
@@ -140,7 +149,7 @@ function FeaturedStrip({
               {/* Tier badge */}
               {tierConfig && (
                 <View style={[styles.stripTierBadge, { backgroundColor: tierConfig.pinColor }]}>
-                  <Text style={styles.stripTierText}>{tierConfig.emoji} {tierConfig.label}</Text>
+                  <Text style={styles.stripTierText}>{tierConfig.emoji} {tTier(tierConfig.id)}</Text>
                 </View>
               )}
               <View style={styles.stripInfo}>
@@ -156,8 +165,10 @@ function FeaturedStrip({
 }
 
 export function EntertainmentScreen() {
+  const t = useT();
   const { top: topInset } = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const route = useRoute<RouteProp<{ Entretenimento: { eventId?: string } }, 'Entretenimento'>>();
   const focusOnMap = useAppStore((s) => s.focusOnMap);
 
   function handleGoToMap(event: EntertainmentEvent) {
@@ -168,7 +179,16 @@ export function EntertainmentScreen() {
   const [pending, setPending] = useState<PendingAdd | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<EntertainmentEvent | null>(null);
   const [commentTarget, setCommentTarget] = useState<EntertainmentEvent | null>(null);
+  const [shareTarget, setShareTarget] = useState<EntertainmentEvent | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Abre automaticamente um evento quando navega do perfil com eventId
+  useEffect(() => {
+    const eventId = route.params?.eventId;
+    if (!eventId || events.length === 0) return;
+    const found = events.find((e) => e.id === eventId);
+    if (found) setSelectedEvent(found);
+  }, [route.params?.eventId, events]);
   const [loadingMore, setLoadingMore] = useState(false);
 
   const { events: allEvents, loading, hasMore, subscribe, toggleLike, toggleFeatured, loadMore } = useEntertainmentStore();
@@ -176,8 +196,6 @@ export function EntertainmentScreen() {
   const setUserStateUF = useAppStore((s) => s.setUserStateUF);
   const userStateUF = useAppStore((s) => s.userStateUF);
   const isAdmin = useUserStore((s) => s.isAdmin);
-  useAppStore((s) => s.langVersion); // re-render on language change
-
   // Detecta estado do usuário automaticamente ao montar
   const { detecting, locationDenied } = useUserLocation();
 
@@ -314,7 +332,7 @@ export function EntertainmentScreen() {
             if ('__ad' in item) {
               return (
                 <View style={styles.adCard}>
-                  <Text style={styles.adLabel}>Publicidade</Text>
+                  <Text style={styles.adLabel}>{t('advertising')}</Text>
                   <AdBanner size={BannerAdSize.MEDIUM_RECTANGLE} />
                 </View>
               );
@@ -325,6 +343,7 @@ export function EntertainmentScreen() {
                 onLike={toggleLike}
                 onOpenComments={setSelectedEvent}
                 onGoToMap={handleGoToMap}
+                onShare={setShareTarget}
               />
             );
           }}
@@ -365,6 +384,7 @@ export function EntertainmentScreen() {
         onLike={(id) => { toggleLike(id); }}
         onToggleFeatured={toggleFeatured}
         onComment={(ev) => { setSelectedEvent(null); setCommentTarget(ev); }}
+        onGoToMap={(ev) => { setSelectedEvent(null); handleGoToMap(ev); }}
         onClose={() => setSelectedEvent(null)}
       />
 
@@ -374,6 +394,19 @@ export function EntertainmentScreen() {
           eventId={commentTarget.id}
           eventTitle={commentTarget.title}
           onClose={() => setCommentTarget(null)}
+        />
+      )}
+
+      {shareTarget && (
+        <ShareSheet
+          visible={!!shareTarget}
+          onClose={() => setShareTarget(null)}
+          title={shareTarget.title}
+          description={shareTarget.description}
+          category={`${ENTERTAINMENT_CATEGORIES[shareTarget.category]?.emoji ?? '🎉'} ${tEntCat(shareTarget.category)}`}
+          location={[shareTarget.cityName, shareTarget.stateUF].filter(Boolean).join(' — ')}
+          eventId={shareTarget.id}
+          eventType="entertainment"
         />
       )}
     </View>
@@ -437,8 +470,15 @@ const styles = StyleSheet.create({
   footerLoader: { marginVertical: rh(16) },
   loadMoreBtn: { alignItems: 'center', paddingVertical: rh(14) },
   loadMoreText: { fontSize: rf(14), fontWeight: '600', color: '#FF5722' },
+  cardBottom: { flexDirection: 'row', gap: rw(8), marginTop: rh(10) },
+  shareCardBtn: {
+    paddingVertical: rh(9), paddingHorizontal: rw(14), borderRadius: rw(10),
+    backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1',
+    alignItems: 'center',
+  },
+  shareCardBtnText: { fontSize: rf(13), fontWeight: '700', color: '#475569' },
   goToMapBtn: {
-    marginTop: rh(10), paddingVertical: rh(9), borderRadius: rw(10),
+    paddingVertical: rh(9), borderRadius: rw(10),
     backgroundColor: '#EEF2FF', alignItems: 'center',
     borderWidth: 1, borderColor: '#C7D2FE',
   },

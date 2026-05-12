@@ -1,8 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { getRank, getNextRank, RANKS } from '../types/user';
-import { t } from '../utils/i18n';
-import { useAppStore } from '../store/appStore';
+import { useT } from '../hooks/useT';
 
 interface Props {
   points: number;
@@ -10,7 +9,7 @@ interface Props {
 }
 
 export function RankBadge({ points, size = 'small' }: Props) {
-  useAppStore((s) => s.langVersion); // re-render on language change
+  const t = useT();
   const rank = getRank(points);
   const isLarge = size === 'large';
 
@@ -23,7 +22,7 @@ export function RankBadge({ points, size = 'small' }: Props) {
 }
 
 export function RankProgressBar({ points }: { points: number }) {
-  useAppStore((s) => s.langVersion); // re-render on language change
+  const t = useT();
   const rank = getRank(points);
   const next = getNextRank(points);
   const prev = rank.minPoints;
@@ -52,7 +51,7 @@ export function RankProgressBar({ points }: { points: number }) {
 }
 
 export function AllRanksLegend() {
-  useAppStore((s) => s.langVersion); // re-render on language change
+  const t = useT();
   return (
     <View style={styles.legend}>
       {RANKS.map((r) => (
