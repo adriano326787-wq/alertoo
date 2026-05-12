@@ -7,7 +7,7 @@ import { useEventsStore } from '../store/eventsStore';
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo, timeLeft } from '../utils/time';
-import { tRoadCat } from '../utils/i18n';
+import { tRoadCat, tf } from '../utils/i18n';
 import { useT } from '../hooks/useT';
 import { useAppStore } from '../store/appStore';
 import { useUserLocation } from '../hooks/useUserLocation';
@@ -105,16 +105,15 @@ export function RoadEventsScreen() {
   // Detecta estado do usuário automaticamente ao montar
   const { detecting, locationDenied } = useUserLocation();
 
-  // Filtro: só eventos do estado do usuário (ou sem estado definido — legado)
-  // · filtro manual (FilterModal) tem precedência
-  // · se GPS negado/falhou/sem região: exibe tudo
-  // · enquanto detecta: spinner
+  // Filtro: só eventos do estado do usuário
+  // · filtro manual (FilterModal) tem precedência total
+  // · se GPS negado/falhou e sem cache: exibe tudo
+  // · quando estado conhecido: filtra estritamente (não inclui eventos sem stateUF)
   const events = getFilteredEvents()
     .filter((e) => {
-      if (filterStateUF) return true;          // filtro manual tem precedência
-      if (locationDenied || !userStateUF) return true; // GPS indisponível ou detectando
-      // Inclui eventos do estado do usuário E eventos sem stateUF (legado)
-      return !e.stateUF || e.stateUF === userStateUF;
+      if (filterStateUF) return e.stateUF === filterStateUF; // filtro manual estrito
+      if (locationDenied || !userStateUF) return true;       // sem estado detectado: tudo
+      return e.stateUF === userStateUF;                      // filtro por estado do usuário
     })
     .sort((a, b) => b.createdAt - a.createdAt);
 
@@ -147,11 +146,24 @@ export function RoadEventsScreen() {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: topInset + 12 }]}>
         <Text style={styles.headerTitle}>🚗 {t('road_title')}</Text>
-        {events.length > 0 && (
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{events.length} ativo{events.length !== 1 ? 's' : ''}</Text>
-          </View>
-        )}
+        <View style={styles.headerRight}>
+          {(userStateUF || filterStateUF) && (
+            <View style={styles.stateBadge}>
+              <Text style={styles.stateBadgeText}>
+                {filterStateUF
+                  ? tf('filter_state_badge', { state: filterStateUF })
+                  : userStateUF
+                    ? tf('filter_state_badge', { state: userStateUF })
+                    : t('filter_all_states')}
+              </Text>
+            </View>
+          )}
+          {events.length > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{events.length}</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {isLoading ? (
@@ -198,6 +210,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B', borderBottomWidth: 0,
   },
   headerTitle: { fontSize: rf(20), fontWeight: '800', color: '#fff' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: rw(8) },
+  stateBadge: {
+    backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: rw(10),
+    paddingVertical: rh(4), borderRadius: rw(12), borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+  },
+  stateBadgeText: { fontSize: rf(12), fontWeight: '700', color: '#fff' },
   countBadge: { backgroundColor: '#FF5722', paddingHorizontal: rw(10), paddingVertical: rh(4), borderRadius: rw(12) },
   countText: { fontSize: rf(13), fontWeight: '700', color: '#fff' },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: rh(12) },

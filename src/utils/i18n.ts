@@ -68,6 +68,8 @@ const translations: Record<LangCode, Record<string, string>> = {
     road_own: 'Seu evento',
     road_empty: 'Nenhum alerta ativo no momento.',
     road_empty_hint: 'Toque no mapa para reportar um evento.',
+    filter_state_badge: '📍 {state}',
+    filter_all_states: '🌐 Todos',
 
     // Entretenimento
     ent_title: 'Entretenimento',
@@ -327,6 +329,8 @@ const translations: Record<LangCode, Record<string, string>> = {
     road_own: 'Your event',
     road_empty: 'No active alerts right now.',
     road_empty_hint: 'Tap the map to report an event.',
+    filter_state_badge: '📍 {state}',
+    filter_all_states: '🌐 All',
 
     ent_title: 'Entertainment',
     ent_add: '+ Add',
@@ -565,6 +569,8 @@ const translations: Record<LangCode, Record<string, string>> = {
     road_own: 'Tu evento',
     road_empty: 'No hay alertas activas en este momento.',
     road_empty_hint: 'Toca el mapa para reportar un evento.',
+    filter_state_badge: '📍 {state}',
+    filter_all_states: '🌐 Todos',
 
     ent_title: 'Entretenimiento',
     ent_add: '+ Agregar',
@@ -803,6 +809,8 @@ const translations: Record<LangCode, Record<string, string>> = {
     road_own: 'Votre événement',
     road_empty: "Pas d'alertes actives pour le moment.",
     road_empty_hint: 'Appuyez sur la carte pour signaler un événement.',
+    filter_state_badge: '📍 {state}',
+    filter_all_states: '🌐 Tous',
 
     ent_title: 'Divertissement',
     ent_add: '+ Ajouter',

@@ -36,23 +36,43 @@ function GoogleAuthButton({ onSuccess, disabled }: GoogleBtnProps) {
   const t = useT();
   async function handlePress() {
     try {
-      await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
+      console.log('[GoogleSignIn] checando Play Services...');
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
-      // Na v16, a estrutura é userInfo.user.idToken
-      const idToken = userInfo.user?.idToken ?? userInfo.idToken ?? null;
+      // Limpa sessão cacheada (pode estar apontando para projeto antigo após troca de config)
+      try {
+        await GoogleSignin.signOut();
+      } catch {}
+
+      console.log('[GoogleSignIn] abrindo seletor de conta...');
+      const userInfo: any = await GoogleSignin.signIn();
+      console.log('[GoogleSignIn] resposta:', JSON.stringify(userInfo, null, 2));
+
+      // Lib v16: { type: 'success', data: { idToken, user: {...} } }
+      // Lib antigas: { idToken, user: {...} }
+      const idToken =
+        userInfo?.data?.idToken ??
+        userInfo?.idToken ??
+        userInfo?.user?.idToken ??
+        null;
 
       if (!idToken) {
-        Alert.alert('Erro', 'Não foi possível obter o ID token do Google');
+        Alert.alert(
+          'Erro',
+          'Não foi possível obter o ID token do Google.\n\n' +
+          'Verifique se o SHA-1 do app está registrado no Firebase Console e se o Web Client ID corresponde ao mesmo projeto.'
+        );
         return;
       }
 
+      console.log('[GoogleSignIn] idToken obtido, prosseguindo para Firebase...');
       onSuccess(idToken, null);
     } catch (error: any) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) return;
       if (error.code === statusCodes.IN_PROGRESS) return;
       const code = error.code ?? 'sem código';
       const msg = error.message ?? 'erro desconhecido';
+      console.error('[GoogleSignIn] erro:', code, msg, error);
       Alert.alert(
         'Erro Google',
         `Código: ${code}\n\nMensagem: ${msg}`,

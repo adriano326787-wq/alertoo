@@ -16,7 +16,7 @@ import { timeAgo, timeLeft } from '../utils/time';
 import { resolveStateUF } from '../utils/brazilGeo';
 import { useAppStore } from '../store/appStore';
 import { useT } from '../hooks/useT';
-import { tEntCat, tTier } from '../utils/i18n';
+import { tEntCat, tTier, tf } from '../utils/i18n';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { rw, rh, rf } from '../utils/responsive';
 import { AdBanner } from '../components/AdBanner';
@@ -208,8 +208,8 @@ export function EntertainmentScreen() {
     if (locationDenied || !userStateUF) {
       filtered = allEvents;
     } else {
-      // Inclui eventos do estado do usuário E eventos sem stateUF (legado)
-      filtered = allEvents.filter((e) => !e.stateUF || e.stateUF === userStateUF);
+      // Filtro estrito: apenas eventos do estado do usuário
+      filtered = allEvents.filter((e) => e.stateUF === userStateUF);
     }
 
     const tierWeight = (e: typeof allEvents[0]) => {
@@ -307,7 +307,16 @@ export function EntertainmentScreen() {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: topInset + 12 }]}>
-        <Text style={styles.headerTitle}>🎉 {t('ent_title')}</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>🎉 {t('ent_title')}</Text>
+          {userStateUF && (
+            <View style={styles.stateBadge}>
+              <Text style={styles.stateBadgeText}>
+                {tf('filter_state_badge', { state: userStateUF })}
+              </Text>
+            </View>
+          )}
+        </View>
         <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
           <Text style={styles.addBtnText}>{t('ent_add')}</Text>
         </TouchableOpacity>
@@ -420,7 +429,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingBottom: 12,
     backgroundColor: '#1E293B', borderBottomWidth: 0,
   },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#fff' },
+  stateBadge: {
+    backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10,
+    paddingVertical: 3, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+  },
+  stateBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   addBtn: { backgroundColor: '#FF5722', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
   addBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: rh(12) },
