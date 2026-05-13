@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
 
@@ -15,7 +15,7 @@ export function EventMarker({ event, onPress }: Props) {
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
   useEffect(() => {
-    const t = setTimeout(() => setTracksViewChanges(false), 500);
+    const t = setTimeout(() => setTracksViewChanges(false), 600);
     return () => clearTimeout(t);
   }, []);
 
@@ -26,12 +26,125 @@ export function EventMarker({ event, onPress }: Props) {
       onPress={() => onPress(event)}
       tracksViewChanges={tracksViewChanges}
     >
-      <FloatingPin color={meta.color} emoji={meta.emoji} />
+      <View style={{ alignItems: 'center' }}>
+        <TeardropPin color={meta.color} emoji={meta.emoji} />
+        <CountBadge count={event.confirmations} color="#22C55E" />
+      </View>
     </Marker>
   );
 }
 
-// ─── Floating Pin base ────────────────────────────────────────────────────────
+// ─── TeardropPin: pino clássico em formato de gota ───────────────────────────
+//
+//   ◯  ← topo arredondado (corpo)
+//    ▼ ← ponta inferior (formada pelo cantinho 0 + rotação 45°)
+//
+// Implementação: square rotacionado 45° com 3 cantos arredondados (radius=50%)
+// e 1 canto sem arredondamento (bottom-right), que vira o "bico" da gota.
+// O emoji/foto fica absoluto sobreposto (não rotaciona), sempre legível.
+export function TeardropPin({
+  color,
+  emoji,
+  photoUrl,
+  size = 44,
+}: {
+  color: string;
+  emoji: string;
+  photoUrl?: string | null;
+  size?: number;
+}) {
+  const wrapperW = size * 1.05;
+  const wrapperH = size * 1.32;
+  return (
+    <View style={[tp.wrapper, { width: wrapperW, height: wrapperH }]}>
+      {/* Corpo da gota */}
+      <View
+        style={[
+          tp.teardrop,
+          {
+            width: size,
+            height: size,
+            backgroundColor: color,
+            borderTopLeftRadius: size / 2,
+            borderTopRightRadius: size / 2,
+            borderBottomLeftRadius: size / 2,
+            borderBottomRightRadius: 0,
+            shadowColor: color,
+          },
+        ]}
+      />
+      {/* Brilho/reflexo */}
+      <View
+        style={[
+          tp.shine,
+          {
+            top: size * 0.18,
+            left: wrapperW / 2 - size * 0.28,
+            width: size * 0.22,
+            height: size * 0.12,
+            borderRadius: size * 0.06,
+          },
+        ]}
+      />
+      {/* Conteúdo: foto (se disponível) ou emoji */}
+      {photoUrl ? (
+        <Image
+          source={{ uri: photoUrl }}
+          style={[
+            tp.photo,
+            {
+              width: size * 0.62,
+              height: size * 0.62,
+              borderRadius: size * 0.31,
+              top: size * 0.15,
+            },
+          ]}
+        />
+      ) : (
+        <Text
+          style={[
+            tp.emoji,
+            {
+              fontSize: size * 0.44,
+              top: size * 0.16,
+            },
+          ]}
+        >
+          {emoji}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+// ─── CountBadge: contagem sobreposta no canto superior-direito ───────────────
+export function CountBadge({
+  count,
+  color = '#FF5722',
+}: {
+  count: number;
+  color?: string;
+}) {
+  if (count <= 0) return null;
+  const label = count > 99 ? '99+' : String(count);
+  const wide = label.length > 1;
+  return (
+    <View
+      style={[
+        cb.badge,
+        {
+          backgroundColor: color,
+          minWidth: wide ? 22 : 18,
+          paddingHorizontal: wide ? 5 : 0,
+        },
+      ]}
+    >
+      <Text style={cb.text}>{label}</Text>
+    </View>
+  );
+}
+
+// ─── FloatingPin (mantido para compatibilidade) ──────────────────────────────
 export function FloatingPin({
   color,
   emoji,
@@ -48,7 +161,6 @@ export function FloatingPin({
 
   return (
     <View style={fp.wrapper}>
-      {/* Corpo flutuante */}
       <View
         style={[
           fp.body,
@@ -61,12 +173,9 @@ export function FloatingPin({
           },
         ]}
       >
-        {/* Reflexo de luz */}
         <View style={fp.shine} />
         <Text style={[fp.emoji, { fontSize: size * 0.48 }]}>{emoji}</Text>
       </View>
-
-      {/* Ponta inferior */}
       <View
         style={[
           fp.tip,
@@ -79,8 +188,6 @@ export function FloatingPin({
           },
         ]}
       />
-
-      {/* Sombra no chão — efeito flutuante */}
       <View
         style={[
           fp.groundShadow,
@@ -94,6 +201,67 @@ export function FloatingPin({
   );
 }
 
+// ─── Estilos do TeardropPin ──────────────────────────────────────────────────
+const tp = StyleSheet.create({
+  wrapper: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  teardrop: {
+    position: 'absolute',
+    top: 2,
+    transform: [{ rotate: '45deg' }],
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 6,
+    elevation: 10,
+  },
+  photo: {
+    position: 'absolute',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  emoji: {
+    position: 'absolute',
+    textAlign: 'center',
+    lineHeight: undefined,
+  },
+  shine: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+});
+
+// ─── Estilos do CountBadge ───────────────────────────────────────────────────
+const cb = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    height: 19,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 2,
+    elevation: 8,
+    zIndex: 10,
+  },
+  text: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#fff',
+    lineHeight: 12,
+  },
+});
+
+// ─── Estilos do FloatingPin (legado) ─────────────────────────────────────────
 const fp = StyleSheet.create({
   wrapper: { alignItems: 'center' },
   body: {
@@ -101,11 +269,9 @@ const fp = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2.5,
     borderColor: '#fff',
-    // iOS shadow
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.45,
     shadowRadius: 8,
-    // Android
     elevation: 10,
     overflow: 'hidden',
   },

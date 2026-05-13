@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Image } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
-import { FloatingPin } from './EventMarker';
+import { TeardropPin, CountBadge } from './EventMarker';
 
 interface Props {
   event: EntertainmentEvent;
@@ -18,6 +18,7 @@ const OURO_DK = '#A67C00';
 
 // ─── Normal ───────────────────────────────────────────────────────────────────
 function NormalMarker({ event, meta, onPress, tracks }: any) {
+  const likesCount = event.likes?.length ?? 0;
   return (
     <Marker
       coordinate={{ latitude: event.latitude, longitude: event.longitude }}
@@ -26,7 +27,10 @@ function NormalMarker({ event, meta, onPress, tracks }: any) {
       tracksViewChanges={tracks}
       zIndex={1}
     >
-      <FloatingPin color={meta.color} emoji={meta.emoji} size={44} />
+      <View style={{ alignItems: 'center' }}>
+        <TeardropPin color={meta.color} emoji={meta.emoji} size={44} />
+        <CountBadge count={likesCount} color="#E91E63" />
+      </View>
     </Marker>
   );
 }
@@ -43,6 +47,7 @@ function NormalMarker({ event, meta, onPress, tracks }: any) {
 
 interface PromoPinProps {
   emoji: string;
+  photoUrl?: string | null;  // foto do estabelecimento → substitui o emoji
   tierColor: string;
   tierLabel: string;
   tierBadge: string;      // ex: "🥉" "🥈" "🥇"
@@ -55,7 +60,7 @@ interface PromoPinProps {
 }
 
 function PromoPin({
-  emoji, tierColor, tierLabel, tierBadge,
+  emoji, photoUrl, tierColor, tierLabel, tierBadge,
   size, ringWidth, labelColor,
   children, animated, scaleAnim,
 }: PromoPinProps) {
@@ -85,12 +90,22 @@ function PromoPin({
         },
         bodyStyle,
       ]}>
-        {/* Centro branco onde o emoji vai */}
+        {/* Centro branco onde o emoji/foto vai */}
         <View style={[
           s.inner,
           { width: innerSize, height: innerSize, borderRadius: innerSize / 2 },
         ]}>
-          <Text style={[s.emoji, { fontSize: innerSize * 0.52 }]}>{emoji}</Text>
+          {photoUrl ? (
+            <Image
+              source={{ uri: photoUrl }}
+              style={[
+                s.innerPhoto,
+                { width: innerSize - 4, height: innerSize - 4, borderRadius: (innerSize - 4) / 2 },
+              ]}
+            />
+          ) : (
+            <Text style={[s.emoji, { fontSize: innerSize * 0.52 }]}>{emoji}</Text>
+          )}
         </View>
 
         {/* Badge do tier — canto inferior direito */}
@@ -130,6 +145,7 @@ function BronzeMarker({ event, meta, onPress, tracks }: any) {
   }, []);
 
   const size = 58;
+  const likesCount = event.likes?.length ?? 0;
 
   return (
     <Marker
@@ -139,24 +155,28 @@ function BronzeMarker({ event, meta, onPress, tracks }: any) {
       tracksViewChanges={tracks}
       zIndex={10}
     >
-      <PromoPin
-        emoji={meta.emoji}
-        tierColor={BRONZE}
-        tierLabel="BRONZE"
-        tierBadge="🥉"
-        size={size}
-        ringWidth={7}
-        labelColor="#A0522D"
-      >
-        {/* Halo de glow simples */}
-        <Animated.View style={[s.halo, {
-          width: size + 18, height: size + 18,
-          borderRadius: (size + 18) / 2,
-          borderColor: BRONZE,
-          opacity: glow,
-          top: -9,
-        }]} />
-      </PromoPin>
+      <View style={{ alignItems: 'center' }}>
+        <PromoPin
+          emoji={meta.emoji}
+          photoUrl={event.promotionPhotoUrl}
+          tierColor={BRONZE}
+          tierLabel="BRONZE"
+          tierBadge="🥉"
+          size={size}
+          ringWidth={7}
+          labelColor="#A0522D"
+        >
+          {/* Halo de glow simples */}
+          <Animated.View style={[s.halo, {
+            width: size + 18, height: size + 18,
+            borderRadius: (size + 18) / 2,
+            borderColor: BRONZE,
+            opacity: glow,
+            top: -9,
+          }]} />
+        </PromoPin>
+        <CountBadge count={likesCount} color="#E91E63" />
+      </View>
     </Marker>
   );
 }
@@ -179,6 +199,7 @@ function PrataMarker({ event, meta, onPress, tracks }: any) {
   }, []);
 
   const size = 68;
+  const likesCount = event.likes?.length ?? 0;
 
   return (
     <Marker
@@ -188,26 +209,30 @@ function PrataMarker({ event, meta, onPress, tracks }: any) {
       tracksViewChanges={tracks}
       zIndex={20}
     >
-      <PromoPin
-        emoji={meta.emoji}
-        tierColor={PRATA}
-        tierLabel="✦ PRATA ✦"
-        tierBadge="🥈"
-        size={size}
-        ringWidth={8}
-        labelColor="#5A6070"
-      >
-        <Animated.View style={[s.halo, {
-          width: size + 30, height: size + 30,
-          borderRadius: (size + 30) / 2,
-          borderColor: PRATA, opacity: h2, top: -15,
-        }]} />
-        <Animated.View style={[s.halo, {
-          width: size + 16, height: size + 16,
-          borderRadius: (size + 16) / 2,
-          borderColor: PRATA, borderWidth: 2, opacity: h1, top: -8,
-        }]} />
-      </PromoPin>
+      <View style={{ alignItems: 'center' }}>
+        <PromoPin
+          emoji={meta.emoji}
+          photoUrl={event.promotionPhotoUrl}
+          tierColor={PRATA}
+          tierLabel="✦ PRATA ✦"
+          tierBadge="🥈"
+          size={size}
+          ringWidth={8}
+          labelColor="#5A6070"
+        >
+          <Animated.View style={[s.halo, {
+            width: size + 30, height: size + 30,
+            borderRadius: (size + 30) / 2,
+            borderColor: PRATA, opacity: h2, top: -15,
+          }]} />
+          <Animated.View style={[s.halo, {
+            width: size + 16, height: size + 16,
+            borderRadius: (size + 16) / 2,
+            borderColor: PRATA, borderWidth: 2, opacity: h1, top: -8,
+          }]} />
+        </PromoPin>
+        <CountBadge count={likesCount} color="#E91E63" />
+      </View>
     </Marker>
   );
 }
@@ -245,6 +270,7 @@ function OuroMarker({ event, meta, onPress, tracks }: any) {
   }, []);
 
   const size = 78;
+  const likesCount = event.likes?.length ?? 0;
 
   return (
     <Marker
@@ -254,33 +280,37 @@ function OuroMarker({ event, meta, onPress, tracks }: any) {
       tracksViewChanges={tracks}
       zIndex={30}
     >
-      <PromoPin
-        emoji={meta.emoji}
-        tierColor={OURO}
-        tierLabel="★ OURO ★"
-        tierBadge="🥇"
-        size={size}
-        ringWidth={9}
-        labelColor={OURO_DK}
-        animated
-        scaleAnim={scale}
-      >
-        {/* Halos dourados */}
-        <Animated.View style={[s.halo, {
-          width: size + 40, height: size + 40,
-          borderRadius: (size + 40) / 2,
-          borderColor: OURO, opacity: h2, top: -20,
-        }]} />
-        <Animated.View style={[s.halo, {
-          width: size + 22, height: size + 22,
-          borderRadius: (size + 22) / 2,
-          borderColor: OURO, borderWidth: 2.5, opacity: h1, top: -11,
-        }]} />
+      <View style={{ alignItems: 'center' }}>
+        <PromoPin
+          emoji={meta.emoji}
+          photoUrl={event.promotionPhotoUrl}
+          tierColor={OURO}
+          tierLabel="★ OURO ★"
+          tierBadge="🥇"
+          size={size}
+          ringWidth={9}
+          labelColor={OURO_DK}
+          animated
+          scaleAnim={scale}
+        >
+          {/* Halos dourados */}
+          <Animated.View style={[s.halo, {
+            width: size + 40, height: size + 40,
+            borderRadius: (size + 40) / 2,
+            borderColor: OURO, opacity: h2, top: -20,
+          }]} />
+          <Animated.View style={[s.halo, {
+            width: size + 22, height: size + 22,
+            borderRadius: (size + 22) / 2,
+            borderColor: OURO, borderWidth: 2.5, opacity: h1, top: -11,
+          }]} />
 
-        {/* Estrelas piscando */}
-        <Animated.Text style={[s.starL, { opacity: stars }]}>★</Animated.Text>
-        <Animated.Text style={[s.starR, { opacity: stars }]}>★</Animated.Text>
-      </PromoPin>
+          {/* Estrelas piscando */}
+          <Animated.Text style={[s.starL, { opacity: stars }]}>★</Animated.Text>
+          <Animated.Text style={[s.starR, { opacity: stars }]}>★</Animated.Text>
+        </PromoPin>
+        <CountBadge count={likesCount} color="#E91E63" />
+      </View>
     </Marker>
   );
 }
@@ -315,6 +345,10 @@ const s = StyleSheet.create({
   },
 
   emoji: { lineHeight: undefined, textAlign: 'center' },
+
+  innerPhoto: {
+    resizeMode: 'cover',
+  },
 
   badge: {
     position: 'absolute',
