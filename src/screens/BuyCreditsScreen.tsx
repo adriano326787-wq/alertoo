@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useT } from '../hooks/useT';
 import { CREDIT_PACKAGES, CreditPackage } from '../types/promotion';
-import { addCredits } from '../services/promotionService';
+import { savePendingPayment, verifyMPPayment } from '../services/promotionService';
 import { getCurrentUserId } from '../services/authService';
 
 // ─── Configuração Mercado Pago ────────────────────────────────────────────────
@@ -71,6 +71,11 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
   const t = useT();
   const [selected, setSelected] = useState<CreditPackage | null>(null);
   const [loading, setLoading] = useState(false);
+  // Aguardando verificação de pagamento
+  const [pendingVerification, setPendingVerification] = useState<{
+    preferenceId: string;
+    pkg: CreditPackage;
+  } | null>(null);
 
   async function handleBuyMercadoPago() {
     if (!selected) return;
@@ -78,59 +83,84 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
     setLoading(true);
 
     let url: string;
+    let preferenceId = '';
     try {
-      // Tenta criar preferência com valor pré-preenchido
       url = await createMPPreference(selected);
+      // Extrai preferenceId da URL (formato: /checkout/v1/redirect?pref_id=XXX)
+      const match = url.match(/pref_id=([^&]+)/);
+      preferenceId = match?.[1] ?? '';
     } catch {
-      // Fallback para link fixo
       url = MP_FALLBACK_LINKS[selected.id];
     } finally {
       setLoading(false);
     }
 
+    // Salva pagamento pendente no Firestore para rastreamento
+    if (preferenceId) {
+      try {
+        await savePendingPayment({
+          userId,
+          preferenceId,
+          packageId: selected.id,
+          credits: selected.credits,
+          price: selected.price,
+        });
+      } catch {}
+    }
+
     try {
       await Linking.openURL(url);
-
-      // Após abrir o link, mostra confirmação manual (simplificado)
-      // Em produção: webhook do MP atualiza automaticamente via Cloud Function
-      Alert.alert(
-        '✅ Pagamento iniciado',
-        `Após concluir o pagamento via Mercado Pago, seus ${selected.credits} crédito(s) serão adicionados automaticamente.\n\nSe não aparecer em até 5 minutos, entre em contato com o suporte.`,
-        [
-          {
-            text: 'Já paguei',
-            onPress: async () => {
-              // Simulação local — em produção via webhook
-              setLoading(true);
-              try {
-                await addCredits(
-                  userId,
-                  selected.credits,
-                  selected.id,
-                  'mercadopago',
-                  `mp_${Date.now()}`,
-                  selected.price,
-                );
-                onPurchased?.(selected.credits);
-                setSelected(null);
-                onClose();
-              } catch (err: any) {
-                Alert.alert('Erro', err.message ?? 'Falha ao registrar créditos.');
-              } finally {
-                setLoading(false);
-              }
-            },
-          },
-          { text: 'Cancelar', style: 'cancel' },
-        ],
-      );
+      // Entra no modo "aguardando verificação"
+      setPendingVerification({ preferenceId, pkg: selected });
     } catch {
       Alert.alert('Erro', 'Não foi possível abrir o Mercado Pago.');
     }
   }
 
+  async function handleVerifyPayment() {
+    if (!pendingVerification) return;
+    const userId = getCurrentUserId();
+    setLoading(true);
+    try {
+      const { preferenceId, pkg } = pendingVerification;
+      const status = await verifyMPPayment(
+        userId,
+        preferenceId,
+        pkg.id,
+        pkg.credits,
+        pkg.price,
+        MP_ACCESS_TOKEN,
+      );
+
+      if (status === 'approved') {
+        Alert.alert(
+          '✅ Pagamento confirmado!',
+          `${pkg.credits} crédito(s) adicionado(s) à sua conta.`,
+          [{ text: 'OK', onPress: () => { onPurchased?.(pkg.credits); setPendingVerification(null); setSelected(null); onClose(); } }],
+        );
+      } else if (status === 'pending') {
+        Alert.alert(
+          '⏳ Pagamento em processamento',
+          'Seu pagamento ainda está sendo processado pelo Mercado Pago. Aguarde alguns minutos e tente novamente.',
+          [{ text: 'OK' }],
+        );
+      } else {
+        Alert.alert(
+          '❌ Pagamento não aprovado',
+          'O pagamento foi recusado ou cancelado. Tente novamente.',
+          [{ text: 'Tentar novamente', onPress: () => setPendingVerification(null) }, { text: 'Fechar', style: 'cancel' }],
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', err.message ?? 'Não foi possível verificar o pagamento.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function handleClose() {
     setSelected(null);
+    setPendingVerification(null);
     onClose();
   }
 
@@ -208,27 +238,53 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
           {/* Pagamento */}
           <Text style={styles.sectionLabel}>{t('buy_credits_payment')}</Text>
 
-          <TouchableOpacity
-            style={[styles.payBtn, !selected && styles.payBtnDisabled]}
-            onPress={handleBuyMercadoPago}
-            disabled={!selected || loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Text style={styles.payBtnIcon}>💳</Text>
-                <View>
-                  <Text style={styles.payBtnLabel}>PIX ou Cartão</Text>
-                  <Text style={styles.payBtnSub}>via Mercado Pago</Text>
-                </View>
-                {selected && (
-                  <Text style={styles.payBtnAmount}>R$ {selected.price.toFixed(2)}</Text>
-                )}
-              </>
-            )}
-          </TouchableOpacity>
+          {pendingVerification ? (
+            /* ── Estado: aguardando verificação ── */
+            <View style={styles.pendingBox}>
+              <Text style={styles.pendingEmoji}>⏳</Text>
+              <Text style={styles.pendingTitle}>Aguardando confirmação</Text>
+              <Text style={styles.pendingDesc}>
+                Após concluir o pagamento no Mercado Pago, toque em{' '}
+                <Text style={{ fontWeight: '800' }}>Verificar pagamento</Text> para
+                receber seus créditos automaticamente.
+              </Text>
+              <TouchableOpacity
+                style={styles.verifyBtn}
+                onPress={handleVerifyPayment}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.verifyBtnText}>🔍 Verificar pagamento</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setPendingVerification(null)} style={styles.cancelVerify}>
+                <Text style={styles.cancelVerifyText}>Cancelar e escolher outro pacote</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.payBtn, !selected && styles.payBtnDisabled]}
+              onPress={handleBuyMercadoPago}
+              disabled={!selected || loading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Text style={styles.payBtnIcon}>💳</Text>
+                  <View>
+                    <Text style={styles.payBtnLabel}>PIX ou Cartão</Text>
+                    <Text style={styles.payBtnSub}>via Mercado Pago</Text>
+                  </View>
+                  {selected && (
+                    <Text style={styles.payBtnAmount}>R$ {selected.price.toFixed(2)}</Text>
+                  )}
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           <View style={styles.secureRow}>
             <Text style={styles.secureText}>{t('buy_credits_secure')}</Text>
@@ -314,4 +370,21 @@ const styles = StyleSheet.create({
 
   secureRow: { alignItems: 'center' },
   secureText: { fontSize: 12, color: '#aaa' },
+
+  // ─── Verificação pendente ─────────────────────────────────────────────────
+  pendingBox: {
+    backgroundColor: '#F0F9FF', borderRadius: 16, padding: 20, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#BAE6FD', alignItems: 'center',
+  },
+  pendingEmoji: { fontSize: 40, marginBottom: 10 },
+  pendingTitle: { fontSize: 17, fontWeight: '800', color: '#0369A1', marginBottom: 8 },
+  pendingDesc: { fontSize: 13, color: '#555', textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  verifyBtn: {
+    backgroundColor: '#0EA5E9', borderRadius: 12,
+    paddingVertical: 14, paddingHorizontal: 32,
+    width: '100%', alignItems: 'center', marginBottom: 10,
+  },
+  verifyBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  cancelVerify: { paddingVertical: 6 },
+  cancelVerifyText: { fontSize: 13, color: '#94A3B8' },
 });

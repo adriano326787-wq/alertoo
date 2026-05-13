@@ -42,9 +42,9 @@ const INITIAL_REGION = {
 
 // ─── Configuração de cluster por tier ────────────────────────────────────────
 const CLUSTER_CONFIG: Record<ZoomTier, { radius: number; minPoints: number }> = {
-  distant: { radius: 80, minPoints: 2 },  // agrupa muito — visão macro
-  medium:  { radius: 50, minPoints: 2 },  // agrupa moderadamente
-  close:   { radius: 28, minPoints: 3 },  // agrupa pouco — mostra pins individuais
+  distant: { radius: 55, minPoints: 5 },  // visão macro: só agrupa grupos grandes
+  medium:  { radius: 35, minPoints: 4 },  // bairro: agrupa moderadamente
+  close:   { radius: 18, minPoints: 3 },  // rua: mostra mais pins individuais
 };
 
 // ─── Aparência do cluster por tier ────────────────────────────────────────────

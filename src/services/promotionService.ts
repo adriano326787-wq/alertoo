@@ -241,6 +241,65 @@ export async function cancelPromotion(promotionId: string, eventId: string): Pro
   });
 }
 
+// ─── Pagamentos pendentes ─────────────────────────────────────────────────────
+
+const PENDING_PAYMENTS_COL = 'pending_payments';
+
+export async function savePendingPayment(params: {
+  userId: string;
+  preferenceId: string;
+  packageId: CreditPackageId;
+  credits: number;
+  price: number;
+}): Promise<string> {
+  const ref = await addDoc(collection(db, PENDING_PAYMENTS_COL), {
+    ...params,
+    status: 'pending',
+    createdAt: Date.now(),
+  });
+  return ref.id;
+}
+
+export async function verifyMPPayment(
+  userId: string,
+  preferenceId: string,
+  packageId: CreditPackageId,
+  credits: number,
+  price: number,
+  accessToken: string,
+): Promise<'approved' | 'pending' | 'rejected'> {
+  const url = `https://api.mercadopago.com/v1/payments/search?preference_id=${preferenceId}&sort=date_created&criteria=desc&range=date_created&begin_date=NOW-7DAYS&end_date=NOW`;
+  const resp = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!resp.ok) return 'pending';
+
+  const data = await resp.json();
+  const results: any[] = data.results ?? [];
+  if (results.length === 0) return 'pending';
+
+  const payment = results[0];
+  const mpStatus: string = payment.status ?? '';
+
+  if (mpStatus === 'approved') {
+    // Credita apenas se ainda não foi creditado (idempotência por paymentRef)
+    const paymentRef = String(payment.id);
+    const q = query(
+      collection(db, PURCHASES_COL),
+      where('paymentRef', '==', paymentRef),
+    );
+    const existing = await getDocs(q);
+    if (existing.empty) {
+      await addCredits(userId, credits, packageId, 'mercadopago', paymentRef, price);
+    }
+    return 'approved';
+  }
+
+  if (['in_process', 'authorized', 'pending'].includes(mpStatus)) return 'pending';
+  return 'rejected';
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 export function getPackageById(id: CreditPackageId): CreditPackage | undefined {

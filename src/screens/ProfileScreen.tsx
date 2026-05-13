@@ -473,7 +473,7 @@ export function ProfileScreen() {
           onPromoted={() => {
             setPromoteModalVisible(false);
             setSelectedEventForPromo(null);
-            loadCreditsAndEvents();
+            loadCredits();
           }}
           onCreditsUpdated={(newCredits) => setUserCredits(newCredits)}
         />
