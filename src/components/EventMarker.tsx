@@ -53,11 +53,16 @@ export function TeardropPin({
   photoUrl?: string | null;
   size?: number;
 }) {
-  const wrapperW = size * 1.05;
-  const wrapperH = size * 1.32;
+  // O quadrado rotacionado 45° projeta sua diagonal para baixo:
+  // visual height ≈ size * sqrt(2)/2 + size/2 ≈ size * 1.21
+  const wrapperW = size;
+  const wrapperH = Math.ceil(size * 1.25);
+  const photoSize = size * 0.62;
+  const photoOffset = (size - photoSize) / 2;
+
   return (
     <View style={[tp.wrapper, { width: wrapperW, height: wrapperH }]}>
-      {/* Corpo da gota */}
+      {/* Corpo da gota (rotacionado) */}
       <View
         style={[
           tp.teardrop,
@@ -73,30 +78,18 @@ export function TeardropPin({
           },
         ]}
       />
-      {/* Brilho/reflexo */}
-      <View
-        style={[
-          tp.shine,
-          {
-            top: size * 0.18,
-            left: wrapperW / 2 - size * 0.28,
-            width: size * 0.22,
-            height: size * 0.12,
-            borderRadius: size * 0.06,
-          },
-        ]}
-      />
-      {/* Conteúdo: foto (se disponível) ou emoji */}
+      {/* Conteúdo (foto ou emoji) sobreposto, sem rotação, centralizado */}
       {photoUrl ? (
         <Image
           source={{ uri: photoUrl }}
           style={[
             tp.photo,
             {
-              width: size * 0.62,
-              height: size * 0.62,
-              borderRadius: size * 0.31,
-              top: size * 0.15,
+              width: photoSize,
+              height: photoSize,
+              borderRadius: photoSize / 2,
+              top: size * 0.16,
+              left: photoOffset,
             },
           ]}
         />
@@ -105,8 +98,10 @@ export function TeardropPin({
           style={[
             tp.emoji,
             {
+              top: size * 0.17,
               fontSize: size * 0.44,
-              top: size * 0.16,
+              width: size,
+              lineHeight: size * 0.55,
             },
           ]}
         >
@@ -204,33 +199,33 @@ export function FloatingPin({
 // ─── Estilos do TeardropPin ──────────────────────────────────────────────────
 const tp = StyleSheet.create({
   wrapper: {
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    overflow: 'visible',
   },
   teardrop: {
     position: 'absolute',
-    top: 2,
+    top: 0,
+    left: 0,
     transform: [{ rotate: '45deg' }],
     borderWidth: 2,
     borderColor: '#fff',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.45,
     shadowRadius: 6,
-    elevation: 10,
+    elevation: 6,
   },
   photo: {
     position: 'absolute',
     borderWidth: 1.5,
     borderColor: '#fff',
+    zIndex: 5,
+    elevation: 12,
   },
   emoji: {
     position: 'absolute',
+    left: 0,
     textAlign: 'center',
-    lineHeight: undefined,
-  },
-  shine: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    zIndex: 5,
+    elevation: 12,
   },
 });
 

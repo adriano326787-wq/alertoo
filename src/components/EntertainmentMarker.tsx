@@ -90,22 +90,25 @@ function PromoPin({
         },
         bodyStyle,
       ]}>
-        {/* Centro branco onde o emoji/foto vai */}
+        {/* Centro branco — emoji sempre presente como base, foto sobreposta se houver */}
         <View style={[
           s.inner,
           { width: innerSize, height: innerSize, borderRadius: innerSize / 2 },
         ]}>
+          <Text style={[s.emoji, { fontSize: innerSize * 0.52 }]}>{emoji}</Text>
           {photoUrl ? (
             <Image
               source={{ uri: photoUrl }}
               style={[
                 s.innerPhoto,
-                { width: innerSize - 4, height: innerSize - 4, borderRadius: (innerSize - 4) / 2 },
+                {
+                  width: innerSize - 4,
+                  height: innerSize - 4,
+                  borderRadius: (innerSize - 4) / 2,
+                },
               ]}
             />
-          ) : (
-            <Text style={[s.emoji, { fontSize: innerSize * 0.52 }]}>{emoji}</Text>
-          )}
+          ) : null}
         </View>
 
         {/* Badge do tier — canto inferior direito */}
@@ -337,6 +340,7 @@ const s = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     // Sombra suave interna
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -344,9 +348,10 @@ const s = StyleSheet.create({
     shadowRadius: 2,
   },
 
-  emoji: { lineHeight: undefined, textAlign: 'center' },
+  emoji: { textAlign: 'center', includeFontPadding: false },
 
   innerPhoto: {
+    position: 'absolute',
     resizeMode: 'cover',
   },
 
