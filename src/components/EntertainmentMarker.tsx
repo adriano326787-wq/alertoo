@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Animated, Easing, Image } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { TeardropPin, CountBadge } from './EventMarker';
+import { tEntCat } from '../utils/i18n';
 
 interface Props {
   event: EntertainmentEvent;
@@ -47,20 +48,20 @@ function NormalMarker({ event, meta, onPress, tracks }: any) {
 
 interface PromoPinProps {
   emoji: string;
-  photoUrl?: string | null;  // foto do estabelecimento → substitui o emoji
+  categoryLabel: string;     // ex: "🍔 Restaurante" — informa ao usuário do que se trata
+  photoUrl?: string | null;  // foto do estabelecimento → sobreposta ao emoji
   tierColor: string;
-  tierLabel: string;
-  tierBadge: string;      // ex: "🥉" "🥈" "🥇"
-  size: number;           // diâmetro total do pin
-  ringWidth: number;      // espessura do anel do tier
-  labelColor: string;     // bg do label abaixo
-  children?: React.ReactNode; // halos/animações extras (passados pelo wrapper)
+  tierBadge: string;         // ex: "🥉" "🥈" "🥇"
+  size: number;              // diâmetro total do pin
+  ringWidth: number;         // espessura do anel do tier
+  labelColor: string;        // bg do label abaixo
+  children?: React.ReactNode;
   animated?: boolean;
   scaleAnim?: Animated.Value;
 }
 
 function PromoPin({
-  emoji, photoUrl, tierColor, tierLabel, tierBadge,
+  emoji, categoryLabel, photoUrl, tierColor, tierBadge,
   size, ringWidth, labelColor,
   children, animated, scaleAnim,
 }: PromoPinProps) {
@@ -95,7 +96,7 @@ function PromoPin({
           s.inner,
           { width: innerSize, height: innerSize, borderRadius: innerSize / 2 },
         ]}>
-          <Text style={[s.emoji, { fontSize: innerSize * 0.52 }]}>{emoji}</Text>
+          <Text style={[s.emoji, { fontSize: innerSize * 0.62 }]}>{emoji}</Text>
           {photoUrl ? (
             <Image
               source={{ uri: photoUrl }}
@@ -126,9 +127,11 @@ function PromoPin({
         marginTop: -2,
       }]} />
 
-      {/* Label do tier */}
-      <View style={[s.label, { backgroundColor: labelColor }]}>
-        <Text style={s.labelText}>{tierLabel}</Text>
+      {/* Label de categoria — diz ao usuário do que se trata o evento */}
+      <View style={[s.label, { backgroundColor: '#fff', borderColor: tierColor }]}>
+        <Text style={[s.labelText, { color: tierColor }]} numberOfLines={1}>
+          {categoryLabel}
+        </Text>
       </View>
 
       {/* Sombra no chão */}
@@ -161,12 +164,12 @@ function BronzeMarker({ event, meta, onPress, tracks }: any) {
       <View style={{ alignItems: 'center' }}>
         <PromoPin
           emoji={meta.emoji}
+          categoryLabel={`${meta.emoji} ${tEntCat(event.category)}`}
           photoUrl={event.promotionPhotoUrl}
           tierColor={BRONZE}
-          tierLabel="BRONZE"
           tierBadge="🥉"
           size={size}
-          ringWidth={7}
+          ringWidth={5}
           labelColor="#A0522D"
         >
           {/* Halo de glow simples */}
@@ -215,12 +218,12 @@ function PrataMarker({ event, meta, onPress, tracks }: any) {
       <View style={{ alignItems: 'center' }}>
         <PromoPin
           emoji={meta.emoji}
+          categoryLabel={`${meta.emoji} ${tEntCat(event.category)}`}
           photoUrl={event.promotionPhotoUrl}
           tierColor={PRATA}
-          tierLabel="✦ PRATA ✦"
           tierBadge="🥈"
           size={size}
-          ringWidth={8}
+          ringWidth={6}
           labelColor="#5A6070"
         >
           <Animated.View style={[s.halo, {
@@ -286,12 +289,12 @@ function OuroMarker({ event, meta, onPress, tracks }: any) {
       <View style={{ alignItems: 'center' }}>
         <PromoPin
           emoji={meta.emoji}
+          categoryLabel={`${meta.emoji} ${tEntCat(event.category)}`}
           photoUrl={event.promotionPhotoUrl}
           tierColor={OURO}
-          tierLabel="★ OURO ★"
           tierBadge="🥇"
           size={size}
-          ringWidth={9}
+          ringWidth={7}
           labelColor={OURO_DK}
           animated
           scaleAnim={scale}
@@ -381,16 +384,23 @@ const s = StyleSheet.create({
   },
 
   label: {
-    marginTop: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 7,
+    marginTop: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    maxWidth: 120,
+    // sombra sutil para legibilidade sobre o mapa
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 2,
+    elevation: 3,
   },
   labelText: {
-    fontSize: 8,
+    fontSize: 11,
     fontWeight: '900',
-    color: '#fff',
-    letterSpacing: 0.7,
+    letterSpacing: 0.3,
   },
 
   ground: {
