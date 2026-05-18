@@ -7,7 +7,8 @@
       "namespace": "android_app",
       "package_name": "com.alertoo.app",
       "sha256_cert_fingerprints": [
-        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C",
+        "EA:69:E9:8D:FE:99:80:BD:6C:96:4D:E7:49:1B:6E:49:06:29:95:33:0F:42:3D:66:11:1C:10:7D:2A:17:07:16"
       ]
     }
   }
