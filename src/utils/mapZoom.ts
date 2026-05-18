@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sistema de zoom inteligente do mapa
  *
  * Converte latitudeDelta (react-native-maps) em nível de zoom (0-20)
@@ -23,22 +23,22 @@ export function deltaToZoom(latitudeDelta: number): number {
 /**
  * Classifica o zoom atual em um dos três tiers.
  *
- * distant : zoom < 11  → visão de cidade/estado inteiro
- * medium  : zoom 11-13 → bairro / alguns quarteirões
- * close   : zoom >= 14 → rua / detalhe
+ * distant : zoom < 12  → visão de cidade/estado inteiro
+ * medium  : zoom 12-14 → bairro / alguns quarteirões
+ * close   : zoom >= 15 → rua / detalhe
  */
 export function getZoomTier(latitudeDelta: number): ZoomTier {
   const zoom = deltaToZoom(latitudeDelta);
-  if (zoom < 11) return 'distant';
-  if (zoom < 14) return 'medium';
+  if (zoom < 12) return 'distant';
+  if (zoom < 15) return 'medium';
   return 'close';
 }
 
 // ─── Pontuação de relevância dos eventos de estrada ───────────────────────────
 
 function roadScore(event: RoadEvent): number {
-  const confirms = event.confirmCount ?? 0;
-  const denies = event.denyCount ?? 0;
+  const confirms = event.confirmations ?? 0;
+  const denies = event.denials ?? 0;
   const net = confirms - denies;
   const age = (Date.now() - event.createdAt) / 60000; // minutos
   // Decai 1 ponto a cada 30 min; mínimo 0
@@ -58,11 +58,10 @@ function entScore(event: EntertainmentEvent): number {
     event.promotionEndDate &&
     event.promotionEndDate > Date.now();
 
-  const featuredBonus = event.isFeatured ? 40 : 0;
   const likeBonus = (event.likes?.length ?? 0) * 5;
   const commentBonus = (event.commentCount ?? 0) * 3;
 
-  return (isPromotedActive ? tierWeight : 0) + featuredBonus + likeBonus + commentBonus;
+  return (isPromotedActive ? tierWeight : 0) + likeBonus + commentBonus;
 }
 
 // ─── Filtros por tier ─────────────────────────────────────────────────────────
@@ -80,18 +79,22 @@ export function filterRoadEvents(events: RoadEvent[], tier: ZoomTier): RoadEvent
   }
 
   if (tier === 'medium') {
-    // Apenas eventos com pelo menos 1 confirmação líquida
+    // Eventos com pelo menos 1 confirmação líquida, ou recentes (< 15 min)
+    const fifteenMin = 15 * 60 * 1000;
     return active
-      .filter((e) => (e.confirmCount ?? 0) - (e.denyCount ?? 0) >= 1)
+      .filter((e) =>
+        (e.confirmations ?? 0) - (e.denials ?? 0) >= 1 ||
+        Date.now() - e.createdAt < fifteenMin
+      )
       .sort((a, b) => roadScore(b) - roadScore(a))
       .slice(0, 80);
   }
 
-  // distant — apenas os mais confirmados (top 20)
+  // distant — com pelo menos 2 confirmações líquidas (era 3, agora mais permissivo)
   return active
-    .filter((e) => (e.confirmCount ?? 0) - (e.denyCount ?? 0) >= 3)
+    .filter((e) => (e.confirmations ?? 0) - (e.denials ?? 0) >= 2)
     .sort((a, b) => roadScore(b) - roadScore(a))
-    .slice(0, 20);
+    .slice(0, 30);
 }
 
 /**
@@ -109,25 +112,26 @@ export function filterEntEvents(events: EntertainmentEvent[], tier: ZoomTier): E
   }
 
   if (tier === 'medium') {
-    // Patrocinados (qualquer tier) + destaque + populares (≥3 likes)
+    // Patrocinados (qualquer tier) + populares (≥2 likes) + recentes (< 1h)
+    const oneHour = 60 * 60 * 1000;
     return events
       .filter((e) =>
         isActivePromotion(e) ||
-        e.isFeatured ||
-        (e.likes?.length ?? 0) >= 3
+        (e.likes?.length ?? 0) >= 2 ||
+        Date.now() - e.createdAt < oneHour
       )
       .sort((a, b) => entScore(b) - entScore(a))
-      .slice(0, 60);
+      .slice(0, 80);
   }
 
-  // distant — apenas ouro + destaque admin
+  // distant — Ouro + Prata + eventos com ≥5 likes (antes era só Ouro)
   return events
     .filter((e) =>
-      (isActivePromotion(e) && e.promotionTier === 'ouro') ||
-      e.isFeatured
+      (isActivePromotion(e) && (e.promotionTier === 'ouro' || e.promotionTier === 'prata')) ||
+      (e.likes?.length ?? 0) >= 5
     )
     .sort((a, b) => entScore(b) - entScore(a))
-    .slice(0, 15);
+    .slice(0, 25);
 }
 
 // ─── Labels de UI ─────────────────────────────────────────────────────────────

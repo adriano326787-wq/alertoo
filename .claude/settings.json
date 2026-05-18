@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx expo whoami)",
+      "Bash(npx expo --version)",
+      "Bash(ipconfig *)",
+      "Bash(adb devices)",
+      "Bash(adb install *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__find"
+    ]
+  }
+}

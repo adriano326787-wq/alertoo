@@ -45,13 +45,6 @@ module.exports = {
   },
   plugins: [
     [
-      'react-native-google-mobile-ads',
-      {
-        androidAppId: process.env.ADMOB_APP_ID_ANDROID ?? 'ca-app-pub-4349309505537394~6456788249',
-        iosAppId:     process.env.ADMOB_APP_ID_IOS     ?? 'ca-app-pub-3940256099942544~1458002511',
-      },
-    ],
-    [
       'expo-location',
       {
         locationWhenInUsePermission:
@@ -77,6 +70,10 @@ module.exports = {
     eas: {
       projectId: '4e50f222-420e-465f-9624-3634d83ae645',
     },
+    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? '',
+    sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '',
+    posthogApiKey: process.env.EXPO_PUBLIC_POSTHOG_API_KEY ?? '',
+    posthogHost: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com',
   },
   owner: 'adrianosethi1',
 };

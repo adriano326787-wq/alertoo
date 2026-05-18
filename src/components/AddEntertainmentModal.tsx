@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+  StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { EntertainmentCategory, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { useEntertainmentStore } from '../store/entertainmentStore';
 import { validateEventContent } from '../utils/contentFilter';
@@ -25,7 +26,25 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
   const [saving, setSaving] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const addEvent = useEntertainmentStore((s) => s.addEvent);
+
+  const handlePickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Precisamos de acesso à galeria pra escolher a foto.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) return;
@@ -48,10 +67,12 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
         stateUF,
         cityName,
         countryCode,
+        photoUri: photoUri ?? undefined,
       });
       setTitle('');
       setDescription('');
       setAddress('');
+      setPhotoUri(null);
       onClose();
     } catch (err: any) {
       Alert.alert('Não foi possível publicar', err?.message ?? 'Tente novamente.');
@@ -126,6 +147,25 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
               maxLength={150}
             />
 
+            {/* Foto opcional */}
+            <Text style={styles.label}>📷 Foto (opcional)</Text>
+            {photoUri ? (
+              <View style={styles.photoPreviewWrap}>
+                <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
+                <TouchableOpacity style={styles.photoRemove} onPress={() => setPhotoUri(null)}>
+                  <Text style={styles.photoRemoveText}>✕</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.photoChange} onPress={handlePickPhoto}>
+                  <Text style={styles.photoChangeText}>{t('change_photo') || 'Trocar foto'}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.photoPickBtn} onPress={handlePickPhoto}>
+                <Text style={styles.photoPickIcon}>📷</Text>
+                <Text style={styles.photoPickText}>{t('add_photo') || 'Adicionar foto'}</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.footer}>
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
                 <Text style={styles.cancelText}>{t('filter_cancel')}</Text>
@@ -170,4 +210,35 @@ const styles = StyleSheet.create({
   submitBtn: { flex: 2, paddingVertical: 14, borderRadius: 12, backgroundColor: '#6A1B9A', alignItems: 'center' },
   submitBtnDisabled: { backgroundColor: '#ccc' },
   submitText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // Photo picker
+  photoPickBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, paddingHorizontal: 16,
+    borderRadius: 12, borderWidth: 1.5, borderColor: '#ddd', borderStyle: 'dashed',
+    backgroundColor: '#FAFAFA',
+    marginBottom: 16, gap: 8,
+  },
+  photoPickIcon: { fontSize: 22 },
+  photoPickText: { fontSize: 14, fontWeight: '600', color: '#666' },
+  photoPreviewWrap: {
+    position: 'relative',
+    borderRadius: 12, overflow: 'hidden',
+    marginBottom: 16,
+    backgroundColor: '#000',
+  },
+  photoPreview: { width: '100%', aspectRatio: 4/3 },
+  photoRemove: {
+    position: 'absolute', top: 8, right: 8,
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  photoRemoveText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  photoChange: {
+    position: 'absolute', bottom: 8, right: 8,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  photoChangeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
 });

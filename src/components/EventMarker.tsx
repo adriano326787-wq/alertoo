@@ -1,296 +1,131 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+/**
+ * EventMarker — sistema de cards para eventos de estrada.
+ *
+ * Hierarquia:
+ *   - AlertCard    → eventos com ≥3 confirmações líquidas (urgência)
+ *   - StandardCard → eventos orgânicos
+ *
+ * Compat: exporta GlassPin (alias StandardCard) e CountBadge.
+ */
+
+import React, { useEffect, useState } from 'react';
+import { View, Text } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
+import { ZoomTier } from '../utils/mapZoom';
+import { palette, shadow, platformShadow } from '../theme/tokens';
+import { StandardCard, AlertCard } from './ui/PinCard';
 
 interface Props {
   event: RoadEvent;
   onPress: (event: RoadEvent) => void;
+  zoomTier?: ZoomTier;
 }
 
 const FALLBACK_META = { color: '#607D8B', emoji: '📍' };
 
-export function EventMarker({ event, onPress }: Props) {
+function cardSize(zoom: ZoomTier): 'sm' | 'md' | 'lg' {
+  return zoom === 'distant' ? 'sm' : zoom === 'medium' ? 'md' : 'lg';
+}
+
+export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
   const meta = EVENT_CATEGORIES[event.category] ?? FALLBACK_META;
-  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  const [tracks, setTracks] = useState(true);
+
+  const netConfirms = (event.confirmations ?? 0) - (event.denials ?? 0);
+  const isAlert = netConfirms >= 3;
+
+  const contentKey = [
+    event.category,
+    event.title,
+    isAlert ? 'A' : 'S',
+    zoomTier,
+  ].join('|');
 
   useEffect(() => {
-    const t = setTimeout(() => setTracksViewChanges(false), 600);
+    setTracks(true);
+    const t = setTimeout(() => setTracks(false), isAlert ? 2500 : 800);
     return () => clearTimeout(t);
-  }, []);
+  }, [contentKey, isAlert]);
+
+  const size = cardSize(zoomTier);
+
+  if (isAlert) {
+    return (
+      <Marker
+        coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+        anchor={{ x: 0.5, y: 0.5 }}
+        onPress={() => onPress(event)}
+        tracksViewChanges={tracks}
+        zIndex={40}
+      >
+        <AlertCard
+          color={meta.color || palette.alert}
+          icon={meta.emoji}
+          label={event.title}
+          size={size}
+        />
+      </Marker>
+    );
+  }
 
   return (
     <Marker
       coordinate={{ latitude: event.latitude, longitude: event.longitude }}
       anchor={{ x: 0.5, y: 1 }}
       onPress={() => onPress(event)}
-      tracksViewChanges={tracksViewChanges}
+      tracksViewChanges={tracks}
+      zIndex={1}
     >
-      <View style={{ alignItems: 'center' }}>
-        <TeardropPin color={meta.color} emoji={meta.emoji} />
-        <CountBadge count={event.confirmations} color="#22C55E" />
-      </View>
+      <StandardCard color={meta.color} icon={meta.emoji} label={event.title} size={size} />
     </Marker>
   );
 }
 
-// ─── TeardropPin: pino clássico em formato de gota ───────────────────────────
-//
-//   ◯  ← topo arredondado (corpo)
-//    ▼ ← ponta inferior (formada pelo cantinho 0 + rotação 45°)
-//
-// Implementação: square rotacionado 45° com 3 cantos arredondados (radius=50%)
-// e 1 canto sem arredondamento (bottom-right), que vira o "bico" da gota.
-// O emoji/foto fica absoluto sobreposto (não rotaciona), sempre legível.
-export function TeardropPin({
-  color,
-  emoji,
-  photoUrl,
-  size = 44,
-}: {
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMPAT — exports antigos mantidos como wrappers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface GlassPinProps {
   color: string;
   emoji: string;
   photoUrl?: string | null;
   size?: number;
-}) {
-  // O quadrado rotacionado 45° projeta sua diagonal para baixo:
-  // visual height ≈ size * sqrt(2)/2 + size/2 ≈ size * 1.21
-  const wrapperW = size;
-  const wrapperH = Math.ceil(size * 1.25);
-  const photoSize = size * 0.62;
-  const photoOffset = (size - photoSize) / 2;
-
-  return (
-    <View style={[tp.wrapper, { width: wrapperW, height: wrapperH }]}>
-      {/* Corpo da gota (rotacionado) */}
-      <View
-        style={[
-          tp.teardrop,
-          {
-            width: size,
-            height: size,
-            backgroundColor: color,
-            borderTopLeftRadius: size / 2,
-            borderTopRightRadius: size / 2,
-            borderBottomLeftRadius: size / 2,
-            borderBottomRightRadius: 0,
-            shadowColor: color,
-          },
-        ]}
-      />
-      {/* Conteúdo (foto ou emoji) sobreposto, sem rotação, centralizado */}
-      {photoUrl ? (
-        <Image
-          source={{ uri: photoUrl }}
-          style={[
-            tp.photo,
-            {
-              width: photoSize,
-              height: photoSize,
-              borderRadius: photoSize / 2,
-              top: size * 0.16,
-              left: photoOffset,
-            },
-          ]}
-        />
-      ) : (
-        <Text
-          style={[
-            tp.emoji,
-            {
-              top: size * 0.17,
-              fontSize: size * 0.44,
-              width: size,
-              lineHeight: size * 0.55,
-            },
-          ]}
-        >
-          {emoji}
-        </Text>
-      )}
-    </View>
-  );
 }
 
-// ─── CountBadge: contagem sobreposta no canto superior-direito ───────────────
-export function CountBadge({
-  count,
-  color = '#FF5722',
-}: {
-  count: number;
-  color?: string;
-}) {
+/** Alias retrocompatível — agora renderiza um StandardCard sem label. */
+export function GlassPin({ color, emoji, size }: GlassPinProps) {
+  const cardSz: 'sm' | 'md' | 'lg' = size && size < 40 ? 'sm' : size && size < 50 ? 'md' : 'lg';
+  return <StandardCard color={color} icon={emoji} size={cardSz} />;
+}
+
+/** Badge de contagem compacto — sem mudanças */
+export function CountBadge({ count, color = palette.brand[500] }: { count: number; color?: string }) {
   if (count <= 0) return null;
   const label = count > 99 ? '99+' : String(count);
   const wide = label.length > 1;
   return (
-    <View
-      style={[
-        cb.badge,
-        {
-          backgroundColor: color,
-          minWidth: wide ? 22 : 18,
-          paddingHorizontal: wide ? 5 : 0,
-        },
-      ]}
-    >
-      <Text style={cb.text}>{label}</Text>
+    <View style={{
+      position: 'absolute',
+      top: -4, right: -6,
+      height: 18,
+      minWidth: wide ? 22 : 18,
+      paddingHorizontal: wide ? 5 : 0,
+      borderRadius: 9,
+      backgroundColor: color,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1.5,
+      borderColor: '#fff',
+      ...platformShadow(shadow.sm),
+    }}>
+      <Text style={{ fontSize: 10, fontWeight: '900', color: '#fff', includeFontPadding: false, lineHeight: 12 }}>
+        {label}
+      </Text>
     </View>
   );
 }
 
-// ─── FloatingPin (mantido para compatibilidade) ──────────────────────────────
-export function FloatingPin({
-  color,
-  emoji,
-  size = 44,
-}: {
-  color: string;
-  emoji: string;
-  size?: number;
-}) {
-  const radius = size / 2;
-  const tipW = size * 0.28;
-  const tipH = size * 0.22;
-  const shadowW = size * 0.55;
-
-  return (
-    <View style={fp.wrapper}>
-      <View
-        style={[
-          fp.body,
-          {
-            width: size,
-            height: size,
-            borderRadius: radius,
-            backgroundColor: color,
-            shadowColor: color,
-          },
-        ]}
-      >
-        <View style={fp.shine} />
-        <Text style={[fp.emoji, { fontSize: size * 0.48 }]}>{emoji}</Text>
-      </View>
-      <View
-        style={[
-          fp.tip,
-          {
-            borderLeftWidth: tipW / 2,
-            borderRightWidth: tipW / 2,
-            borderTopWidth: tipH,
-            borderTopColor: color,
-            marginTop: -2,
-          },
-        ]}
-      />
-      <View
-        style={[
-          fp.groundShadow,
-          {
-            width: shadowW,
-            backgroundColor: color,
-          },
-        ]}
-      />
-    </View>
-  );
-}
-
-// ─── Estilos do TeardropPin ──────────────────────────────────────────────────
-const tp = StyleSheet.create({
-  wrapper: {
-    overflow: 'visible',
-  },
-  teardrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    transform: [{ rotate: '45deg' }],
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  photo: {
-    position: 'absolute',
-    borderWidth: 1.5,
-    borderColor: '#fff',
-    zIndex: 5,
-    elevation: 12,
-  },
-  emoji: {
-    position: 'absolute',
-    left: 0,
-    textAlign: 'center',
-    zIndex: 5,
-    elevation: 12,
-  },
-});
-
-// ─── Estilos do CountBadge ───────────────────────────────────────────────────
-const cb = StyleSheet.create({
-  badge: {
-    position: 'absolute',
-    top: -2,
-    right: -4,
-    height: 19,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.35,
-    shadowRadius: 2,
-    elevation: 8,
-    zIndex: 10,
-  },
-  text: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#fff',
-    lineHeight: 12,
-  },
-});
-
-// ─── Estilos do FloatingPin (legado) ─────────────────────────────────────────
-const fp = StyleSheet.create({
-  wrapper: { alignItems: 'center' },
-  body: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2.5,
-    borderColor: '#fff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    elevation: 10,
-    overflow: 'hidden',
-  },
-  shine: {
-    position: 'absolute',
-    top: '15%',
-    left: '18%',
-    width: '32%',
-    height: '22%',
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.38)',
-    transform: [{ rotate: '-20deg' }],
-  },
-  emoji: { lineHeight: undefined },
-  tip: {
-    width: 0,
-    height: 0,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  groundShadow: {
-    height: 5,
-    borderRadius: 50,
-    opacity: 0.22,
-    marginTop: 3,
-  },
-});
+// Aliases retro
+export const TeardropPin = GlassPin;
+export const SquarePin = GlassPin;
+export const FloatingPin = GlassPin;

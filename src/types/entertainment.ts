@@ -18,10 +18,12 @@ export interface EntertainmentEvent {
   stateUF?: string;
   cityName?: string;
   countryCode?: string; // ex: 'BR', 'US', 'PT'
-  isFeatured?: boolean;           // destaque pago — aparece fixado no topo
+  isFeatured?: boolean;           // legacy — não usado mais
+  /** Foto opcional adicionada pelo criador (qualquer evento, não só promovido) */
+  photoUrl?: string | null;
   promotionTier?: 'bronze' | 'prata' | 'ouro' | null;
   promotionEndDate?: number | null; // unix ms
-  promotionPhotoUrl?: string | null;
+  promotionPhotoUrl?: string | null; // foto da promoção (substitui photoUrl quando promovido)
 }
 
 export interface EventComment {

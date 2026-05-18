@@ -10,6 +10,7 @@ import {
   Linking,
   Alert,
 } from 'react-native';
+import { buildShareLinks } from '../utils/deepLinks';
 
 interface Props {
   visible: boolean;
@@ -33,19 +34,24 @@ export function ShareSheet({
   eventType,
 }: Props) {
   const t = useT();
-  const deepLink = `alertoo://evento/${eventType}/${eventId}`;
+  const links = buildShareLinks(eventType, eventId);
 
+  // Mensagem otimizada — usa link WEB (universal) que abre o app se instalado
+  // ou redireciona pra Play Store automaticamente.
   const buildMessage = (): string => {
     const lines: string[] = [];
     lines.push(`🎉 ${title}`);
     if (description) lines.push(description);
     if (location) lines.push(`📍 ${location}`);
     lines.push('');
-    lines.push(t('share') + ' via Alertoo 🚦');
+    lines.push(`👉 ${t('see_event') || 'Ver evento'}: ${links.webLink}`);
+    lines.push(`📲 ${t('get_app') || 'Baixar Alertoo'}: ${links.storeLink}`);
     return lines.join('\n');
   };
 
   const message = buildMessage();
+  // Para "copiar link", usa o link web (universal) — funciona pra todos
+  const copyableLink = links.webLink;
 
   const handleWhatsApp = async () => {
     const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
@@ -89,7 +95,7 @@ export function ShareSheet({
 
   const handleCopyLink = async () => {
     try {
-      await Share.share({ message: deepLink, title: 'Copiar link do evento' });
+      await Share.share({ message: copyableLink, title: 'Copiar link do evento' });
     } catch {
       // ignore cancel
     }

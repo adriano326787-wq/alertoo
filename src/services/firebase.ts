@@ -1,6 +1,10 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
+// firebase/auth tem conditional exports — em React Native o Metro resolve
+// automaticamente para dist/rn/index.js, que inclui getReactNativePersistence.
+import { initializeAuth, getAuth, type Auth } from 'firebase/auth';
+// @ts-expect-error — getReactNativePersistence existe no bundle RN mas não nos types públicos
+import { getReactNativePersistence } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -20,7 +24,7 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 
 // Inicializa Auth com persistência via AsyncStorage (evita login a cada sessão)
 // try/catch evita erro "auth/already-initialized" em hot-reloads
-let auth;
+let auth: Auth;
 try {
   auth = initializeAuth(app, {
     persistence: getReactNativePersistence(ReactNativeAsyncStorage),

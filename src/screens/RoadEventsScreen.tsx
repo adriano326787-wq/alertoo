@@ -13,7 +13,7 @@ import { useAppStore } from '../store/appStore';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { rw, rh, rf, isTablet } from '../utils/responsive';
 import { AdBanner } from '../components/AdBanner';
-import { BannerAdSize } from 'react-native-google-mobile-ads';
+import { BannerAdSize } from '../components/AdBanner';
 import { useNavigation } from '@react-navigation/native';
 
 function RoadEventCard({ event, onConfirm, onDeny, onGoToMap }: {

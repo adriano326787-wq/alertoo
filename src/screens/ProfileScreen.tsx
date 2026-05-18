@@ -30,6 +30,8 @@ import { uploadProfilePhoto } from '../services/storageService';
 import { ShareSheet } from '../components/ShareSheet';
 import { LanguagePicker } from '../components/LanguagePicker';
 import { ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
+import { useFavoritesStore } from '../store/favoritesStore';
+import { FavoriteEvent } from '../services/favoritesService';
 
 export function ProfileScreen() {
   const { top } = useSafeAreaInsets();
@@ -58,6 +60,12 @@ export function ProfileScreen() {
 
   // ─── Compartilhar ────────────────────────────────────────────────────────────
   const [shareEvent, setShareEvent] = useState<EntertainmentEvent | null>(null);
+
+  // ─── Favoritos ───────────────────────────────────────────────────────────────
+  const favorites = useFavoritesStore((s) => s.favorites);
+  const favLoading = useFavoritesStore((s) => s.loading);
+  const toggleFav = useFavoritesStore((s) => s.toggle);
+  const [favExpanded, setFavExpanded] = useState(true);
 
   // Carrega créditos uma vez
   const loadCredits = useCallback(async () => {
@@ -107,6 +115,7 @@ export function ProfileScreen() {
               ? (data.promotionEndDate as Timestamp).toMillis()
               : null,
             promotionPhotoUrl: data.promotionPhotoUrl ?? null,
+            photoUrl: data.photoUrl ?? null,
           } as EntertainmentEvent;
         })
         .filter((e) => e.expiresAt > now)
@@ -428,6 +437,63 @@ export function ProfileScreen() {
         )}
       </View>
 
+      {/* ── Eventos Favoritos ────────────────────────────────────────────────── */}
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.favHeader}
+          onPress={() => setFavExpanded((v) => !v)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.cardTitle}>⭐ Eventos Salvos</Text>
+          <View style={styles.favBadgeRow}>
+            {favorites.length > 0 && (
+              <View style={styles.favCountBadge}>
+                <Text style={styles.favCountText}>{favorites.length}</Text>
+              </View>
+            )}
+            <Text style={styles.favChevron}>{favExpanded ? '▲' : '▼'}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {favExpanded && (
+          favLoading ? (
+            <ActivityIndicator color="#E53935" style={{ marginVertical: 12 }} />
+          ) : favorites.length === 0 ? (
+            <View style={styles.favEmpty}>
+              <Text style={styles.favEmptyEmoji}>☆</Text>
+              <Text style={styles.favEmptyText}>
+                Nenhum evento salvo ainda.{'\n'}Toque em ☆ num evento para salvá-lo.
+              </Text>
+            </View>
+          ) : (
+            favorites.map((fav: FavoriteEvent) => (
+              <View key={fav.eventId} style={styles.favItem}>
+                <View style={styles.favItemEmoji}>
+                  <Text style={styles.favEmoji}>{fav.emoji}</Text>
+                </View>
+                <View style={styles.favItemInfo}>
+                  <Text style={styles.favItemTitle} numberOfLines={1}>{fav.title}</Text>
+                  <Text style={styles.favItemType}>
+                    {fav.eventType === 'entertainment' ? '🎉 Entretenimento' : '🚦 Trânsito'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.favRemoveBtn}
+                  onPress={() => toggleFav({
+                    eventId: fav.eventId,
+                    eventType: fav.eventType,
+                    title: fav.title,
+                    emoji: fav.emoji,
+                  })}
+                >
+                  <Text style={styles.favRemoveText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )
+        )}
+      </View>
+
       {/* Doação */}
       <TouchableOpacity style={styles.donateBtn} onPress={() => setDonateVisible(true)}>
         <Text style={styles.donateBtnEmoji}>💛</Text>
@@ -673,6 +739,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8,
   },
   buyCreditsText: { fontSize: 13, fontWeight: '800', color: '#fff' },
+
+  // ─── Favoritos ────────────────────────────────────────────────────────────
+  favHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  favBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  favCountBadge: {
+    backgroundColor: '#E53935', borderRadius: 10,
+    paddingHorizontal: 7, paddingVertical: 2,
+    minWidth: 22, alignItems: 'center',
+  },
+  favCountText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  favChevron: { fontSize: 11, color: '#aaa', fontWeight: '700' },
+  favEmpty: { alignItems: 'center', paddingVertical: 20, gap: 8 },
+  favEmptyEmoji: { fontSize: 36, color: '#ddd' },
+  favEmptyText: { fontSize: 13, color: '#bbb', textAlign: 'center', lineHeight: 20 },
+  favItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: '#f5f5f5',
+    gap: 12,
+  },
+  favItemEmoji: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  favEmoji: { fontSize: 20 },
+  favItemInfo: { flex: 1 },
+  favItemTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
+  favItemType: { fontSize: 11, color: '#aaa', marginTop: 2 },
+  favRemoveBtn: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  favRemoveText: { fontSize: 12, color: '#E53935', fontWeight: '800' },
 
   // ─── Meus Eventos ─────────────────────────────────────────────────────────
   noEventsText: { fontSize: 13, color: '#aaa', textAlign: 'center', paddingVertical: 12 },

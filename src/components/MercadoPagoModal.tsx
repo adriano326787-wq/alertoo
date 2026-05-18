@@ -1,8 +1,9 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Modal, SafeAreaView, Linking, Alert,
+  Modal, Linking, Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useT } from '../hooks/useT';
 
 // ─── Links de pagamento do Mercado Pago ────────────────────────────────────────

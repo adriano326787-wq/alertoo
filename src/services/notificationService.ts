@@ -22,7 +22,9 @@ function ensureHandler() {
   try {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
+        // Android 13+ / iOS 17+: banner e list substituem shouldShowAlert
+        shouldShowBanner: true,
+        shouldShowList: true,
         shouldPlaySound: true,
         shouldSetBadge: false,
       }),

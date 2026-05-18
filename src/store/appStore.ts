@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { updateLangFromCountry } from '../utils/i18n';
+import { DeepLinkEventType } from '../utils/deepLinks';
 
 type AuthTab = 'login' | 'register';
 
@@ -8,6 +9,11 @@ export interface MapFocus {
   lon: number;
   title?: string;
   emoji?: string;
+}
+
+export interface PendingDeepLink {
+  type: DeepLinkEventType;
+  id: string;
 }
 
 interface AppState {
@@ -20,6 +26,8 @@ interface AppState {
   userLon: number | null;
   /** Evento para o qual o mapa deve navegar */
   pendingMapFocus: MapFocus | null;
+  /** Deep link recebido, aguardando a tela do mapa abrir o evento */
+  pendingDeepLink: PendingDeepLink | null;
 
   setPendingAuthTab: (tab: AuthTab | null) => void;
   setUserCountryCode: (code: string | null) => void;
@@ -28,6 +36,7 @@ interface AppState {
   bumpLangVersion: () => void;
   focusOnMap: (focus: MapFocus) => void;
   clearMapFocus: () => void;
+  setPendingDeepLink: (link: PendingDeepLink | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -38,6 +47,7 @@ export const useAppStore = create<AppState>((set) => ({
   userLat: null,
   userLon: null,
   pendingMapFocus: null,
+  pendingDeepLink: null,
   setPendingAuthTab: (tab) => set({ pendingAuthTab: tab }),
   setUserCountryCode: (code) => {
     set({ userCountryCode: code });
@@ -51,4 +61,5 @@ export const useAppStore = create<AppState>((set) => ({
   bumpLangVersion: () => set((s) => ({ langVersion: s.langVersion + 1 })),
   focusOnMap: (focus) => set({ pendingMapFocus: focus }),
   clearMapFocus: () => set({ pendingMapFocus: null }),
+  setPendingDeepLink: (link) => set({ pendingDeepLink: link }),
 }));

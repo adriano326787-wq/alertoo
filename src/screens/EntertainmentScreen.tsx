@@ -20,7 +20,7 @@ import { tEntCat, tTier, tf } from '../utils/i18n';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { rw, rh, rf } from '../utils/responsive';
 import { AdBanner } from '../components/AdBanner';
-import { BannerAdSize } from 'react-native-google-mobile-ads';
+import { BannerAdSize } from '../components/AdBanner';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PROMOTION_TIERS } from '../types/promotion';
 import { ShareSheet } from '../components/ShareSheet';
@@ -46,9 +46,10 @@ function EventCard({
   onShare: (event: EntertainmentEvent) => void;
 }) {
   const t = useT();
-  const meta = ENTERTAINMENT_CATEGORIES[event.category];
-  const myUid = getCurrentUserId();
-  const liked = event.likes.includes(myUid);
+  const meta = ENTERTAINMENT_CATEGORIES[event.category] ?? { emoji: '📍', color: '#607D8B', label: event.category };
+  const myUid = getCurrentUserId() ?? '';
+  const likes = Array.isArray(event.likes) ? event.likes : [];
+  const liked = likes.includes(myUid);
   const isOwner = event.userId === myUid;
 
   const isPromoted = !!(event.promotionTier && event.promotionEndDate && event.promotionEndDate > Date.now());
@@ -97,7 +98,7 @@ function EventCard({
           disabled={isOwner}
         >
           <Text style={[styles.actionBtnText, isOwner && styles.disabledText]}>
-            {liked ? '❤️' : '🤍'} {event.likes.length}
+            {liked ? '❤️' : '🤍'} {likes.length}
           </Text>
         </TouchableOpacity>
 
@@ -181,21 +182,12 @@ export function EntertainmentScreen() {
   const [commentTarget, setCommentTarget] = useState<EntertainmentEvent | null>(null);
   const [shareTarget, setShareTarget] = useState<EntertainmentEvent | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Abre automaticamente um evento quando navega do perfil com eventId
-  useEffect(() => {
-    const eventId = route.params?.eventId;
-    if (!eventId || events.length === 0) return;
-    const found = events.find((e) => e.id === eventId);
-    if (found) setSelectedEvent(found);
-  }, [route.params?.eventId, events]);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const { events: allEvents, loading, hasMore, subscribe, toggleLike, toggleFeatured, loadMore } = useEntertainmentStore();
+  const { events: allEvents, loading, hasMore, subscribe, toggleLike, loadMore } = useEntertainmentStore();
   const setUserCountryCode = useAppStore((s) => s.setUserCountryCode);
   const setUserStateUF = useAppStore((s) => s.setUserStateUF);
   const userStateUF = useAppStore((s) => s.userStateUF);
-  const isAdmin = useUserStore((s) => s.isAdmin);
   // Detecta estado do usuário automaticamente ao montar
   const { detecting, locationDenied } = useUserLocation();
 
@@ -220,8 +212,6 @@ export function EntertainmentScreen() {
       const wa = tierWeight(a);
       const wb = tierWeight(b);
       if (wa !== wb) return wb - wa;
-      if (a.isFeatured && !b.isFeatured) return -1;
-      if (!a.isFeatured && b.isFeatured) return 1;
       return b.createdAt - a.createdAt;
     });
   })();
@@ -236,6 +226,14 @@ export function EntertainmentScreen() {
     const unsub = subscribe();
     return unsub;
   }, []);
+
+  // Abre automaticamente um evento quando navega do perfil com eventId
+  useEffect(() => {
+    const eventId = route.params?.eventId;
+    if (!eventId || events.length === 0) return;
+    const found = events.find((e) => e.id === eventId);
+    if (found) setSelectedEvent(found);
+  }, [route.params?.eventId, events]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -386,12 +384,10 @@ export function EntertainmentScreen() {
         />
       )}
 
-      {/* Modal de detalhes do evento (com controle de destaque para admin) */}
+      {/* Modal de detalhes do evento */}
       <EntertainmentInfoModal
         event={selectedEvent}
-        isAdmin={isAdmin}
         onLike={(id) => { toggleLike(id); }}
-        onToggleFeatured={toggleFeatured}
         onComment={(ev) => { setSelectedEvent(null); setCommentTarget(ev); }}
         onGoToMap={(ev) => { setSelectedEvent(null); handleGoToMap(ev); }}
         onClose={() => setSelectedEvent(null)}

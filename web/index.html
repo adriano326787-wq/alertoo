@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alertoo — Eventos e Alertas em Tempo Real</title>
+  <meta name="description" content="Alertoo: descubra eventos próximos e receba alertas de trânsito em tempo real na sua cidade." />
+  <meta name="theme-color" content="#FF5722" />
+
+  <!-- Open Graph (preview rico em WhatsApp, Twitter, etc) -->
+  <meta property="og:title" content="Alertoo — Eventos perto de você" />
+  <meta property="og:description" content="Descubra eventos próximos e alertas de trânsito em tempo real." />
+  <meta property="og:image" content="https://alertoo.app/og-image.png" />
+  <meta property="og:url" content="https://alertoo.app" />
+  <meta property="og:type" content="website" />
+
+  <!-- iOS Universal Link hint -->
+  <meta name="apple-itunes-app" content="app-id=PLACEHOLDER_IOS_APP_ID, app-argument=alertoo://" />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #FF5722 0%, #C2410C 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .logo { font-size: 88px; margin-bottom: 12px; }
+    h1 { font-size: 36px; font-weight: 900; letter-spacing: -1px; margin-bottom: 8px; }
+    .tagline { font-size: 17px; opacity: 0.92; margin-bottom: 36px; max-width: 480px; }
+    .card {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 20px;
+      padding: 28px;
+      max-width: 420px;
+      width: 100%;
+    }
+    .open-btn {
+      display: block;
+      background: #fff;
+      color: #C2410C;
+      font-weight: 800;
+      font-size: 16px;
+      padding: 14px 24px;
+      border-radius: 12px;
+      text-decoration: none;
+      margin-bottom: 12px;
+      transition: transform 0.15s;
+    }
+    .open-btn:hover { transform: translateY(-2px); }
+    .store-row { display: flex; gap: 12px; justify-content: center; margin-top: 24px; }
+    .store-btn {
+      background: rgba(0,0,0,0.4);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .footer {
+      margin-top: 48px;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+    .footer a { color: #fff; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="logo">🔔</div>
+  <h1>Alertoo</h1>
+  <p class="tagline">Eventos e alertas em tempo real na sua cidade</p>
+
+  <div class="card">
+    <a class="open-btn" id="open-app" href="#">Abrir no app</a>
+    <p style="font-size: 13px; opacity: 0.85;">
+      Não tem o app instalado?
+    </p>
+    <div class="store-row">
+      <a class="store-btn" id="play-store" href="https://play.google.com/store/apps/details?id=com.alertoo.app">
+        📱 Google Play
+      </a>
+      <a class="store-btn" id="app-store" href="https://apps.apple.com/app/idPLACEHOLDER">
+        🍎 App Store
+      </a>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="/privacy.html">Política de Privacidade</a> ·
+    <a href="/terms.html">Termos</a>
+  </div>
+
+  <script>
+    // ─── Smart redirect ──────────────────────────────────────────────────
+    // Lê o path /evento/{type}/{id} e tenta abrir no app
+    (function () {
+      const path = window.location.pathname;
+      const match = path.match(/\/evento\/(road|entertainment)\/([^/?#]+)/);
+      const deepLink = match ? `alertoo://evento/${match[1]}/${match[2]}` : 'alertoo://';
+      const playStore = match
+        ? `https://play.google.com/store/apps/details?id=com.alertoo.app&referrer=evento_${match[1]}_${match[2]}`
+        : 'https://play.google.com/store/apps/details?id=com.alertoo.app';
+
+      document.getElementById('open-app').setAttribute('href', deepLink);
+      document.getElementById('play-store').setAttribute('href', playStore);
+
+      // Auto-abre no mobile (tenta o scheme, cai pro Play Store se falhar)
+      const ua = navigator.userAgent;
+      const isAndroid = /android/i.test(ua);
+      const isIOS = /iphone|ipad|ipod/i.test(ua);
+
+      if ((isAndroid || isIOS) && match) {
+        // Tenta abrir o app
+        window.location.href = deepLink;
+        // Se 1.5s depois ainda está nesta página, cai pro store
+        setTimeout(function () {
+          if (document.hasFocus()) {
+            window.location.href = isAndroid ? playStore : 'https://apps.apple.com/app/idPLACEHOLDER';
+          }
+        }, 1500);
+      }
+    })();
+  </script>
+</body>
+</html>

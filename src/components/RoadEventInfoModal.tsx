@@ -1,11 +1,21 @@
+/**
+ * RoadEventInfoModal — refeito com BottomSheetCard.
+ *
+ * Para eventos de estrada (alertas), trata como notification card
+ * com botões de confirmar/negar bem destacados.
+ */
+
 import React, { useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo, timeLeft } from '../utils/time';
 import { ShareSheet } from './ShareSheet';
+import { NavigationModal } from './NavigationModal';
+import { BottomSheetCard, SheetAction } from './ui/BottomSheetCard';
 import { useT } from '../hooks/useT';
 import { tRoadCat } from '../utils/i18n';
+import { palette } from '../theme/tokens';
+import { useFavoritesStore } from '../store/favoritesStore';
 
 interface Props {
   event: RoadEvent | null;
@@ -17,114 +27,104 @@ interface Props {
 export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props) {
   const t = useT();
   const [shareVisible, setShareVisible] = useState(false);
+  const [navVisible, setNavVisible] = useState(false);
+  const isFavorite = useFavoritesStore((s) => event ? s.isFavorite(event.id) : false);
+  const toggleFav = useFavoritesStore((s) => s.toggle);
+
   if (!event) return null;
+
   const meta = EVENT_CATEGORIES[event.category];
   const myUid = getCurrentUserId();
   const alreadyVoted = event.voters.includes(myUid);
   const isOwner = event.userId === myUid;
   const blocked = alreadyVoted || isOwner;
+  const location = [event.cityName, event.stateUF].filter(Boolean).join(' — ');
+
+  // Tag — owner ou já votou
+  const tag = isOwner
+    ? { label: `📌 ${t('own_event').toUpperCase()}`, color: palette.brand[500] }
+    : alreadyVoted
+      ? { label: `✓ ${t('road_voted').toUpperCase()}`, color: palette.live }
+      : undefined;
+
+  // Stats: confirmações + negações + tempo restante
+  const stats = [
+    { icon: '✓', value: event.confirmations, label: t('confirm') ?? 'Confirma' },
+    { icon: '✗', value: event.denials, label: t('deny') ?? 'Nega' },
+    { icon: '⏱', value: timeLeft(event.expiresAt).replace(/[^0-9hm]/g, '') || '—', label: 'Resta' },
+  ];
+
+  // Quick actions: confirmar, negar, navegar, compartilhar
+  const quickActions: SheetAction[] = [
+    {
+      icon: '✓',
+      label: 'Confirmar',
+      onPress: () => { if (!blocked) { onConfirm(event.id); onClose(); } },
+      disabled: blocked,
+      variant: 'primary',
+    },
+    {
+      icon: '✗',
+      label: 'Negar',
+      onPress: () => { if (!blocked) { onDeny(event.id); onClose(); } },
+      disabled: blocked,
+      variant: 'danger',
+    },
+    {
+      icon: isFavorite ? '⭐' : '☆',
+      label: isFavorite ? t('saved') || 'Salvo' : t('save') || 'Salvar',
+      onPress: () => toggleFav({
+        eventId: event.id,
+        eventType: 'road',
+        title: event.title,
+        emoji: meta.emoji,
+      }),
+    },
+    {
+      icon: '↗',
+      label: t('share'),
+      onPress: () => setShareVisible(true),
+    },
+  ];
 
   return (
     <>
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={styles.card}>
-          <View style={[styles.accent, { backgroundColor: meta.color }]} />
-          <View style={styles.body}>
-            <Text style={styles.title}>{meta.emoji} {event.title}</Text>
-            {event.description ? <Text style={styles.desc}>{event.description}</Text> : null}
-            {(event.cityName || event.stateUF) && (
-              <Text style={styles.location}>📌 {[event.cityName, event.stateUF].filter(Boolean).join(' — ')}</Text>
-            )}
-            <Text style={styles.time}>{timeAgo(event.createdAt)}</Text>
-            <Text style={styles.expiry}>{timeLeft(event.expiresAt)}</Text>
+      <BottomSheetCard
+        visible
+        onClose={onClose}
+        tag={tag}
+        category={`${meta.emoji} ${tRoadCat(event.category).toUpperCase()}`}
+        title={event.title}
+        subtitle={location}
+        meta={`${timeAgo(event.createdAt)}  ·  ${timeLeft(event.expiresAt)}`}
+        description={event.description}
+        stats={stats}
+        primaryAction={{
+          icon: '🧭',
+          label: t('navigate_gps') || 'Como chegar',
+          onPress: () => setNavVisible(true),
+        }}
+        quickActions={quickActions}
+      />
 
-            {alreadyVoted && (
-              <View style={styles.votedBanner}>
-                <Text style={styles.votedText}>✅ {t('road_voted')}</Text>
-              </View>
-            )}
-            {isOwner && !alreadyVoted && (
-              <View style={styles.ownerBanner}>
-                <Text style={styles.ownerText}>📌 {t('own_event')}</Text>
-              </View>
-            )}
+      <ShareSheet
+        visible={shareVisible}
+        onClose={() => setShareVisible(false)}
+        title={event.title}
+        description={event.description}
+        category={`${meta.emoji} ${tRoadCat(event.category)}`}
+        location={location}
+        eventId={event.id}
+        eventType="road"
+      />
 
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={[styles.btn, styles.confirmBtn, blocked && styles.disabledBtn]}
-                onPress={() => { if (!blocked) { onConfirm(event.id); onClose(); } }}
-                disabled={blocked}
-              >
-                <Text style={[styles.btnText, blocked && styles.disabledBtnText]}>
-                  ✓ Confirmar ({event.confirmations})
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, styles.denyBtn, blocked && styles.disabledBtn]}
-                onPress={() => { if (!blocked) { onDeny(event.id); onClose(); } }}
-                disabled={blocked}
-              >
-                <Text style={[styles.btnText, blocked && styles.disabledBtnText]}>
-                  ✗ Negar ({event.denials})
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Compartilhar */}
-            <TouchableOpacity style={styles.shareBtn} onPress={() => setShareVisible(true)}>
-              <Text style={styles.shareBtnText}>↗ {t('share_alert')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Modal>
-
-    <ShareSheet
-      visible={shareVisible}
-      onClose={() => setShareVisible(false)}
-      title={event.title}
-      description={event.description}
-      category={`${meta.emoji} ${tRoadCat(event.category)}`}
-      location={[event.cityName, event.stateUF].filter(Boolean).join(' — ')}
-      eventId={event.id}
-      eventType="road"
-    />
+      <NavigationModal
+        visible={navVisible}
+        destination={{ latitude: event.latitude, longitude: event.longitude }}
+        destinationLabel={event.title}
+        destinationEmoji={meta.emoji}
+        onClose={() => setNavVisible(false)}
+      />
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 24 },
-  card: { backgroundColor: '#fff', borderRadius: 16, width: '100%', overflow: 'hidden', elevation: 8 },
-  accent: { height: 6 },
-  body: { padding: 18 },
-  title: { fontSize: 17, fontWeight: '800', color: '#1a1a1a', marginBottom: 6 },
-  desc: { fontSize: 14, color: '#555', marginBottom: 8 },
-  location: { fontSize: 13, color: '#1565C0', marginBottom: 6 },
-  time: { fontSize: 13, color: '#888' },
-  expiry: { fontSize: 13, color: '#E53935', marginBottom: 10 },
-  votedBanner: {
-    backgroundColor: '#E8F5E9', borderRadius: 8, paddingHorizontal: 12,
-    paddingVertical: 6, marginBottom: 12,
-  },
-  votedText: { fontSize: 13, color: '#2E7D32', fontWeight: '600' },
-  ownerBanner: {
-    backgroundColor: '#E3F2FD', borderRadius: 8, paddingHorizontal: 12,
-    paddingVertical: 6, marginBottom: 12,
-  },
-  ownerText: { fontSize: 13, color: '#1565C0', fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  shareBtn: {
-    paddingVertical: 11, borderRadius: 10,
-    backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#CBD5E1',
-    alignItems: 'center',
-  },
-  shareBtnText: { fontSize: 13, fontWeight: '700', color: '#475569' },
-  btn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  confirmBtn: { backgroundColor: '#43A047' },
-  denyBtn: { backgroundColor: '#E53935' },
-  disabledBtn: { backgroundColor: '#eee' },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  disabledBtnText: { color: '#bbb' },
-});

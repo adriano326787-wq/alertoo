@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, Alert, ActivityIndicator, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ClusteredMapView from 'react-native-map-clustering';
 import { Marker, MapPressEvent, PROVIDER_GOOGLE, Region } from 'react-native-maps';
@@ -30,6 +30,10 @@ import {
   filterRoadEvents,
   filterEntEvents,
 } from '../utils/mapZoom';
+import { mapStyleLight, mapStyleDark } from '../theme/mapStyle';
+import { MapSearchBar, SearchResult } from '../components/ui/MapSearchBar';
+import { ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
+import { EVENT_CATEGORIES } from '../types';
 
 const MAX_REPORT_RADIUS_KM = 1;
 
@@ -76,13 +80,12 @@ interface SmartClusterProps {
   onPress: (cluster: any) => void;
 }
 
+// Cluster estilo Google Maps premium — halo translúcido + corpo sólido
 function SmartCluster({ cluster, zoomTier, onPress }: SmartClusterProps) {
   const count: number = cluster.properties.point_count;
   const [lon, lat] = cluster.geometry.coordinates;
-  const style = CLUSTER_STYLE[zoomTier];
   const size = clusterSize(count);
-  const fontSize = size >= 62 ? 16 : size >= 48 ? 14 : 13;
-  const ringSize = size + 14;
+  const fontSize = size >= 62 ? 18 : size >= 48 ? 16 : 14;
 
   return (
     <Marker
@@ -91,31 +94,20 @@ function SmartCluster({ cluster, zoomTier, onPress }: SmartClusterProps) {
       onPress={() => onPress(cluster)}
       tracksViewChanges={false}
     >
-      {/* Anel externo */}
-      <View style={[
-        clusterStyles.ring,
-        { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: style.border + '55' },
-      ]}>
-        {/* Corpo do cluster */}
-        <View style={[
-          clusterStyles.body,
-          {
-            width: size, height: size, borderRadius: size / 2,
-            backgroundColor: style.bg,
-            borderColor: style.border,
-          },
-        ]}>
-          {/* Brilho interno */}
-          <View style={clusterStyles.shine} />
-          <Text style={[clusterStyles.count, { fontSize, color: style.text }]}>
+      <View style={{ alignItems: 'center', justifyContent: 'center', width: size + 16, height: size + 16 }}>
+        {/* Halo translúcido externo (estilo Google Maps cluster) */}
+        <View style={{
+          position: 'absolute',
+          width: size + 14,
+          height: size + 14,
+          borderRadius: (size + 14) / 2,
+          backgroundColor: 'rgba(255,107,53,0.18)',
+        }} />
+        {/* Corpo sólido */}
+        <View style={[clusterStyles.body, { width: size, height: size, borderRadius: size / 2 }]}>
+          <Text style={[clusterStyles.count, { fontSize }]}>
             {clusterLabel(count)}
           </Text>
-          {/* Ícone de tipo abaixo do número para clusters grandes */}
-          {size >= 54 && (
-            <Text style={clusterStyles.typeIcon}>
-              {zoomTier === 'distant' ? '🌍' : zoomTier === 'medium' ? '🏙️' : '📍'}
-            </Text>
-          )}
         </View>
       </View>
     </Marker>
@@ -123,26 +115,18 @@ function SmartCluster({ cluster, zoomTier, onPress }: SmartClusterProps) {
 }
 
 const clusterStyles = StyleSheet.create({
-  ring: {
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderStyle: 'dashed',
-    backgroundColor: 'transparent',
-  },
   body: {
     alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#FF6B35',
     borderWidth: 2.5,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25, shadowRadius: 6, elevation: 8,
-    overflow: 'hidden',
+    borderColor: '#ffffff',
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 10,
   },
-  shine: {
-    position: 'absolute', top: 5, left: 8,
-    width: 14, height: 8, borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    transform: [{ rotate: '-20deg' }],
-  },
-  count: { fontWeight: '800', lineHeight: 18 },
-  typeIcon: { fontSize: 10, marginTop: -2, opacity: 0.9 },
+  count: { fontWeight: '900', color: '#ffffff', includeFontPadding: false, letterSpacing: 0.3 },
 });
 
 // ─── Tela ─────────────────────────────────────────────────────────────────────
@@ -155,6 +139,8 @@ interface PendingCoord {
 
 export function MapScreen() {
   const t = useT();
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
@@ -201,13 +187,15 @@ export function MapScreen() {
 
   // Stores
   const { loading: roadLoading, events: allRoadEvents, subscribeToEvents, confirmEvent, denyEvent, filterStateUF } = useEventsStore();
-  const { events: entertainmentEvents, subscribe: subscribeEntertainment, toggleLike, toggleFeatured } = useEntertainmentStore();
+  const { events: entertainmentEvents, subscribe: subscribeEntertainment, toggleLike } = useEntertainmentStore();
   const isAdmin = useUserStore((s) => s.isAdmin);
   const setUserCountryCode = useAppStore((s) => s.setUserCountryCode);
   const setUserStateUF = useAppStore((s) => s.setUserStateUF);
   const setUserLocation = useAppStore((s) => s.setUserLocation);
   const pendingMapFocus = useAppStore((s) => s.pendingMapFocus);
   const clearMapFocus = useAppStore((s) => s.clearMapFocus);
+  const pendingDeepLink = useAppStore((s) => s.pendingDeepLink);
+  const setPendingDeepLink = useAppStore((s) => s.setPendingDeepLink);
 
   // Pins filtrados por tier
   const roadEvents = filterRoadEvents(allRoadEvents, zoomTier);
@@ -226,6 +214,39 @@ export function MapScreen() {
     }, 800);
     clearMapFocus();
   }, [pendingMapFocus, mapReady]);
+
+  // ─── Deep link → abrir evento ──────────────────────────────────────────────
+  // Aguarda os stores carregarem o evento (pode chegar antes ou depois do link).
+  useEffect(() => {
+    if (!pendingDeepLink || !mapReady) return;
+
+    const { type, id } = pendingDeepLink;
+    if (type === 'road') {
+      const ev = allRoadEvents.find((e) => e.id === id);
+      if (ev) {
+        setSelectedRoadEvent(ev);
+        mapRef.current?.animateToRegion({
+          latitude: ev.latitude,
+          longitude: ev.longitude,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        }, 800);
+        setPendingDeepLink(null);
+      }
+    } else if (type === 'entertainment') {
+      const ev = entertainmentEvents.find((e) => e.id === id);
+      if (ev) {
+        setSelectedEntEvent(ev);
+        mapRef.current?.animateToRegion({
+          latitude: ev.latitude,
+          longitude: ev.longitude,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        }, 800);
+        setPendingDeepLink(null);
+      }
+    }
+  }, [pendingDeepLink, mapReady, allRoadEvents, entertainmentEvents]);
 
   useEffect(() => {
     const unsubRoad = subscribeToEvents();
@@ -309,9 +330,9 @@ export function MapScreen() {
         style={[styles.map, mapError && { opacity: 0 }]}
         provider={PROVIDER_GOOGLE}
         initialRegion={INITIAL_REGION}
+        customMapStyle={isDarkMode ? mapStyleDark : mapStyleLight}
         onPress={handleMapPress}
         onMapReady={() => setMapReady(true)}
-        onMapLoadingError={() => setMapError(true)}
         onRegionChange={handleRegionChange}
         onRegionChangeComplete={handleRegionChange}
         showsUserLocation
@@ -337,10 +358,20 @@ export function MapScreen() {
         )}
       >
         {roadEvents.map((event) => (
-          <EventMarker key={`road-${event.id}`} event={event} onPress={setSelectedRoadEvent} />
+          <EventMarker
+            key={`road-${event.id}`}
+            event={event}
+            onPress={setSelectedRoadEvent}
+            zoomTier={zoomTier}
+          />
         ))}
         {visibleEntEvents.map((event) => (
-          <EntertainmentMarker key={`ent-${event.id}`} event={event} onPress={setSelectedEntEvent} />
+          <EntertainmentMarker
+            key={`ent-${event.id}`}
+            event={event}
+            onPress={setSelectedEntEvent}
+            zoomTier={zoomTier}
+          />
         ))}
       </ClusteredMapView>
 
@@ -351,11 +382,49 @@ export function MapScreen() {
         </View>
       )}
 
+      {/* SearchBar flutuante no topo (Google Maps style) */}
+      <MapSearchBar
+        localEvents={[
+          ...visibleEntEvents.map((e) => ({
+            id: e.id, title: e.title,
+            category: e.category, cityName: e.cityName, stateUF: e.stateUF,
+            latitude: e.latitude, longitude: e.longitude,
+            emoji: ENTERTAINMENT_CATEGORIES[e.category]?.emoji,
+            type: 'entertainment' as const,
+          })),
+          ...roadEvents.map((e) => ({
+            id: e.id, title: e.title,
+            category: e.category, cityName: e.cityName, stateUF: e.stateUF,
+            latitude: e.latitude, longitude: e.longitude,
+            emoji: EVENT_CATEGORIES[e.category]?.emoji,
+            type: 'road' as const,
+          })),
+        ]}
+        onSelectResult={(r: SearchResult) => {
+          mapRef.current?.animateToRegion({
+            latitude: r.coords.latitude,
+            longitude: r.coords.longitude,
+            latitudeDelta: 0.008,
+            longitudeDelta: 0.008,
+          }, 600);
+          // Se for evento, abre o modal correspondente
+          if (r.kind === 'event' && r.eventId) {
+            const ev = r.eventType === 'entertainment'
+              ? entertainmentEvents.find((e) => e.id === r.eventId)
+              : allRoadEvents.find((e) => e.id === r.eventId);
+            if (ev) {
+              if (r.eventType === 'entertainment') setSelectedEntEvent(ev as any);
+              else setSelectedRoadEvent(ev as any);
+            }
+          }
+        }}
+      />
+
       <TouchableOpacity
         style={[styles.mapBtn, styles.filterBtn, filterStateUF && styles.filterBtnActive]}
         onPress={() => setFilterVisible(true)}
       >
-        <Text style={styles.mapBtnIcon}>🔍</Text>
+        <Text style={styles.mapBtnIcon}>⚙</Text>
         {filterStateUF && <View style={styles.filterDot} />}
       </TouchableOpacity>
 
@@ -403,9 +472,7 @@ export function MapScreen() {
 
       <EntertainmentInfoModal
         event={selectedEntEvent}
-        isAdmin={isAdmin}
         onLike={toggleLike}
-        onToggleFeatured={toggleFeatured}
         onComment={(ev) => { setSelectedEntEvent(null); setCommentTarget(ev); }}
         onGoToMap={(ev) => { setSelectedEntEvent(null); mapRef.current?.animateToRegion({ latitude: ev.latitude, longitude: ev.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 }, 800); }}
         onClose={() => setSelectedEntEvent(null)}
@@ -440,18 +507,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 8,
   },
   loadingText: { fontSize: 13, color: '#555' },
+  // FAB premium estilo Google/Waze — rounded square com shadow forte
   mapBtn: {
-    position: 'absolute', right: 16,
-    width: 48, height: 48, borderRadius: 24,
-    alignItems: 'center', justifyContent: 'center', elevation: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4,
-    backgroundColor: '#fff',
+    position: 'absolute', right: 14,
+    width: 52, height: 52, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18, shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
   },
-  mapBtnIcon: { fontSize: 22 },
-  filterBtn: { bottom: 170 },
-  filterBtnActive: { backgroundColor: '#FBE9E7' },
-  filterDot: { position: 'absolute', top: 6, right: 6, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF5722' },
-  locationBtn: { bottom: 110 },
+  mapBtnIcon: { fontSize: 24 },
+  filterBtn: { bottom: 180 },
+  filterBtnActive: { backgroundColor: '#FFEDD5', borderColor: '#FF5722' },
+  filterDot: {
+    position: 'absolute', top: 6, right: 6,
+    width: 11, height: 11, borderRadius: 5.5,
+    backgroundColor: '#FF5722',
+    borderWidth: 2, borderColor: '#fff',
+  },
+  locationBtn: { bottom: 116 },
   mapErrorWrap: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center',

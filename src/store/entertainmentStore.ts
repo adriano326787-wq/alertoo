@@ -32,6 +32,7 @@ import { POINTS } from '../types/user';
 import { notifyIfNearby } from '../services/notificationService';
 import { useAppStore } from './appStore';
 import { ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
+import { track } from '../services/analytics';
 
 const COLLECTION = 'entertainment_events';
 const PAGE_SIZE = 20;
@@ -58,9 +59,9 @@ interface EntertainmentState {
     stateUF?: string;
     cityName?: string;
     countryCode?: string;
+    photoUri?: string;       // URI local — store comprime + sobe
   }) => Promise<void>;
   toggleLike: (eventId: string) => Promise<void>;
-  toggleFeatured: (eventId: string) => Promise<void>;
   fetchComments: (eventId: string) => Promise<EventComment[]>;
   addComment: (eventId: string, text: string) => Promise<void>;
 }
@@ -91,6 +92,7 @@ function docToEvent(d: QueryDocumentSnapshot<DocumentData>): EntertainmentEvent 
       ? (data.promotionEndDate as Timestamp).toMillis()
       : null,
     promotionPhotoUrl: data.promotionPhotoUrl ?? null,
+    photoUrl: data.photoUrl ?? null,
   };
 }
 
@@ -202,8 +204,8 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
     }));
   },
 
-  // ─── Criar evento (com rate limiting) ────────────────────────────────────
-  addEvent: async ({ category, title, description, address, latitude, longitude, stateUF, cityName, countryCode }) => {
+  // ─── Criar evento (com rate limiting + upload de foto opcional) ─────────
+  addEvent: async ({ category, title, description, address, latitude, longitude, stateUF, cityName, countryCode, photoUri }) => {
     const uid = getCurrentUserId();
     const now = Date.now();
 
@@ -215,7 +217,8 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
 
     const expiresAt = Timestamp.fromMillis(now + ENTERTAINMENT_TTL_HOURS * 60 * 60 * 1000);
 
-    await addDoc(collection(db, COLLECTION), {
+    // 1) Cria o documento sem foto primeiro (rápido — usuário não espera)
+    const docRef = await addDoc(collection(db, COLLECTION), {
       category,
       title,
       description: description ?? null,
@@ -230,13 +233,28 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
       stateUF: stateUF ?? null,
       cityName: cityName ?? null,
       countryCode: countryCode ?? null,
-      isFeatured: false,
+      photoUrl: null,
       promotionTier: null,
       promotionEndDate: null,
       promotionPhotoUrl: null,
     });
 
+    // 2) Se tem foto, faz upload em background e atualiza o doc com URL
+    if (photoUri) {
+      (async () => {
+        try {
+          const { uploadEventPhoto } = await import('../services/storageService');
+          const url = await uploadEventPhoto(docRef.id, photoUri);
+          await updateDoc(docRef, { photoUrl: url });
+        } catch (e) {
+          console.warn('[entStore] upload de foto falhou:', e);
+        }
+      })();
+    }
+
     set({ _lastEventAt: now });
+
+    track('event_created', { type: 'entertainment', category, stateUF, hasPhoto: !!photoUri });
 
     if (uid !== 'anonymous') {
       awardPoints(uid, POINTS.ENTERTAINMENT_EVENT_CREATED, 'eventsReported').catch(() => {});
@@ -253,23 +271,17 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
     if (event.userId === uid) return;
 
     const ref = doc(db, COLLECTION, eventId);
-    const hasLiked = event.likes.includes(uid);
+    const hasLiked = Array.isArray(event.likes) && event.likes.includes(uid);
 
     await updateDoc(ref, {
       likes: hasLiked ? arrayRemove(uid) : arrayUnion(uid),
     });
 
+    track(hasLiked ? 'event_unliked' : 'event_liked', { eventId, category: event.category });
+
     if (!hasLiked && event.userId && event.userId !== 'anonymous') {
       awardPoints(event.userId, POINTS.LIKE_RECEIVED).catch(() => {});
     }
-  },
-
-  // ─── Destaque (somente admin) ─────────────────────────────────────────────
-  toggleFeatured: async (eventId) => {
-    const event = get().events.find((e) => e.id === eventId);
-    if (!event) return;
-    const ref = doc(db, COLLECTION, eventId);
-    await updateDoc(ref, { isFeatured: !event.isFeatured });
   },
 
   // ─── Comentários ─────────────────────────────────────────────────────────

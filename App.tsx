@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { rf } from './src/utils/responsive';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -18,23 +18,63 @@ import { EntertainmentScreen } from './src/screens/EntertainmentScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
+import { OnboardingScreen, shouldShowOnboarding } from './src/screens/OnboardingScreen';
 import { RankBadge } from './src/components/RankBadge';
 import { loadSavedLang } from './src/utils/i18n';
 import { useT } from './src/hooks/useT';
+import { parseEventDeepLink } from './src/utils/deepLinks';
+import { useAppStore } from './src/store/appStore';
+import { initSentry, setSentryUser } from './src/services/sentry';
+import { initAnalytics, identify, resetAnalytics, track } from './src/services/analytics';
+import { useFavoritesStore } from './src/store/favoritesStore';
+
+// Inicializa Sentry o mais cedo possível (antes do componente)
+initSentry();
 
 const Tab = createBottomTabNavigator();
 
 export default function App() {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
   const { profile, loadProfile, subscribeToProfile, clearProfile } = useUserStore();
   const profileUnsubRef = useRef<(() => void) | null>(null);
+
+  // Decide se mostra onboarding na primeira abertura
+  useEffect(() => {
+    shouldShowOnboarding()
+      .then((show) => setShowOnboarding(show))
+      .catch(() => setShowOnboarding(false));
+  }, []);
 
   // Carrega filtro persistido, idioma salvo e permissão de notificação
   useEffect(() => {
     useEventsStore.getState().loadFilter();
     loadSavedLang().catch(() => {});
     requestNotificationPermission().catch(() => {});
+    // Analytics — init + tracking de app_opened
+    initAnalytics().then(() => {
+      track('app_opened');
+    }).catch(() => {});
+  }, []);
+
+  // ─── Deep links ─────────────────────────────────────────────────────────────
+  // Captura links `alertoo://evento/{type}/{id}` (a) ao iniciar o app via link,
+  // e (b) enquanto o app está em uso (foreground/background).
+  useEffect(() => {
+    const handleUrl = (url: string | null) => {
+      const parsed = parseEventDeepLink(url);
+      if (parsed) {
+        useAppStore.getState().setPendingDeepLink(parsed);
+      }
+    };
+
+    // App aberto via deep link (cold start)
+    Linking.getInitialURL().then(handleUrl).catch(() => {});
+
+    // App já estava aberto, recebeu um novo link
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
@@ -58,12 +98,25 @@ export default function App() {
           });
         } catch (_) {}
 
+        // Sentry + Analytics: associa erros e eventos ao usuário
+        setSentryUser({ id: u.uid, email: u.email ?? undefined });
+        identify(u.uid, {
+          email: u.email ?? undefined,
+          isAnonymous: u.isAnonymous,
+          displayName: u.displayName ?? undefined,
+        });
+
         // Ponto 3 — assina perfil em tempo real (só para usuários com conta)
         if (!u.isAnonymous) {
           profileUnsubRef.current = subscribeToProfile(u.uid);
         }
+
+        // Favoritos — assina lista do usuário (vazio pra anônimo)
+        useFavoritesStore.getState().subscribe();
       } else {
         clearProfile();
+        setSentryUser(null);
+        resetAnalytics();
       }
 
       setUser(u);
@@ -81,7 +134,7 @@ export default function App() {
     setUser(u);
   }
 
-  if (!ready) {
+  if (!ready || showOnboarding === null) {
     return (
       <View style={styles.splash}>
         <SystemBars style="light" />
@@ -89,6 +142,17 @@ export default function App() {
         <Text style={styles.splashName}>Alertoo</Text>
         <ActivityIndicator size="large" color="#fff" style={{ marginTop: 32 }} />
       </View>
+    );
+  }
+
+  // Onboarding antes de qualquer tela (mesmo antes do login)
+  if (showOnboarding) {
+    return (
+      <SafeAreaProvider>
+        <SystemBars style="light" />
+        <StatusBar style="light" translucent />
+        <OnboardingScreen onDone={() => setShowOnboarding(false)} />
+      </SafeAreaProvider>
     );
   }
 

@@ -1,49 +1,39 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
-import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
 
-// ─── IDs de anúncio ────────────────────────────────────────────────────────────
-// Em produção: substitua pelos seus Ad Unit IDs reais do AdMob
-// Em desenvolvimento: TestIds.BANNER garante anúncios de teste sem risco de ban
-
-const BANNER_ID_ANDROID = __DEV__
-  ? TestIds.BANNER
-  : 'ca-app-pub-4349309505537394/5595132714';
-
-const BANNER_ID_IOS = __DEV__
-  ? TestIds.BANNER
-  : (process.env.EXPO_PUBLIC_ADMOB_BANNER_IOS ?? TestIds.BANNER);
-
-const UNIT_ID = Platform.OS === 'ios' ? BANNER_ID_IOS : BANNER_ID_ANDROID;
+// ─── AdBanner DESABILITADO TEMPORARIAMENTE ─────────────────────────────────────
+//
+//  Por que: react-native-google-mobile-ads@16.3.3 tem incompatibilidade com
+//  New Architecture (Bridgeless) do RN — o módulo Kotlin não estende a spec
+//  gerada pelo codegen, então TurboModuleRegistry.getEnforcing falha no boot.
+//
+//  Para reativar quando uma versão compatível for lançada (v17+):
+//    1. Atualizar: npm i react-native-google-mobile-ads@latest
+//    2. Rebuild Android: rm -rf android/app/build && ./gradlew assembleDebug
+//    3. Reverter este arquivo para a versão com import BannerAd
+//
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
-  size?: BannerAdSize;
+  size?: any;
   style?: object;
 }
 
-export function AdBanner({ size = BannerAdSize.ANCHORED_ADAPTIVE_BANNER, style }: Props) {
-  const [loaded, setLoaded] = useState(false);
-
-  return (
-    <View style={[styles.container, !loaded && styles.hidden, style]}>
-      <BannerAd
-        unitId={UNIT_ID}
-        size={size}
-        requestOptions={{ requestNonPersonalizedAdsOnly: false }}
-        onAdLoaded={() => setLoaded(true)}
-        onAdFailedToLoad={() => setLoaded(false)}
-      />
-    </View>
-  );
+export function AdBanner({ style }: Props) {
+  // Placeholder invisível — mantém a API mas não renderiza nada
+  return <View style={[styles.hidden, style]} />;
 }
 
+// Re-exporta os tipos como any pra não quebrar quem importa BannerAdSize
+export const BannerAdSize = {
+  BANNER: 'BANNER',
+  LARGE_BANNER: 'LARGE_BANNER',
+  MEDIUM_RECTANGLE: 'MEDIUM_RECTANGLE',
+  FULL_BANNER: 'FULL_BANNER',
+  LEADERBOARD: 'LEADERBOARD',
+  ANCHORED_ADAPTIVE_BANNER: 'ANCHORED_ADAPTIVE_BANNER',
+} as const;
+
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-  hidden: {
-    height: 0,
-    overflow: 'hidden',
-  },
+  hidden: { height: 0, overflow: 'hidden' },
 });

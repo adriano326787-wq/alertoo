@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Modal, SafeAreaView, Alert, ActivityIndicator, Image, Animated, Platform, StatusBar,
+  Modal, Alert, ActivityIndicator, Image, Animated, Platform, StatusBar,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import {
   PROMOTION_TIERS,
@@ -71,7 +71,7 @@ export function PromoteEventModal({
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'], // expo-image-picker 17+: array de strings
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.8,

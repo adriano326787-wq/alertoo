@@ -1,65 +1,21 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Modal, SafeAreaView, Alert, ActivityIndicator, Linking,
+  Modal, Alert, ActivityIndicator, Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useT } from '../hooks/useT';
 import { CREDIT_PACKAGES, CreditPackage } from '../types/promotion';
-import { savePendingPayment, verifyMPPayment } from '../services/promotionService';
-import { getCurrentUserId } from '../services/authService';
-
-// ─── Configuração Mercado Pago ────────────────────────────────────────────────
-// Access Token do MP (use o de PRODUÇÃO para cobranças reais)
-// ⚠️ Em produção, mova isso para um Cloud Function/backend para não expor o token
-const MP_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MP_ACCESS_TOKEN ?? '';
+import { createMPPreferenceCloud, verifyMPPaymentCloud } from '../services/promotionService';
 
 // Fallback: links fixos por pacote (criar no painel MP com os valores corretos)
-// Usado quando a criação de preferência falha ou o token não está configurado
+// Usado se a Cloud Function falhar (sem rede, sem deploy ainda, etc).
 const MP_FALLBACK_LINKS: Record<string, string> = {
   pkg_1:  'https://link.mercadopago.com.br/alertoo',
   pkg_5:  'https://link.mercadopago.com.br/alertoo',
   pkg_10: 'https://link.mercadopago.com.br/alertoo',
   pkg_20: 'https://link.mercadopago.com.br/alertoo',
 };
-
-async function createMPPreference(pkg: CreditPackage): Promise<string> {
-  if (!MP_ACCESS_TOKEN) throw new Error('Token MP não configurado');
-
-  const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify({
-      items: [
-        {
-          id: pkg.id,
-          title: pkg.label,
-          description: `${pkg.credits} crédito(s) para promoção no Alertoo`,
-          quantity: 1,
-          currency_id: 'BRL',
-          unit_price: pkg.price,
-        },
-      ],
-      payment_methods: {
-        excluded_payment_types: [{ id: 'ticket' }], // exclui boleto, mantém PIX e cartão
-        installments: 1,
-      },
-      back_urls: {
-        success: 'alertoo://payment/success',
-        failure: 'alertoo://payment/failure',
-        pending: 'alertoo://payment/pending',
-      },
-      statement_descriptor: 'ALERTOO',
-    }),
-  });
-
-  if (!response.ok) throw new Error(`MP API error: ${response.status}`);
-  const data = await response.json();
-  // init_point = link de checkout com valor pré-preenchido
-  return data.init_point as string;
-}
 
 interface Props {
   visible: boolean;
@@ -79,33 +35,18 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
 
   async function handleBuyMercadoPago() {
     if (!selected) return;
-    const userId = getCurrentUserId();
     setLoading(true);
 
-    let url: string;
+    let url = '';
     let preferenceId = '';
     try {
-      url = await createMPPreference(selected);
-      // Extrai preferenceId da URL (formato: /checkout/v1/redirect?pref_id=XXX)
-      const match = url.match(/pref_id=([^&]+)/);
-      preferenceId = match?.[1] ?? '';
+      const result = await createMPPreferenceCloud(selected.id);
+      url = result.initPoint;
+      preferenceId = result.preferenceId;
     } catch {
       url = MP_FALLBACK_LINKS[selected.id];
     } finally {
       setLoading(false);
-    }
-
-    // Salva pagamento pendente no Firestore para rastreamento
-    if (preferenceId) {
-      try {
-        await savePendingPayment({
-          userId,
-          preferenceId,
-          packageId: selected.id,
-          credits: selected.credits,
-          price: selected.price,
-        });
-      } catch {}
     }
 
     try {
@@ -119,18 +60,10 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
 
   async function handleVerifyPayment() {
     if (!pendingVerification) return;
-    const userId = getCurrentUserId();
     setLoading(true);
     try {
       const { preferenceId, pkg } = pendingVerification;
-      const status = await verifyMPPayment(
-        userId,
-        preferenceId,
-        pkg.id,
-        pkg.credits,
-        pkg.price,
-        MP_ACCESS_TOKEN,
-      );
+      const status = await verifyMPPaymentCloud(preferenceId);
 
       if (status === 'approved') {
         Alert.alert(
