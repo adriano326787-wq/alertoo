@@ -62,11 +62,24 @@ export const useFavoritesStore = create<State>((set, get) => ({
     if (!uid || uid === 'anonymous') return false;
 
     const wasFavorite = get().favoriteIds.has(eventId);
-    // Optimistic update
+
+    // Optimistic update — atualiza TANTO favoriteIds quanto favorites array
     const newIds = new Set(get().favoriteIds);
-    if (wasFavorite) newIds.delete(eventId);
-    else newIds.add(eventId);
-    set({ favoriteIds: newIds });
+    let newFavorites = [...get().favorites];
+    if (wasFavorite) {
+      newIds.delete(eventId);
+      newFavorites = newFavorites.filter((f) => f.eventId !== eventId);
+    } else {
+      newIds.add(eventId);
+      // Insere no topo (mais recente)
+      newFavorites = [
+        { eventId, eventType, title, emoji, savedAt: Date.now() },
+        ...newFavorites,
+      ];
+    }
+    const prevFavorites = get().favorites;
+    const prevIds = get().favoriteIds;
+    set({ favoriteIds: newIds, favorites: newFavorites });
 
     try {
       if (wasFavorite) {
@@ -78,8 +91,8 @@ export const useFavoritesStore = create<State>((set, get) => ({
       }
       return !wasFavorite;
     } catch {
-      // Rollback se falhar
-      set({ favoriteIds: get().favoriteIds });
+      // Rollback completo se falhar
+      set({ favoriteIds: prevIds, favorites: prevFavorites });
       return wasFavorite;
     }
   },

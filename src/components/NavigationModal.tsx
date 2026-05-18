@@ -63,7 +63,26 @@ const GOOGLE_API_KEY: string =
 
 const OFF_ROUTE_THRESHOLD_M = 60;
 const REROUTE_DEBOUNCE_MS   = 8000;
-const VOICE_THRESHOLDS      = [500, 200, 50, 10];
+const VOICE_THRESHOLDS      = [600, 300, 80, 20];
+
+/** Fala com voz suave — pitch e rate calibrados para sonoridade mais natural */
+function speak(text: string, priority = false) {
+  try {
+    if (priority) Speech.stop();
+    Speech.speak(text, {
+      language: 'pt-BR',
+      pitch: 1.05,   // ligeiramente mais agudo = mais natural em PT-BR
+      rate: 0.88,    // um pouco mais lento = mais claro
+    });
+  } catch {}
+}
+
+/** Thresholds adaptados à velocidade do usuário (km/h) */
+function voiceThresholds(speedKmh: number | null): number[] {
+  if (speedKmh == null || speedKmh < 20) return [300, 100, 30, 10]; // pedestre/lento
+  if (speedKmh < 60) return [450, 200, 60, 15];                     // urbano
+  return [700, 350, 100, 20];                                        // rodovia
+}
 
 type Phase = 'preview' | 'navigating';
 
@@ -152,16 +171,23 @@ export function NavigationModal({
         watcherRef.current = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.BestForNavigation,
-            timeInterval: 1500,
-            distanceInterval: 3,
+            timeInterval: 1000,
+            distanceInterval: 2,
           },
           (loc) => {
             if (canceled) return;
             const newPos: Coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-            const prev = prevUserPosRef.current;
-            if (prev) {
-              const moved = haversineMeters(prev, newPos);
-              if (moved > 3) setUserHeading(bearingDegrees(prev, newPos));
+
+            // Usa heading do sensor do dispositivo (bússola) se disponível e confiável
+            if (loc.coords.heading != null && loc.coords.heading >= 0) {
+              setUserHeading(loc.coords.heading);
+            } else {
+              // Fallback: calcula pelo deslocamento
+              const prev = prevUserPosRef.current;
+              if (prev) {
+                const moved = haversineMeters(prev, newPos);
+                if (moved > 2) setUserHeading(bearingDegrees(prev, newPos));
+              }
             }
             prevUserPosRef.current = newPos;
             setUserPos(newPos);
@@ -228,7 +254,7 @@ export function NavigationModal({
     if (distToDest < 30) {
       setArrived(true);
       track('navigation_completed');
-      if (voiceEnabled) { try { Speech.speak('Você chegou ao destino.', { language: 'pt-BR' }); } catch {} }
+      if (voiceEnabled) speak('Você chegou ao destino.', true);
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       return;
     }
@@ -238,7 +264,7 @@ export function NavigationModal({
     if (distToRoute > OFF_ROUTE_THRESHOLD_M && now - lastRerouteAtRef.current > REROUTE_DEBOUNCE_MS) {
       lastRerouteAtRef.current = now;
       track('route_recalculated', { distFromRouteM: Math.round(distToRoute) });
-      if (voiceEnabled) { try { Speech.speak('Recalculando rota.', { language: 'pt-BR' }); } catch {} }
+      if (voiceEnabled) speak('Recalculando rota.', true);
       fetchRoute(userPos);
     }
   }, [userPos, route, arrived, voiceEnabled, phase]);
@@ -280,38 +306,29 @@ export function NavigationModal({
   // Urgência visual: manobra <100m fica DESTACADA (cor laranja brilhante)
   const isUrgent = distToManeuver != null && distToManeuver <= 100;
 
-  // ─── TTS (só na navigating)
+  // ─── TTS adaptativo (só na navigating)
   useEffect(() => {
     if (phase !== 'navigating' || !voiceEnabled || !currentStep || !userPos || arrived) return;
+    if (distToManeuver == null) return;
 
     const stepKey = `${curStepIdx}:${currentStep.instruction.slice(0, 30)}`;
+    const speedKmh = userSpeed != null ? userSpeed * 3.6 : null;
+    const thresholds = voiceThresholds(speedKmh);
 
-    const enterKey = `${stepKey}:enter`;
-    if (!announcedRef.current.has(enterKey) && currentStep.instruction) {
-      announcedRef.current.add(enterKey);
-      try { Speech.speak(currentStep.instruction, { language: 'pt-BR' }); } catch {}
-      return;
-    }
-
-    if (distToManeuver == null) return;
-    for (const threshold of VOICE_THRESHOLDS) {
+    for (const threshold of thresholds) {
       const k = `${stepKey}:${threshold}`;
-      if (
-        distToManeuver <= threshold &&
-        !announcedRef.current.has(k) &&
-        distToManeuver < threshold + 50
-      ) {
+      if (distToManeuver <= threshold && !announcedRef.current.has(k)) {
         announcedRef.current.add(k);
         let msg: string;
-        if (threshold === 10) msg = 'Agora';
-        else if (threshold < 1000) msg = `Em ${threshold} metros, ${currentStep.instruction.toLowerCase()}`;
-        else msg = `Em ${(threshold / 1000).toFixed(1)} quilômetros, ${currentStep.instruction.toLowerCase()}`;
-        try { Speech.speak(msg, { language: 'pt-BR' }); } catch {}
-        if (threshold <= 50) { try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {} }
+        if (threshold <= 20)        msg = 'Agora.';
+        else if (threshold < 1000)  msg = `Em ${Math.round(distToManeuver)} metros, ${currentStep.instruction.toLowerCase()}.`;
+        else                         msg = `Em ${(distToManeuver / 1000).toFixed(1)} quilômetros, ${currentStep.instruction.toLowerCase()}.`;
+        speak(msg);
+        if (threshold <= 80) { try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {} }
         break;
       }
     }
-  }, [phase, distToManeuver, curStepIdx, currentStep, voiceEnabled, userPos, arrived]);
+  }, [phase, distToManeuver, curStepIdx, currentStep, voiceEnabled, userPos, arrived, userSpeed]);
 
   const remaining = useMemo(() => {
     if (!route?.steps || curStepIdx < 0) {
@@ -348,7 +365,7 @@ export function NavigationModal({
     });
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
     if (voiceEnabled && route?.steps?.[0]) {
-      try { Speech.speak(`Iniciando navegação. ${route.steps[0].instruction}`, { language: 'pt-BR' }); } catch {}
+      speak(`Iniciando navegação. ${route.steps[0].instruction}`, true);
     }
   };
 
@@ -394,7 +411,7 @@ export function NavigationModal({
           rotateEnabled
           onPanDrag={() => phase === 'navigating' && setFollowUser(false)}
         >
-          {/* MARCADOR DO USUÁRIO — seta rotativa */}
+          {/* MARCADOR DO USUÁRIO — seta rotativa com círculo */}
           {userPos && (
             <Marker
               coordinate={userPos}
@@ -405,8 +422,13 @@ export function NavigationModal({
               zIndex={100}
             >
               <View style={styles.arrowMarker}>
-                <View style={styles.arrowOuter} />
-                <View style={styles.arrowInner} />
+                {/* Sombra/halo externo */}
+                <View style={styles.arrowHalo} />
+                {/* Círculo principal */}
+                <View style={styles.arrowCircle}>
+                  {/* Triângulo (seta) apontando para cima */}
+                  <View style={styles.arrowTriangle} />
+                </View>
               </View>
             </Marker>
           )}
@@ -536,7 +558,16 @@ export function NavigationModal({
         {/* Lista de passos */}
         {phase === 'navigating' && showStepsList && route?.steps && (
           <View style={[styles.stepsPanel, { top: insets.top + 230, bottom: insets.bottom + 180 }]}>
-            <Text style={styles.stepsTitle}>📋 {t('steps') || 'Próximos passos'}</Text>
+            <View style={styles.stepsPanelHeader}>
+              <Text style={styles.stepsTitle}>📋 {t('steps') || 'Próximos passos'}</Text>
+              <TouchableOpacity
+                style={styles.stepsCloseBtn}
+                onPress={() => setShowStepsList(false)}
+                hitSlop={10}
+              >
+                <Text style={styles.stepsCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <ScrollView style={{ flex: 1 }}>
               {route.steps.slice(Math.max(0, curStepIdx)).map((s, idx) => (
                 <View key={idx} style={[styles.stepRow, idx === 0 && styles.stepRowCurrent]}>
@@ -640,23 +671,37 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
 
   // ─── SETA do usuário (substitui o blue dot)
-  arrowMarker: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
-  arrowOuter: {
-    position: 'absolute',
-    width: 0, height: 0,
-    borderLeftWidth: 14, borderRightWidth: 14,
-    borderBottomWidth: 26,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    borderBottomColor: '#fff',
+  arrowMarker: {
+    width: 48, height: 48,
+    alignItems: 'center', justifyContent: 'center',
   },
-  arrowInner: {
+  arrowHalo: {
     position: 'absolute',
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(37, 99, 235, 0.22)', // azul translúcido
+  },
+  arrowCircle: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#2563EB',       // azul Google Maps
+    borderWidth: 2.5,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+  },
+  arrowTriangle: {
     width: 0, height: 0,
-    borderLeftWidth: 11, borderRightWidth: 11,
-    borderBottomWidth: 20,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    borderBottomColor: '#FF5722',
-    marginTop: 4,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderBottomWidth: 13,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#fff',
+    marginTop: -3, // centraliza verticalmente dentro do círculo
   },
 
   // ─── Navigating top bar (escuro)
@@ -754,7 +799,19 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25, shadowRadius: 8,
   },
-  stepsTitle: { fontSize: 14, fontWeight: '800', color: '#1a1a1a', marginBottom: 8 },
+  stepsPanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  stepsTitle: { fontSize: 14, fontWeight: '800', color: '#1a1a1a' },
+  stepsCloseBtn: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepsCloseBtnText: { fontSize: 13, fontWeight: '800', color: '#475569' },
   stepRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingVertical: 10, paddingHorizontal: 8,
