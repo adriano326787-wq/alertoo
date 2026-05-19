@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, Dimensions, Modal, Pressable, StatusBar } from 'react-native';
 import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo } from '../utils/time';
@@ -34,6 +34,7 @@ export function EntertainmentInfoModal({
   const t = useT();
   const [shareVisible, setShareVisible] = useState(false);
   const [navVisible, setNavVisible] = useState(false);
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
   const isFavorite = useFavoritesStore((s) => event ? s.isFavorite(event.id) : false);
   const toggleFav = useFavoritesStore((s) => s.toggle);
 
@@ -137,17 +138,50 @@ export function EntertainmentInfoModal({
               contentContainerStyle={styles.galleryScroll}
             >
               {allPhotos.map((uri, i) => (
-                <Image
+                <Pressable
                   key={i}
-                  source={{ uri }}
-                  style={styles.galleryThumb}
-                  resizeMode="cover"
-                />
+                  onPress={() => setLightboxPhoto(uri)}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <Image
+                    source={{ uri }}
+                    style={styles.galleryThumb}
+                    resizeMode="cover"
+                  />
+                </Pressable>
               ))}
             </ScrollView>
           </View>
         ) : undefined}
       />
+
+      {/* Lightbox de foto em tela cheia */}
+      <Modal
+        visible={!!lightboxPhoto}
+        transparent
+        statusBarTranslucent
+        animationType="fade"
+        onRequestClose={() => setLightboxPhoto(null)}
+      >
+        <StatusBar hidden />
+        <View style={styles.lightboxBg}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setLightboxPhoto(null)} />
+          {lightboxPhoto ? (
+            <Image
+              source={{ uri: lightboxPhoto }}
+              style={styles.lightboxImage}
+              resizeMode="contain"
+            />
+          ) : null}
+          <Pressable
+            onPress={() => setLightboxPhoto(null)}
+            hitSlop={16}
+            style={({ pressed }) => [styles.lightboxClose, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Text style={styles.lightboxCloseText}>✕</Text>
+          </Pressable>
+        </View>
+      </Modal>
 
       {/* Sub-modais — só renderizados quando event existe */}
       {event && meta && (
@@ -202,5 +236,34 @@ const styles = StyleSheet.create({
     width: 120,
     height: 80,
     borderRadius: 8,
+  },
+
+  // Lightbox
+  lightboxBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.8,
+  },
+  lightboxClose: {
+    position: 'absolute',
+    top: 48,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxCloseText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '900',
+    includeFontPadding: false,
   },
 });

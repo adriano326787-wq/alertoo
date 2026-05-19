@@ -142,6 +142,19 @@ export function BottomSheetCard({
 
       {/* Sheet */}
       <Animated.View style={[styles.sheetWrap, { transform: [{ translateY }] }]}>
+        {/* Close button FORA do overflow:hidden — garante recebimento de toque no Android */}
+        <Pressable
+          onPress={handleClose}
+          hitSlop={16}
+          style={({ pressed }) => [
+            styles.closeBtnFixed,
+            { backgroundColor: theme.bg.base, borderColor: theme.border.default },
+            pressed && { opacity: 0.6, transform: [{ scale: 0.92 }] },
+          ]}
+        >
+          <Text style={[styles.closeBtnText, { color: theme.text.primary }]}>✕</Text>
+        </Pressable>
+
         <View style={[
           styles.sheet,
           {
@@ -151,22 +164,11 @@ export function BottomSheetCard({
           },
           platformShadow(shadow.xl),
         ]}>
-          {/* TOP BAR FIXA — handle + close button SEMPRE visível */}
+          {/* TOP BAR FIXA — só handle (close foi para fora do overflow:hidden) */}
           <View style={styles.topBar}>
             <View style={styles.handleArea}>
               <View style={[styles.handle, { backgroundColor: theme.border.strong }]} />
             </View>
-            <Pressable
-              onPress={handleClose}
-              hitSlop={14}
-              style={({ pressed }) => [
-                styles.closeBtnFixed,
-                { backgroundColor: theme.bg.base, borderColor: theme.border.default },
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Text style={[styles.closeBtnText, { color: theme.text.primary }]}>✕</Text>
-            </Pressable>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} bounces>
@@ -316,24 +318,25 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Top bar FIXA — handle no centro + close button no canto
+  // Top bar — só handle centralizado (close button foi para fora do overflow:hidden)
   topBar: {
     height: 36,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
   handleArea: { alignItems: 'center', justifyContent: 'center' },
   handle: { width: 38, height: 4, borderRadius: 2 },
+  // Close button fica no sheetWrap (acima do overflow:hidden)
   closeBtnFixed: {
     position: 'absolute',
     top: 6, right: 12,
-    width: 32, height: 32, borderRadius: 16,
+    width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1,
-    zIndex: 100,
+    zIndex: 200,
+    elevation: 10,
   },
   closeBtnText: { fontSize: 14, fontWeight: '900', lineHeight: 16, includeFontPadding: false },
 
