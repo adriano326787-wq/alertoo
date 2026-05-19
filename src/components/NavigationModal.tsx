@@ -464,117 +464,141 @@ export function NavigationModal({
           {route && route.polyline.length > 0 && (
             <Polyline
               coordinates={route.polyline}
-              strokeWidth={7}
-              strokeColor="#FF5722"
+              strokeWidth={8}
+              strokeColor="#1A73E8"
               geodesic
             />
           )}
         </MapView>
 
-        {/* TOP BAR — varia por fase */}
+        {/* ═══════════════════════ TOP BAR ═══════════════════════ */}
         {phase === 'navigating' ? (
-          <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-            <View style={styles.topRow}>
-              <TouchableOpacity style={styles.iconBtn} onPress={onClose}>
-                <Text style={styles.iconBtnText}>✕</Text>
-              </TouchableOpacity>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity style={styles.iconBtn} onPress={toggleVoice}>
-                <Text style={styles.iconBtnText}>{voiceEnabled ? '🔊' : '🔇'}</Text>
-              </TouchableOpacity>
-            </View>
-
-            {arrived ? (
-              <View style={styles.arrivedBlock}>
-                <Text style={styles.arrivedTitle}>🏁 {t('arrived') || 'Você chegou!'}</Text>
-                <Text style={styles.headerSub} numberOfLines={1}>{destinationLabel}</Text>
-              </View>
-            ) : currentStep ? (
-              <View style={styles.instructionBlock}>
-                <View style={styles.maneuverRow}>
-                  <Text style={[styles.bigManeuver, isUrgent && styles.bigManeuverUrgent]}>
-                    {maneuverIcon(currentStep.maneuver)}
-                  </Text>
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={[styles.bigDistance, isUrgent && styles.bigDistanceUrgent]}>
-                      {distToManeuver != null ? formatDistanceMeters(distToManeuver) : '—'}
-                    </Text>
-                    <Text style={styles.instructionText} numberOfLines={2}>
-                      {currentStep.instruction || '—'}
-                    </Text>
-                  </View>
+          arrived ? (
+            /* ARRIVED */
+            <View style={[styles.gmTopBar, { paddingTop: insets.top + 10 }]}>
+              <View style={styles.gmInstrRow}>
+                <View style={styles.gmTurnBox}>
+                  <Text style={styles.gmTurnIcon}>🏁</Text>
                 </View>
-
-                {/* Preview próxima manobra (estilo Waze) */}
-                {nextStep ? (
-                  <View style={styles.nextStepRow}>
-                    <Text style={styles.nextStepLabel}>EM SEGUIDA</Text>
-                    <Text style={styles.nextStepIcon}>{maneuverIcon(nextStep.maneuver)}</Text>
-                    <Text style={styles.nextStepText} numberOfLines={1}>
-                      {nextStep.instruction || '—'}
-                    </Text>
-                  </View>
-                ) : null}
+                <View style={styles.gmInstrCenter}>
+                  <Text style={styles.gmStreet} numberOfLines={1}>{t('arrived') || 'Você chegou!'}</Text>
+                  <Text style={styles.gmStreetSub} numberOfLines={1}>{destinationLabel}</Text>
+                </View>
               </View>
-            ) : null}
-
-            {route && !arrived && (
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+            </View>
+          ) : currentStep ? (
+            /* NAVIGATING WITH STEP */
+            <View style={[styles.gmTopBar, { paddingTop: insets.top + 10 }]}>
+              {/* Linha principal: ícone manobra + distância + rua + botão recentrar */}
+              <View style={styles.gmInstrRow}>
+                <View style={[styles.gmTurnBox, isUrgent && styles.gmTurnBoxUrgent]}>
+                  <Text style={styles.gmTurnIcon}>{maneuverIcon(currentStep.maneuver)}</Text>
+                </View>
+                <View style={styles.gmInstrCenter}>
+                  <Text style={[styles.gmDistance, isUrgent && styles.gmDistanceUrgent]}>
+                    {distToManeuver != null ? formatDistanceMeters(distToManeuver) : '—'}
+                  </Text>
+                  <Text style={styles.gmStreet} numberOfLines={1}>
+                    {currentStep.instruction || '—'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.gmRecenterBtn, followUser && styles.gmRecenterBtnActive]}
+                  onPress={recenterOnUser}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.gmRecenterIcon}>✦</Text>
+                </TouchableOpacity>
               </View>
-            )}
-          </View>
+
+              {/* Faixa "Depois" — próxima manobra */}
+              {nextStep ? (
+                <View style={styles.gmNextStrip}>
+                  <Text style={styles.gmNextLabel}>Depois,</Text>
+                  <Text style={styles.gmNextIcon}>{maneuverIcon(nextStep.maneuver)}</Text>
+                  <Text style={styles.gmNextText} numberOfLines={1}>{nextStep.instruction || '—'}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            /* NAVIGATING, NO STEP YET */
+            <View style={[styles.gmTopBar, { paddingTop: insets.top + 10 }]}>
+              <View style={styles.gmInstrRow}>
+                <View style={styles.gmTurnBox}>
+                  <Text style={styles.gmTurnIcon}>↑</Text>
+                </View>
+                <View style={styles.gmInstrCenter}>
+                  <Text style={styles.gmDistance}>{destinationLabel}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.gmRecenterBtn, followUser && styles.gmRecenterBtnActive]}
+                  onPress={recenterOnUser}
+                >
+                  <Text style={styles.gmRecenterIcon}>✦</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )
         ) : (
-          /* PREVIEW MODE — header simples */
-          <View style={[styles.previewTopBar, { paddingTop: insets.top + 8 }]}>
-            <TouchableOpacity style={styles.previewClose} onPress={onClose}>
-              <Text style={styles.previewCloseText}>✕</Text>
+          /* PREVIEW MODE */
+          <View style={[styles.gmPreviewBar, { paddingTop: insets.top + 10 }]}>
+            <TouchableOpacity style={styles.gmCloseCircle} onPress={onClose}>
+              <Text style={styles.gmCloseCircleText}>✕</Text>
             </TouchableOpacity>
-            <View style={styles.previewTitleBlock}>
-              <Text style={styles.previewLabel}>DESTINO</Text>
-              <Text style={styles.previewTitle} numberOfLines={1}>
+            <View style={styles.gmPreviewInfo}>
+              <Text style={styles.gmPreviewLabel}>DESTINO</Text>
+              <Text style={styles.gmPreviewTitle} numberOfLines={1}>
                 {destinationEmoji} {destinationLabel}
               </Text>
+              {route && (
+                <Text style={styles.gmPreviewMeta}>
+                  {formatDurationSeconds(route.durationSeconds)}  ·  {formatDistanceMeters(route.distanceMeters)}
+                </Text>
+              )}
             </View>
           </View>
         )}
 
-        {/* FAB direita */}
+        {/* ═══════════════════ FABs — LADO DIREITO ═══════════════════ */}
         {phase === 'navigating' && (
-          <View style={[styles.fab, { bottom: insets.bottom + 180 }]}>
-            <TouchableOpacity
-              style={[styles.fabBtn, followUser && styles.fabBtnActive]}
-              onPress={recenterOnUser}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.fabIcon}>📍</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.fabBtn, { marginTop: 10 }]} onPress={showFullRoute} activeOpacity={0.7}>
-              <Text style={styles.fabIcon}>🔍</Text>
+          <View style={[styles.gmFabCol, { bottom: insets.bottom + GM_BOTTOM_H + 16 }]}>
+            <TouchableOpacity style={styles.gmFab} onPress={toggleVoice} activeOpacity={0.75}>
+              <Text style={styles.gmFabText}>{voiceEnabled ? '🔊' : '🔇'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.fabBtn, { marginTop: 10 }, showStepsList && styles.fabBtnActive]}
+              style={[styles.gmFab, { marginTop: 10 }, showStepsList && styles.gmFabActive]}
               onPress={() => setShowStepsList((v) => !v)}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
-              <Text style={styles.fabIcon}>📋</Text>
+              <Text style={styles.gmFabText}>≡</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Velocímetro (só navigating) */}
+        {/* ═══════════════════ VELOCÍMETRO ═══════════════════ */}
         {phase === 'navigating' && userSpeed != null && (
-          <View style={[styles.speedometer, { bottom: insets.bottom + 180 }]}>
-            <Text style={styles.speedValue}>{Math.round(userSpeed * 3.6)}</Text>
-            <Text style={styles.speedUnit}>km/h</Text>
+          <View style={[styles.gmSpeedometer, { bottom: insets.bottom + GM_BOTTOM_H + 16 }]}>
+            <Text style={styles.gmSpeedValue}>{Math.round(userSpeed * 3.6)}</Text>
+            <Text style={styles.gmSpeedUnit}>km/h</Text>
           </View>
         )}
 
-        {/* Lista de passos */}
+        {/* ═══════════════════ PILL RECENTRALIZAR ═══════════════════ */}
+        {phase === 'navigating' && !followUser && (
+          <TouchableOpacity
+            style={[styles.gmRecenterPill, { bottom: insets.bottom + GM_BOTTOM_H + 16 }]}
+            onPress={recenterOnUser}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.gmRecenterPillText}>⟳  Recentralizar</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* ═══════════════════ LISTA DE PASSOS ═══════════════════ */}
         {phase === 'navigating' && showStepsList && route?.steps && (
-          <View style={[styles.stepsPanel, { top: insets.top + 230, bottom: insets.bottom + 180 }]}>
+          <View style={[styles.stepsPanel, { bottom: insets.bottom + GM_BOTTOM_H + 12 }]}>
             <View style={styles.stepsPanelHeader}>
-              <Text style={styles.stepsTitle}>📋 {t('steps') || 'Próximos passos'}</Text>
+              <Text style={styles.stepsTitle}>Próximos passos</Text>
               <TouchableOpacity
                 style={styles.stepsCloseBtn}
                 onPress={() => setShowStepsList(false)}
@@ -599,69 +623,69 @@ export function NavigationModal({
           </View>
         )}
 
-        {/* BOTTOM PANEL */}
-        <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 12 }]}>
+        {/* ═══════════════════ BOTTOM BAR (Google Maps) ═══════════════════ */}
+        <View style={[styles.gmBottomBar, { paddingBottom: insets.bottom + 12 }]}>
           {error ? (
-            <Text style={styles.errorText}>⚠️ {error}</Text>
+            <View style={styles.gmBottomError}>
+              <Text style={styles.gmBottomErrorText}>⚠️ {error}</Text>
+            </View>
           ) : loading && !route ? (
-            <View style={styles.loadingRoute}>
-              <ActivityIndicator size="small" color="#FF5722" />
-              <Text style={styles.loadingRouteText}>{t('calculating_route') || 'Calculando rota…'}</Text>
+            <View style={styles.gmBottomLoading}>
+              <ActivityIndicator size="small" color="#1A73E8" />
+              <Text style={styles.gmBottomLoadingText}>Calculando rota…</Text>
             </View>
           ) : route ? (
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statValue}>{formatDistanceMeters(remaining.distance)}</Text>
-                <Text style={styles.statLabel}>{t('distance') || 'Distância'}</Text>
+            phase === 'preview' ? (
+              /* PREVIEW BOTTOM: info + CTA */
+              <>
+                <View style={styles.gmPreviewCtaRow}>
+                  <Pressable style={({ pressed }) => [styles.gmCancelBtn, pressed && { opacity: 0.7 }]} onPress={onClose}>
+                    <Text style={styles.gmCancelBtnText}>Cancelar</Text>
+                  </Pressable>
+                  <Pressable style={({ pressed }) => [styles.gmStartBtn, pressed && { opacity: 0.88 }]} onPress={startNavigation}>
+                    <Text style={styles.gmStartBtnText}>▶  Iniciar</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : arrived ? (
+              /* ARRIVED BOTTOM */
+              <Pressable style={({ pressed }) => [styles.gmStartBtn, pressed && { opacity: 0.88 }]} onPress={onClose}>
+                <Text style={styles.gmStartBtnText}>✓  Concluir</Text>
+              </Pressable>
+            ) : (
+              /* NAVIGATING BOTTOM: X · tempo/dist · ⇅ */
+              <View style={styles.gmNavRow}>
+                {/* Botão Sair — círculo com ✕ */}
+                <TouchableOpacity
+                  style={styles.gmExitBtn}
+                  onPress={() => { setPhase('preview'); setFollowUser(false); try { Speech.stop(); } catch {} }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.gmExitText}>✕</Text>
+                </TouchableOpacity>
+
+                {/* Centro: tempo + distância + ETA */}
+                <View style={styles.gmNavCenter}>
+                  <View style={styles.gmNavTimeRow}>
+                    <Text style={styles.gmNavTime}>{formatDurationSeconds(remaining.duration)}</Text>
+                    <Text style={styles.gmNavEcoLeaf}> 🌿</Text>
+                  </View>
+                  <Text style={styles.gmNavMeta}>
+                    {formatDistanceMeters(remaining.distance)}  ·  {etaClock ?? '—'}
+                  </Text>
+                  {/* Barra de progresso fina */}
+                  <View style={styles.gmProgressTrack}>
+                    <View style={[styles.gmProgressBar, { width: `${progress * 100}%` }]} />
+                  </View>
+                </View>
+
+                {/* Botão "ver rota completa" */}
+                <TouchableOpacity style={styles.gmRouteOptionsBtn} onPress={showFullRoute} activeOpacity={0.75}>
+                  <Text style={styles.gmRouteOptionsText}>⇅</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.statDivider} />
-              <View style={styles.stat}>
-                <Text style={styles.statValue}>{formatDurationSeconds(remaining.duration)}</Text>
-                <Text style={styles.statLabel}>{t('eta') || 'Tempo'}</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.stat}>
-                <Text style={styles.statValue}>{etaClock ?? '—'}</Text>
-                <Text style={styles.statLabel}>{t('arrival_time') || 'Chegada'}</Text>
-              </View>
-            </View>
+            )
           ) : null}
-
-          {/* CTA — varia por fase */}
-          {phase === 'preview' && route && !error && (
-            <View style={styles.previewCtaRow}>
-              <Pressable
-                style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.8 }]}
-                onPress={onClose}
-              >
-                <Text style={styles.cancelBtnText}>{t('cancel') || 'Cancelar'}</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.85 }]}
-                onPress={startNavigation}
-              >
-                <Text style={styles.startBtnText}>🧭 {t('start_navigation') || 'Iniciar navegação'}</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {phase === 'navigating' && arrived && (
-            <Pressable
-              style={({ pressed }) => [styles.startBtn, { marginTop: 10 }, pressed && { opacity: 0.85 }]}
-              onPress={onClose}
-            >
-              <Text style={styles.startBtnText}>✓ {t('finish') || 'Concluir'}</Text>
-            </Pressable>
-          )}
-
-          {phase === 'navigating' && !arrived && (
-            <Pressable
-              style={({ pressed }) => [styles.cancelNavBtn, pressed && { opacity: 0.7 }]}
-              onPress={() => { setPhase('preview'); setFollowUser(false); try { Speech.stop(); } catch {} }}
-            >
-              <Text style={styles.cancelNavBtnText}>✕ {t('cancel_navigation') || 'Cancelar navegação'}</Text>
-            </Pressable>
-          )}
         </View>
       </View>
     </Modal>
@@ -682,150 +706,182 @@ function formatDurationSeconds(s: number): string {
   return rem > 0 ? `${h}h ${rem}min` : `${h}h`;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+/** Altura fixa do bottom bar no modo navigating */
+const GM_BOTTOM_H = 90;
 
-  // ─── SETA do usuário (substitui o blue dot)
-  arrowMarker: {
-    width: 48, height: 48,
-    alignItems: 'center', justifyContent: 'center',
-  },
+const gmShadow = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 3 },
+  shadowOpacity: 0.28,
+  shadowRadius: 8,
+  elevation: 12,
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#e8eaed' },
+
+  // ─── Seta do usuário
+  arrowMarker: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   arrowHalo: {
-    position: 'absolute',
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: 'rgba(37, 99, 235, 0.22)', // azul translúcido
+    position: 'absolute', width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(26,115,232,0.2)',
   },
   arrowCircle: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#2563EB',       // azul Google Maps
-    borderWidth: 2.5,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#1A73E8',
+    borderWidth: 2.5, borderColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
     elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 4,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35, shadowRadius: 4,
   },
   arrowTriangle: {
     width: 0, height: 0,
-    borderLeftWidth: 7,
-    borderRightWidth: 7,
-    borderBottomWidth: 13,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: '#fff',
-    marginTop: -3, // centraliza verticalmente dentro do círculo
+    borderLeftWidth: 7, borderRightWidth: 7, borderBottomWidth: 13,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+    borderBottomColor: '#fff', marginTop: -3,
   },
 
-  // ─── Navigating top bar (escuro)
-  topBar: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    paddingHorizontal: 12, paddingBottom: 10,
-    backgroundColor: '#0F172A',
-    borderBottomLeftRadius: 18, borderBottomRightRadius: 18,
-    elevation: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4, shadowRadius: 8,
-  },
-  topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  iconBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  iconBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
-
-  instructionBlock: { paddingHorizontal: 4, paddingVertical: 6 },
-  maneuverRow: { flexDirection: 'row', alignItems: 'center' },
-  bigManeuver: { fontSize: 60, lineHeight: 64, includeFontPadding: false },
-  bigDistance: { fontSize: 34, fontWeight: '900', color: '#FF7043', includeFontPadding: false, lineHeight: 36 },
-  instructionText: { fontSize: 15, fontWeight: '600', color: '#fff', lineHeight: 19, includeFontPadding: false, marginTop: 2 },
-
-  arrivedBlock: { paddingHorizontal: 4, paddingVertical: 12 },
-  arrivedTitle: { fontSize: 26, fontWeight: '900', color: '#22C55E', marginBottom: 4 },
-  headerSub: { fontSize: 17, color: '#fff', fontWeight: '800', marginTop: 4 },
-
-  progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 2, marginTop: 10, overflow: 'hidden' },
-  progressBar: { height: '100%', backgroundColor: '#FF5722' },
-
-  // ─── Preview top bar (claro/translúcido)
-  previewTopBar: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingBottom: 10,
-    backgroundColor: 'rgba(255,255,255,0.97)',
-    borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
-    elevation: 6,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, shadowRadius: 4,
-  },
-  previewClose: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  previewCloseText: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  previewTitleBlock: { flex: 1, marginLeft: 12 },
-  previewLabel: { fontSize: 10, color: '#64748B', fontWeight: '700', letterSpacing: 0.5 },
-  previewTitle: { fontSize: 16, color: '#0F172A', fontWeight: '800', marginTop: 1 },
-
-  // ─── Destino
+  // ─── Destino marker
   destMarker: {
-    width: 46, height: 46, borderRadius: 23,
-    backgroundColor: '#fff',
-    borderWidth: 3, borderColor: '#FF5722',
-    alignItems: 'center', justifyContent: 'center',
-    elevation: 10,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#fff', borderWidth: 3, borderColor: '#1A73E8',
+    alignItems: 'center', justifyContent: 'center', elevation: 10,
   },
   destEmoji: { fontSize: 22 },
 
-  // ─── FAB
-  fab: { position: 'absolute', right: 14, alignItems: 'center' },
-  fabBtn: {
+  // ═══════════════════ TOP BAR — NAVIGATING (Google Maps style) ═══════════════════
+  gmTopBar: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    backgroundColor: '#1B3A5C',  // navy escuro igual Google Maps
+    paddingHorizontal: 0, paddingBottom: 0,
+    ...gmShadow,
+  },
+  gmInstrRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 0,
+    paddingBottom: 10,
+  },
+  // Caixa do ícone de manobra — destaque à esquerda
+  gmTurnBox: {
+    width: 72, minHeight: 72,
+    backgroundColor: '#1A73E8',   // azul Google
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  gmTurnBoxUrgent: { backgroundColor: '#E84335' }, // vermelho se < 100m
+  gmTurnIcon: { fontSize: 36, color: '#fff', includeFontPadding: false },
+
+  gmInstrCenter: { flex: 1, paddingHorizontal: 14, justifyContent: 'center' },
+  gmDistance: {
+    fontSize: 32, fontWeight: '900', color: '#fff',
+    includeFontPadding: false, lineHeight: 34,
+  },
+  gmDistanceUrgent: { color: '#FFC107' },
+  gmStreet: {
+    fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.85)',
+    includeFontPadding: false, lineHeight: 18, marginTop: 2,
+  },
+  gmStreetSub: {
+    fontSize: 12, color: 'rgba(255,255,255,0.6)',
+    includeFontPadding: false, marginTop: 2,
+  },
+
+  // Botão de recentrar no canto direito da top bar
+  gmRecenterBtn: {
+    width: 52, height: 52, marginRight: 10,
+    alignItems: 'center', justifyContent: 'center',
+    borderRadius: 26,
+  },
+  gmRecenterBtnActive: { backgroundColor: 'rgba(26,115,232,0.25)' },
+  gmRecenterIcon: { fontSize: 26, color: '#fff' },
+
+  // Faixa "Depois" (próxima manobra)
+  gmNextStrip: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#14304E',
+    paddingHorizontal: 16, paddingVertical: 8,
+  },
+  gmNextLabel: { fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: '700', marginRight: 8 },
+  gmNextIcon: { fontSize: 18, color: '#fff', marginRight: 6, includeFontPadding: false },
+  gmNextText: { flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '600', includeFontPadding: false },
+
+  // ═══════════════════ TOP BAR — PREVIEW ═══════════════════
+  gmPreviewBar: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingBottom: 14,
+    backgroundColor: '#fff',
+    borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
+    ...gmShadow,
+  },
+  gmCloseCircle: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  gmCloseCircleText: { fontSize: 16, fontWeight: '800', color: '#333' },
+  gmPreviewInfo: { flex: 1, marginLeft: 12 },
+  gmPreviewLabel: { fontSize: 10, color: '#9E9E9E', fontWeight: '700', letterSpacing: 0.5 },
+  gmPreviewTitle: { fontSize: 16, color: '#1A1A1A', fontWeight: '800', marginTop: 1 },
+  gmPreviewMeta: { fontSize: 13, color: '#1A73E8', fontWeight: '700', marginTop: 3 },
+
+  // ═══════════════════ FABs DIREITA ═══════════════════
+  gmFabCol: { position: 'absolute', right: 14, alignItems: 'center' },
+  gmFab: {
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
     elevation: 8,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25, shadowRadius: 4,
+    shadowOpacity: 0.22, shadowRadius: 4,
   },
-  fabBtnActive: { backgroundColor: '#FF5722' },
-  fabIcon: { fontSize: 22 },
+  gmFabActive: { backgroundColor: '#E8F0FE' },
+  gmFabText: { fontSize: 20 },
 
-  // ─── Velocímetro
-  speedometer: {
+  // ═══════════════════ VELOCÍMETRO ═══════════════════
+  gmSpeedometer: {
     position: 'absolute', left: 14,
-    width: 64, height: 64, borderRadius: 32,
+    width: 62, height: 62, borderRadius: 31,
     backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3, borderColor: '#1E293B',
+    borderWidth: 2.5, borderColor: '#1B3A5C',
     elevation: 8,
   },
-  speedValue: { fontSize: 22, fontWeight: '900', color: '#1a1a1a', includeFontPadding: false, lineHeight: 24 },
-  speedUnit: { fontSize: 9, color: '#64748B', fontWeight: '700', marginTop: -1 },
+  gmSpeedValue: { fontSize: 22, fontWeight: '900', color: '#1a1a1a', includeFontPadding: false, lineHeight: 24 },
+  gmSpeedUnit: { fontSize: 9, color: '#9E9E9E', fontWeight: '700', marginTop: -1 },
 
-  // ─── Steps panel
+  // ═══════════════════ PILL RECENTRALIZAR ═══════════════════
+  gmRecenterPill: {
+    position: 'absolute', left: 14,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderRadius: 24,
+    elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2, shadowRadius: 4,
+  },
+  gmRecenterPillText: { fontSize: 13, fontWeight: '700', color: '#1A73E8' },
+
+  // ═══════════════════ LISTA DE PASSOS ═══════════════════
   stepsPanel: {
-    position: 'absolute', left: 14, right: 14,
+    position: 'absolute', left: 14, right: 14, top: 200,
     backgroundColor: '#fff',
     borderRadius: 14, padding: 12, elevation: 20,
-    zIndex: 20,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25, shadowRadius: 8,
+    maxHeight: 300,
   },
   stepsPanelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 8,
   },
   stepsTitle: { fontSize: 14, fontWeight: '800', color: '#1a1a1a' },
   stepsCloseBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center',
   },
   stepsCloseBtnText: { fontSize: 15, fontWeight: '900', color: '#475569' },
   stepRow: {
@@ -833,87 +889,64 @@ const styles = StyleSheet.create({
     paddingVertical: 10, paddingHorizontal: 8,
     borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
   },
-  stepRowCurrent: { backgroundColor: '#FFF7ED', borderRadius: 8 },
-  stepIcon: { fontSize: 22, marginRight: 10, width: 28, textAlign: 'center' },
+  stepRowCurrent: { backgroundColor: '#E8F0FE', borderRadius: 8 },
+  stepIcon: { fontSize: 20, marginRight: 10, width: 26, textAlign: 'center' },
   stepInstr: { fontSize: 13, fontWeight: '700', color: '#1F2937', includeFontPadding: false },
   stepMeta: { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 2 },
 
-  // ─── Bottom panel
-  bottomPanel: {
+  // ═══════════════════ BOTTOM BAR ═══════════════════
+  gmBottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: '#fff',
     paddingHorizontal: 16, paddingTop: 14,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    elevation: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.18, shadowRadius: 8,
+    elevation: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.15, shadowRadius: 8,
   },
-  statsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#F8FAFC', borderRadius: 12,
-    paddingVertical: 12, paddingHorizontal: 4,
-  },
-  stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 18, fontWeight: '900', color: '#1a1a1a', includeFontPadding: false },
-  statLabel: { fontSize: 10, color: '#64748B', fontWeight: '700', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
-  statDivider: { width: 1, height: 32, backgroundColor: '#E2E8F0' },
+  gmBottomLoading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
+  gmBottomLoadingText: { marginLeft: 10, fontSize: 14, color: '#555', fontWeight: '600' },
+  gmBottomError: { paddingVertical: 14, alignItems: 'center' },
+  gmBottomErrorText: { fontSize: 14, color: '#D32F2F', fontWeight: '600' },
 
-  loadingRoute: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
-  loadingRouteText: { marginLeft: 10, fontSize: 13, color: '#64748B', fontWeight: '600' },
-  errorText: { fontSize: 13, color: '#DC2626', textAlign: 'center', marginVertical: 14, fontWeight: '600' },
+  // Preview bottom CTA
+  gmPreviewCtaRow: { flexDirection: 'row', gap: 10 },
+  gmCancelBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 24,
+    backgroundColor: '#F1F5F9', alignItems: 'center',
+  },
+  gmCancelBtnText: { fontSize: 14, fontWeight: '700', color: '#555' },
+  gmStartBtn: {
+    flex: 2, paddingVertical: 14, borderRadius: 24,
+    backgroundColor: '#1A73E8', alignItems: 'center',
+    elevation: 4, shadowColor: '#1A73E8',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.45, shadowRadius: 6,
+  },
+  gmStartBtnText: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
 
-  // ─── CTA preview
-  previewCtaRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
+  // Navigating bottom row (X · tempo · ⇅)
+  gmNavRow: { flexDirection: 'row', alignItems: 'center' },
+  gmExitBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    borderWidth: 2, borderColor: '#BDBDBD',
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 16,
   },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
+  gmExitText: { fontSize: 16, fontWeight: '800', color: '#555' },
+  gmNavCenter: { flex: 1 },
+  gmNavTimeRow: { flexDirection: 'row', alignItems: 'baseline' },
+  gmNavTime: { fontSize: 28, fontWeight: '900', color: '#E53935', includeFontPadding: false },
+  gmNavEcoLeaf: { fontSize: 18 },
+  gmNavMeta: { fontSize: 13, color: '#757575', fontWeight: '500', marginTop: 1 },
+  gmProgressTrack: {
+    height: 3, backgroundColor: '#E0E0E0', borderRadius: 2,
+    marginTop: 6, overflow: 'hidden',
   },
-  cancelBtnText: { fontSize: 14, fontWeight: '700', color: '#475569', includeFontPadding: false },
-  startBtn: {
-    flex: 2,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#FF5722',
-    alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#FF5722',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
+  gmProgressBar: { height: '100%', backgroundColor: '#1A73E8', borderRadius: 2 },
+  gmRouteOptionsBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center', justifyContent: 'center', marginLeft: 16,
   },
-  startBtnText: { fontSize: 15, fontWeight: '900', color: '#fff', letterSpacing: 0.3, includeFontPadding: false },
-
-  // Próxima manobra (preview Waze)
-  nextStepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.15)',
-  },
-  nextStepLabel: { fontSize: 9, fontWeight: '900', color: 'rgba(255,255,255,0.55)', letterSpacing: 0.8, marginRight: 8 },
-  nextStepIcon: { fontSize: 22, marginRight: 8, includeFontPadding: false },
-  nextStepText: { flex: 1, fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.85)', includeFontPadding: false },
-
-  // Urgência (<100m)
-  bigManeuverUrgent: { color: '#FF7043' /* laranja brilhante */ },
-  bigDistanceUrgent: { color: '#FFB74D' },
-
-  // Cancelar navegação (volta pro preview)
-  cancelNavBtn: {
-    marginTop: 10,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  cancelNavBtnText: { fontSize: 13, fontWeight: '700', color: '#64748B', includeFontPadding: false },
+  gmRouteOptionsText: { fontSize: 20, fontWeight: '700', color: '#333' },
 });
