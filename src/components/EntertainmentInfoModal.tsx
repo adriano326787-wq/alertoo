@@ -102,13 +102,7 @@ export function EntertainmentInfoModal({
       <BottomSheetCard
         visible
         onClose={onClose}
-        imageUrl={
-          // Promovido com foto de promoção → prioridade máxima
-          // Senão → qualquer foto disponível (normal ou nula)
-          (isPromoted && event.promotionPhotoUrl)
-            ? event.promotionPhotoUrl
-            : event.photoUrl ?? undefined
-        }
+        imageUrl={event.promotionPhotoUrl ?? event.photoUrl ?? undefined}
         imageHeight={200}
         imageOverlay={heroOverlay}
         tag={tag}

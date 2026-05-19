@@ -158,9 +158,9 @@ function FeaturedStrip({
           const tierConfig = ev.promotionTier ? PROMOTION_TIERS[ev.promotionTier] : null;
           return (
             <TouchableOpacity key={ev.id} style={styles.stripCard} onPress={() => onPress(ev)} activeOpacity={0.88}>
-              {/* Foto ou cor sólida de fundo */}
-              {ev.promotionPhotoUrl ? (
-                <Image source={{ uri: ev.promotionPhotoUrl }} style={styles.stripPhoto} resizeMode="cover" />
+              {/* Foto ou cor sólida de fundo — prefere foto de promoção, cai para foto do evento */}
+              {(ev.promotionPhotoUrl ?? ev.photoUrl) ? (
+                <Image source={{ uri: (ev.promotionPhotoUrl ?? ev.photoUrl)! }} style={styles.stripPhoto} resizeMode="cover" />
               ) : (
                 <View style={[styles.stripPhoto, { backgroundColor: tierConfig?.pinColor ?? meta.color, alignItems: 'center', justifyContent: 'center' }]}>
                   <Text style={{ fontSize: 32 }}>{meta.emoji}</Text>
