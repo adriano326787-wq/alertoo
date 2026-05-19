@@ -55,23 +55,42 @@ function EventCard({
   const isPromoted = !!(event.promotionTier && event.promotionEndDate && event.promotionEndDate > Date.now());
   const tierConfig = isPromoted ? PROMOTION_TIERS[event.promotionTier!] : null;
 
+  // Foto: prefere foto de promoção, cai para foto padrão do evento
+  const photoUri = event.promotionPhotoUrl ?? event.photoUrl ?? null;
+
   return (
     <TouchableOpacity
       style={[
         styles.card,
         { borderLeftColor: isPromoted ? tierConfig!.pinColor : meta.color },
         isPromoted && styles.promotedCard,
+        photoUri ? styles.cardWithPhoto : null,
       ]}
       activeOpacity={0.92}
       onPress={() => onOpenComments(event)}
     >
-      {/* Badge de promoção */}
-      {isPromoted && tierConfig && (
-        <View style={[styles.featuredBadge, { backgroundColor: tierConfig.pinColor + '22', borderColor: tierConfig.pinColor + '55' }]}>
-          <Text style={[styles.featuredBadgeText, { color: tierConfig.pinColor }]}>
-            {tierConfig.emoji} {tTier(tierConfig.id)}
-          </Text>
+      {/* Foto do evento — aparece no topo quando disponível */}
+      {photoUri ? (
+        <View style={styles.cardPhotoWrap}>
+          <Image source={{ uri: photoUri }} style={styles.cardPhoto} resizeMode="cover" />
+          {/* Overlay com badge de promoção sobre a foto */}
+          {isPromoted && tierConfig && (
+            <View style={[styles.cardPhotoTierBadge, { backgroundColor: tierConfig.pinColor }]}>
+              <Text style={styles.cardPhotoTierText}>
+                {tierConfig.emoji} {tTier(tierConfig.id)}
+              </Text>
+            </View>
+          )}
         </View>
+      ) : (
+        /* Badge de promoção sem foto — aparece acima do header */
+        isPromoted && tierConfig && (
+          <View style={[styles.featuredBadge, { backgroundColor: tierConfig.pinColor + '22', borderColor: tierConfig.pinColor + '55' }]}>
+            <Text style={[styles.featuredBadgeText, { color: tierConfig.pinColor }]}>
+              {tierConfig.emoji} {tTier(tierConfig.id)}
+            </Text>
+          </View>
+        )
       )}
 
       <View style={styles.cardHeader}>
@@ -440,7 +459,21 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff', borderRadius: rw(16), padding: rw(14), borderLeftWidth: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3,
+    overflow: 'hidden',
   },
+  cardWithPhoto: { paddingTop: 0 },
+  // Margem negativa nas laterais e topo para que a foto sangre até as bordas do card
+  cardPhotoWrap: {
+    height: rh(180), position: 'relative',
+    marginHorizontal: -rw(14), marginTop: 0,
+    marginBottom: rh(4),
+  },
+  cardPhoto: { width: '100%', height: '100%' },
+  cardPhotoTierBadge: {
+    position: 'absolute', top: 10, left: 10,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+  },
+  cardPhotoTierText: { fontSize: rf(11), fontWeight: '800', color: '#fff' },
   featuredCard: {
     borderLeftColor: '#F9A825',
     shadowColor: '#F9A825', shadowOpacity: 0.22, shadowRadius: 10, elevation: 5,
