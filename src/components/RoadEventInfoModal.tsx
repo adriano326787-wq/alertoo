@@ -9,7 +9,7 @@
 import React, { useState } from 'react';
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
 import { getCurrentUserId } from '../services/authService';
-import { timeAgo, timeLeft } from '../utils/time';
+import { timeAgo, timeLeft, timeLeftShort } from '../utils/time';
 import { ShareSheet } from './ShareSheet';
 import { NavigationModal } from './NavigationModal';
 import { BottomSheetCard, SheetAction } from './ui/BottomSheetCard';
@@ -51,7 +51,7 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
   const stats = event ? [
     { icon: '✓', value: event.confirmations, label: t('confirm') ?? 'Confirma' },
     { icon: '✗', value: event.denials, label: t('deny') ?? 'Nega' },
-    { icon: '⏱', value: timeLeft(event.expiresAt).replace(/[^0-9hm]/g, '') || '—', label: 'Resta' },
+    { icon: '⏱', value: timeLeftShort(event.expiresAt), label: 'Resta' },
   ] : undefined;
 
   // Quick actions: confirmar, negar, navegar, compartilhar
