@@ -119,10 +119,12 @@ export async function createPromotion(params: {
   userId: string;
   eventId: string;
   tier: PromotionTier;
-  photoUrl: string | null;
-  skipCreditCheck?: boolean; // usado por admins (créditos infinitos)
+  photoUrl: string | null;       // legacy (primeira foto)
+  photoUrls?: string[];          // array completo de fotos
+  skipCreditCheck?: boolean;     // usado por admins (créditos infinitos)
 }): Promise<ActivePromotion> {
-  const { userId, eventId, tier, photoUrl, skipCreditCheck = false } = params;
+  const { userId, eventId, tier, photoUrl, photoUrls, skipCreditCheck = false } = params;
+  const allPhotoUrls = photoUrls && photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : []);
   const config = PROMOTION_TIERS[tier];
 
   // Verifica e debita créditos (admins pulam essa etapa)
@@ -161,7 +163,8 @@ export async function createPromotion(params: {
     isFeatured: config.showFeatured,
     promotionTier: tier,
     promotionEndDate: Timestamp.fromMillis(endDate),
-    promotionPhotoUrl: photoUrl ?? null,
+    promotionPhotoUrl: allPhotoUrls[0] ?? null,       // primeira foto (legacy)
+    promotionPhotoUrls: allPhotoUrls.length > 0 ? allPhotoUrls : null,
   });
 
   return {

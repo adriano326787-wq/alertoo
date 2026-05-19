@@ -23,7 +23,8 @@ export interface EntertainmentEvent {
   photoUrl?: string | null;
   promotionTier?: 'bronze' | 'prata' | 'ouro' | null;
   promotionEndDate?: number | null; // unix ms
-  promotionPhotoUrl?: string | null; // foto da promoção (substitui photoUrl quando promovido)
+  promotionPhotoUrl?: string | null;  // primeira foto (legacy + compatibilidade com pins/cards)
+  promotionPhotoUrls?: string[] | null; // todas as fotos da promoção (bronze≤2, prata≤3, ouro≤5)
 }
 
 export interface EventComment {

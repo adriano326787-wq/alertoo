@@ -92,6 +92,7 @@ function docToEvent(d: QueryDocumentSnapshot<DocumentData>): EntertainmentEvent 
       ? (data.promotionEndDate as Timestamp).toMillis()
       : null,
     promotionPhotoUrl: data.promotionPhotoUrl ?? null,
+    promotionPhotoUrls: data.promotionPhotoUrls ?? null,
     photoUrl: data.photoUrl ?? null,
   };
 }

@@ -38,7 +38,7 @@ export function PromoteEventModal({
   const t = useT();
   const { top } = useSafeAreaInsets();
   const [selectedTier, setSelectedTier] = useState<PromotionTier>('bronze');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUris, setPhotoUris] = useState<string[]>([]); // até maxPhotos por tier
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
@@ -64,21 +64,36 @@ export function PromoteEventModal({
     event.promotionEndDate > Date.now()
   );
 
-  async function handlePickPhoto() {
+  const maxPhotos = PROMOTION_TIERS[selectedTier].maxPhotos;
+
+  // Ao mudar o tier, trunca fotos extras se o novo tier tiver menos slots
+  useEffect(() => {
+    setPhotoUris((prev) => prev.slice(0, PROMOTION_TIERS[selectedTier].maxPhotos));
+  }, [selectedTier]);
+
+  async function handlePickPhoto(index: number) {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permissão necessária', 'Precisamos de acesso à sua galeria para escolher a foto.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], // expo-image-picker 17+: array de strings
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
+      setPhotoUris((prev) => {
+        const next = [...prev];
+        next[index] = result.assets[0].uri;
+        return next;
+      });
     }
+  }
+
+  function handleRemovePhoto(index: number) {
+    setPhotoUris((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handlePromote() {
@@ -93,23 +108,25 @@ export function PromoteEventModal({
 
     try {
       const userId = getCurrentUserId();
-      let photoUrl: string | null = null;
+      const uploadedUrls: string[] = [];
 
-      // Upload da foto se selecionada
-      if (photoUri) {
-        photoUrl = await uploadPromotionPhoto(
+      // Upload de cada foto sequencialmente com progresso total
+      for (let i = 0; i < photoUris.length; i++) {
+        const url = await uploadPromotionPhoto(
           userId,
           event.id,
-          photoUri,
-          setUploadProgress,
+          photoUris[i],
+          (pct) => setUploadProgress(Math.round(((i + pct / 100) / photoUris.length) * 100)),
         );
+        uploadedUrls.push(url);
       }
 
       await createPromotion({
         userId,
         eventId: event.id,
         tier: selectedTier,
-        photoUrl,
+        photoUrl: uploadedUrls[0] ?? null,
+        photoUrls: uploadedUrls,
         skipCreditCheck: isAdmin,
       });
 
@@ -133,7 +150,7 @@ export function PromoteEventModal({
 
   function handleClose() {
     setSelectedTier('bronze');
-    setPhotoUri(null);
+    setPhotoUris([]);
     setUploadProgress(0);
     onClose();
   }
@@ -172,29 +189,54 @@ export function PromoteEventModal({
               )}
             </View>
 
-            {/* Seção 1: Foto */}
-            <Text style={styles.sectionTitle}>{t('promo_photo_section')}</Text>
-            <TouchableOpacity style={styles.photoBox} onPress={handlePickPhoto} activeOpacity={0.8}>
-              {photoUri ? (
-                <>
-                  <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-                  <View style={styles.photoOverlay}>
-                    <Text style={styles.photoOverlayText}>{t('promo_change_photo')}</Text>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.photoIcon}>📷</Text>
-                  <Text style={styles.photoLabel}>{t('promo_add_photo')}</Text>
-                  <Text style={styles.photoHint}>{t('promo_photo_hint')}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            {photoUri && (
-              <TouchableOpacity onPress={() => setPhotoUri(null)} style={styles.removePhoto}>
-                <Text style={styles.removePhotoText}>{t('promo_remove_photo')}</Text>
-              </TouchableOpacity>
-            )}
+            {/* Seção 1: Fotos (até maxPhotos por tier) */}
+            <View style={styles.photoSectionHeader}>
+              <Text style={styles.sectionTitle}>{t('promo_photo_section')}</Text>
+              <View style={[styles.photoCountChip, { backgroundColor: tierConfig.pinColor + '33', borderColor: tierConfig.pinColor }]}>
+                <Text style={[styles.photoCountText, { color: tierConfig.pinColor }]}>
+                  {tierConfig.emoji} {photoUris.length}/{maxPhotos} foto{maxPhotos !== 1 ? 's' : ''}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.photoGrid}>
+              {Array.from({ length: maxPhotos }).map((_, i) => {
+                const uri = photoUris[i];
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.photoSlot, uri && styles.photoSlotFilled]}
+                    onPress={() => handlePickPhoto(i)}
+                    activeOpacity={0.8}
+                  >
+                    {uri ? (
+                      <>
+                        <Image source={{ uri }} style={styles.photoSlotImage} />
+                        <TouchableOpacity
+                          style={styles.photoSlotRemove}
+                          onPress={() => handleRemovePhoto(i)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={styles.photoSlotRemoveText}>✕</Text>
+                        </TouchableOpacity>
+                        {i === 0 && (
+                          <View style={styles.photoSlotPrimaryBadge}>
+                            <Text style={styles.photoSlotPrimaryText}>Capa</Text>
+                          </View>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.photoSlotIcon}>📷</Text>
+                        <Text style={styles.photoSlotLabel}>
+                          {i === 0 ? 'Foto capa' : `Foto ${i + 1}`}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             {/* Seção 2: Tier */}
             <Text style={styles.sectionTitle}>{t('promo_tier_section')}</Text>
@@ -364,22 +406,40 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8, marginBottom: 12, marginTop: 4,
   },
 
-  photoBox: {
-    height: 160, borderRadius: 14, borderWidth: 2, borderStyle: 'dashed',
-    borderColor: '#ddd', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#fafafa', marginBottom: 8, overflow: 'hidden',
+  // ─── Fotos múltiplas ──────────────────────────────────────────────────────────
+  photoSectionHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10,
   },
-  photoPreview: { width: '100%', height: '100%', position: 'absolute' },
-  photoOverlay: {
-    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)',
+  photoCountChip: {
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1.5,
+  },
+  photoCountText: { fontSize: 12, fontWeight: '800' },
+  photoGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16,
+  },
+  photoSlot: {
+    width: '47%', aspectRatio: 16 / 9,
+    borderRadius: 10, borderWidth: 2, borderStyle: 'dashed',
+    borderColor: '#ddd', backgroundColor: '#fafafa',
+    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  photoSlotFilled: { borderStyle: 'solid', borderColor: 'transparent' },
+  photoSlotImage: { width: '100%', height: '100%', position: 'absolute' },
+  photoSlotRemove: {
+    position: 'absolute', top: 4, right: 4,
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center', justifyContent: 'center',
   },
-  photoOverlayText: { fontSize: 16, color: '#fff', fontWeight: '700' },
-  photoIcon: { fontSize: 36, marginBottom: 8 },
-  photoLabel: { fontSize: 14, fontWeight: '700', color: '#555' },
-  photoHint: { fontSize: 11, color: '#aaa', marginTop: 4 },
-  removePhoto: { alignSelf: 'flex-end', marginBottom: 16, paddingVertical: 4 },
-  removePhotoText: { fontSize: 13, color: '#E53935' },
+  photoSlotRemoveText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  photoSlotPrimaryBadge: {
+    position: 'absolute', bottom: 4, left: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+  },
+  photoSlotPrimaryText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  photoSlotIcon: { fontSize: 24, marginBottom: 4 },
+  photoSlotLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
 
   tiers: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   tierCard: {

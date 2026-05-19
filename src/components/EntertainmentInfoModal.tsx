@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, Dimensions } from 'react-native';
 import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo } from '../utils/time';
@@ -36,6 +36,14 @@ export function EntertainmentInfoModal({
   const [navVisible, setNavVisible] = useState(false);
   const isFavorite = useFavoritesStore((s) => event ? s.isFavorite(event.id) : false);
   const toggleFav = useFavoritesStore((s) => s.toggle);
+
+  // Galeria de fotos: usa promotionPhotoUrls se disponível, senão cai para fotos individuais
+  const allPhotos: string[] = event
+    ? (event.promotionPhotoUrls && event.promotionPhotoUrls.length > 0
+        ? event.promotionPhotoUrls
+        : [event.promotionPhotoUrl ?? event.photoUrl].filter(Boolean) as string[])
+    : [];
+  const hasMultiplePhotos = allPhotos.length > 1;
 
   // Deriva os dados do evento apenas quando disponível
   const meta = event
@@ -105,7 +113,7 @@ export function EntertainmentInfoModal({
       <BottomSheetCard
         visible={!!event}
         onClose={onClose}
-        imageUrl={event ? (event.promotionPhotoUrl ?? event.photoUrl ?? undefined) : undefined}
+        imageUrl={allPhotos[0] ?? undefined}
         imageHeight={200}
         imageOverlay={heroOverlay}
         tag={tag}
@@ -120,6 +128,25 @@ export function EntertainmentInfoModal({
           onPress: () => setNavVisible(true),
         } : undefined}
         quickActions={quickActions}
+        footer={hasMultiplePhotos ? (
+          <View style={styles.galleryWrap}>
+            <Text style={styles.galleryLabel}>📸 Mais fotos</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.galleryScroll}
+            >
+              {allPhotos.map((uri, i) => (
+                <Image
+                  key={i}
+                  source={{ uri }}
+                  style={styles.galleryThumb}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+          </View>
+        ) : undefined}
       />
 
       {/* Sub-modais — só renderizados quando event existe */}
@@ -157,5 +184,23 @@ const styles = StyleSheet.create({
   },
   heroChipText: {
     color: '#fff', fontSize: 11, fontWeight: '900', letterSpacing: 0.4,
+  },
+  galleryWrap: {
+    marginTop: 8,
+  },
+  galleryLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 8,
+  },
+  galleryScroll: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  galleryThumb: {
+    width: 120,
+    height: 80,
+    borderRadius: 8,
   },
 });

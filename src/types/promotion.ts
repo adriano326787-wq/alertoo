@@ -11,6 +11,7 @@ export interface PromotionTierConfig {
   pinScale: number;       // multiplicador do tamanho do pin
   animated: boolean;      // pin pulsante (Ouro)
   showFeatured: boolean;  // seção destaque no topo da lista
+  maxPhotos: number;      // quantas fotos o tier permite (bronze=2, prata=3, ouro=5)
   description: string[];  // lista de benefícios
 }
 
@@ -25,6 +26,7 @@ export const PROMOTION_TIERS: Record<PromotionTier, PromotionTierConfig> = {
     pinScale: 1.2,
     animated: false,
     showFeatured: false,
+    maxPhotos: 2,
     description: [
       'promo_bronze_desc_1',
       'promo_bronze_desc_2',
@@ -41,6 +43,7 @@ export const PROMOTION_TIERS: Record<PromotionTier, PromotionTierConfig> = {
     pinScale: 1.4,
     animated: false,
     showFeatured: true,
+    maxPhotos: 3,
     description: [
       'promo_prata_desc_1',
       'promo_prata_desc_2',
@@ -58,6 +61,7 @@ export const PROMOTION_TIERS: Record<PromotionTier, PromotionTierConfig> = {
     pinScale: 1.6,
     animated: true,
     showFeatured: true,
+    maxPhotos: 5,
     description: [
       'promo_ouro_desc_1',
       'promo_ouro_desc_2',
