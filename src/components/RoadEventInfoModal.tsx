@@ -1,8 +1,9 @@
 /**
  * RoadEventInfoModal — refeito com BottomSheetCard.
  *
- * Para eventos de estrada (alertas), trata como notification card
- * com botões de confirmar/negar bem destacados.
+ * Mantém o componente SEMPRE montado e controla o BottomSheetCard via
+ * `visible={!!event}`, evitando que o desmonte imediato interrompa a
+ * animação de saída quando o X é pressionado.
  */
 
 import React, { useState } from 'react';
@@ -31,31 +32,30 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
   const isFavorite = useFavoritesStore((s) => event ? s.isFavorite(event.id) : false);
   const toggleFav = useFavoritesStore((s) => s.toggle);
 
-  if (!event) return null;
-
-  const meta = EVENT_CATEGORIES[event.category];
+  const meta = event ? EVENT_CATEGORIES[event.category] : null;
   const myUid = getCurrentUserId();
-  const alreadyVoted = event.voters.includes(myUid);
-  const isOwner = event.userId === myUid;
+  const alreadyVoted = event ? event.voters.includes(myUid) : false;
+  const isOwner = event ? event.userId === myUid : false;
   const blocked = alreadyVoted || isOwner;
-  const location = [event.cityName, event.stateUF].filter(Boolean).join(' — ');
+  const location = event ? [event.cityName, event.stateUF].filter(Boolean).join(' — ') : '';
 
   // Tag — owner ou já votou
-  const tag = isOwner
-    ? { label: `📌 ${t('own_event').toUpperCase()}`, color: palette.brand[500] }
-    : alreadyVoted
-      ? { label: `✓ ${t('road_voted').toUpperCase()}`, color: palette.live }
-      : undefined;
+  const tag = !event ? undefined :
+    isOwner
+      ? { label: `📌 ${t('own_event').toUpperCase()}`, color: palette.brand[500] }
+      : alreadyVoted
+        ? { label: `✓ ${t('road_voted').toUpperCase()}`, color: palette.live }
+        : undefined;
 
   // Stats: confirmações + negações + tempo restante
-  const stats = [
+  const stats = event ? [
     { icon: '✓', value: event.confirmations, label: t('confirm') ?? 'Confirma' },
     { icon: '✗', value: event.denials, label: t('deny') ?? 'Nega' },
     { icon: '⏱', value: timeLeft(event.expiresAt).replace(/[^0-9hm]/g, '') || '—', label: 'Resta' },
-  ];
+  ] : undefined;
 
   // Quick actions: confirmar, negar, navegar, compartilhar
-  const quickActions: SheetAction[] = [
+  const quickActions: SheetAction[] = event && meta ? [
     {
       icon: '✓',
       label: 'Confirmar',
@@ -85,46 +85,51 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
       label: t('share'),
       onPress: () => setShareVisible(true),
     },
-  ];
+  ] : [];
 
   return (
     <>
+      {/* BottomSheetCard SEMPRE montado — visible controla abertura/fechamento */}
       <BottomSheetCard
-        visible
+        visible={!!event}
         onClose={onClose}
         tag={tag}
-        category={`${meta.emoji} ${tRoadCat(event.category).toUpperCase()}`}
-        title={event.title}
+        category={event && meta ? `${meta.emoji} ${tRoadCat(event.category).toUpperCase()}` : ''}
+        title={event?.title ?? ''}
         subtitle={location}
-        meta={`${timeAgo(event.createdAt)}  ·  ${timeLeft(event.expiresAt)}`}
-        description={event.description}
+        meta={event ? `${timeAgo(event.createdAt)}  ·  ${timeLeft(event.expiresAt)}` : ''}
+        description={event?.description}
         stats={stats}
-        primaryAction={{
+        primaryAction={event ? {
           icon: '🧭',
           label: t('navigate_gps') || 'Como chegar',
           onPress: () => setNavVisible(true),
-        }}
+        } : undefined}
         quickActions={quickActions}
       />
 
-      <ShareSheet
-        visible={shareVisible}
-        onClose={() => setShareVisible(false)}
-        title={event.title}
-        description={event.description}
-        category={`${meta.emoji} ${tRoadCat(event.category)}`}
-        location={location}
-        eventId={event.id}
-        eventType="road"
-      />
+      {event && meta && (
+        <>
+          <ShareSheet
+            visible={shareVisible}
+            onClose={() => setShareVisible(false)}
+            title={event.title}
+            description={event.description}
+            category={`${meta.emoji} ${tRoadCat(event.category)}`}
+            location={location}
+            eventId={event.id}
+            eventType="road"
+          />
 
-      <NavigationModal
-        visible={navVisible}
-        destination={{ latitude: event.latitude, longitude: event.longitude }}
-        destinationLabel={event.title}
-        destinationEmoji={meta.emoji}
-        onClose={() => setNavVisible(false)}
-      />
+          <NavigationModal
+            visible={navVisible}
+            destination={{ latitude: event.latitude, longitude: event.longitude }}
+            destinationLabel={event.title}
+            destinationEmoji={meta.emoji}
+            onClose={() => setNavVisible(false)}
+          />
+        </>
+      )}
     </>
   );
 }

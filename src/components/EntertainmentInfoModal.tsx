@@ -1,8 +1,9 @@
 /**
  * EntertainmentInfoModal — sheet inferior premium.
  *
- * Apenas eventos promovidos (via PromoteEventModal) recebem destaque.
- * Removida toda a estrutura de "featured" admin.
+ * Mantém o componente SEMPRE montado e controla o BottomSheetCard via
+ * `visible={!!event}`, evitando que o desmonte imediato interrompa a
+ * animação de saída quando o X é pressionado.
  */
 
 import React, { useState } from 'react';
@@ -36,23 +37,25 @@ export function EntertainmentInfoModal({
   const isFavorite = useFavoritesStore((s) => event ? s.isFavorite(event.id) : false);
   const toggleFav = useFavoritesStore((s) => s.toggle);
 
-  if (!event) return null;
-
-  const meta = ENTERTAINMENT_CATEGORIES[event.category] ?? { emoji: '📍', color: '#607D8B', label: event.category };
+  // Deriva os dados do evento apenas quando disponível
+  const meta = event
+    ? ENTERTAINMENT_CATEGORIES[event.category] ?? { emoji: '📍', color: '#607D8B', label: event.category }
+    : null;
   const myUid = getCurrentUserId() ?? '';
-  const likes = Array.isArray(event.likes) ? event.likes : [];
-  const liked = likes.includes(myUid);
-  const isOwner = event.userId === myUid;
-  const isPromoted = !!(event.promotionTier && event.promotionEndDate && event.promotionEndDate > Date.now());
-  const tierConfig = isPromoted && event.promotionTier ? PROMOTION_TIERS[event.promotionTier] : null;
-  const location = [event.cityName, event.stateUF].filter(Boolean).join(' — ');
+  const likes = event && Array.isArray(event.likes) ? event.likes : [];
+  const liked = event ? likes.includes(myUid) : false;
+  const isOwner = event ? event.userId === myUid : false;
+  const isPromoted = !!(event?.promotionTier && event?.promotionEndDate && event.promotionEndDate > Date.now());
+  const tierConfig = isPromoted && event?.promotionTier ? PROMOTION_TIERS[event.promotionTier] : null;
+  const location = event ? [event.cityName, event.stateUF].filter(Boolean).join(' — ') : '';
 
   // Tag superior: tier promovido OU dono do evento
-  const tag = isPromoted && tierConfig
-    ? { label: `${tierConfig.emoji} ${tTier(tierConfig.id).toUpperCase()}`, color: tierConfig.pinColor }
-    : isOwner
-      ? { label: `📌 ${t('own_event').toUpperCase()}`, color: palette.brand[500] }
-      : undefined;
+  const tag = !event || !meta ? undefined :
+    isPromoted && tierConfig
+      ? { label: `${tierConfig.emoji} ${tTier(tierConfig.id).toUpperCase()}`, color: tierConfig.pinColor }
+      : isOwner
+        ? { label: `📌 ${t('own_event').toUpperCase()}`, color: palette.brand[500] }
+        : undefined;
 
   // Overlay sobre a imagem hero (chip do tier flutuante)
   const heroOverlay = isPromoted && tierConfig ? (
@@ -61,82 +64,87 @@ export function EntertainmentInfoModal({
     </View>
   ) : null;
 
-  // Quick actions
-  const quickActions: SheetAction[] = [];
-  quickActions.push({
-    icon: liked ? '❤️' : '🤍',
-    label: `${likes.length}`,
-    onPress: () => { if (!isOwner) { onLike(event.id); onClose(); } },
-    disabled: isOwner,
-  });
-  quickActions.push({
-    icon: '💬',
-    label: `${event.commentCount}`,
-    onPress: () => { onClose(); onComment(event); },
-  });
-  quickActions.push({
-    icon: isFavorite ? '⭐' : '☆',
-    label: isFavorite ? t('saved') || 'Salvo' : t('save') || 'Salvar',
-    onPress: () => toggleFav({
-      eventId: event.id,
-      eventType: 'entertainment',
-      title: event.title,
-      emoji: meta.emoji,
-    }),
-  });
-  quickActions.push({
-    icon: '↗',
-    label: t('share'),
-    onPress: () => setShareVisible(true),
-  });
-  if (onGoToMap) {
-    quickActions.push({
+  // Quick actions — só montadas quando event existe
+  const quickActions: SheetAction[] = event && meta ? [
+    {
+      icon: liked ? '❤️' : '🤍',
+      label: `${likes.length}`,
+      onPress: () => { if (!isOwner) onLike(event.id); },
+      disabled: isOwner,
+    },
+    {
+      icon: '💬',
+      label: `${event.commentCount}`,
+      onPress: () => { onClose(); onComment(event); },
+    },
+    {
+      icon: isFavorite ? '⭐' : '☆',
+      label: isFavorite ? t('saved') || 'Salvo' : t('save') || 'Salvar',
+      onPress: () => toggleFav({
+        eventId: event.id,
+        eventType: 'entertainment',
+        title: event.title,
+        emoji: meta.emoji,
+      }),
+    },
+    {
+      icon: '↗',
+      label: t('share'),
+      onPress: () => setShareVisible(true),
+    },
+    ...(onGoToMap ? [{
       icon: '🗺️',
       label: t('go_to_event'),
       onPress: () => { onClose(); onGoToMap(event); },
-    });
-  }
+    }] : []),
+  ] : [];
 
   return (
     <>
+      {/* BottomSheetCard SEMPRE montado — visible controla abertura/fechamento */}
       <BottomSheetCard
-        visible
+        visible={!!event}
         onClose={onClose}
-        imageUrl={event.promotionPhotoUrl ?? event.photoUrl ?? undefined}
+        imageUrl={event ? (event.promotionPhotoUrl ?? event.photoUrl ?? undefined) : undefined}
         imageHeight={200}
         imageOverlay={heroOverlay}
         tag={tag}
-        category={`${meta.emoji} ${tEntCat(event.category).toUpperCase()}`}
-        title={event.title}
+        category={event && meta ? `${meta.emoji} ${tEntCat(event.category).toUpperCase()}` : ''}
+        title={event?.title ?? ''}
         subtitle={location}
-        meta={timeAgo(event.createdAt)}
-        description={event.description}
-        primaryAction={{
+        meta={event ? timeAgo(event.createdAt) : ''}
+        description={event?.description}
+        primaryAction={event ? {
           icon: '🧭',
           label: t('navigate_gps') || 'Como chegar',
           onPress: () => setNavVisible(true),
-        }}
+        } : undefined}
         quickActions={quickActions}
       />
 
-      <ShareSheet
-        visible={shareVisible}
-        onClose={() => setShareVisible(false)}
-        title={event.title}
-        description={event.description}
-        category={`${meta.emoji} ${tEntCat(event.category)}`}
-        location={location}
-        eventId={event.id}
-        eventType="entertainment"
-      />
+      {/* Sub-modais — só renderizados quando event existe */}
+      {event && meta && (
+        <>
+          <ShareSheet
+            visible={shareVisible}
+            onClose={() => setShareVisible(false)}
+            title={event.title}
+            description={event.description}
+            category={`${meta.emoji} ${tEntCat(event.category)}`}
+            location={location}
+            eventId={event.id}
+            eventType="entertainment"
+          />
 
-      <NavigationModal
-        visible={navVisible}
-        destination={{ latitude: event.latitude, longitude: event.longitude }}
-        destinationLabel={event.title}
-        destinationEmoji={meta.emoji}
-        onClose={() => setNavVisible(false)}
-      />
+          <NavigationModal
+            visible={navVisible}
+            destination={{ latitude: event.latitude, longitude: event.longitude }}
+            destinationLabel={event.title}
+            destinationEmoji={meta.emoji}
+            onClose={() => setNavVisible(false)}
+          />
+        </>
+      )}
     </>
   );
 }
