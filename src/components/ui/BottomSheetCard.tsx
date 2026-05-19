@@ -158,19 +158,6 @@ export function BottomSheetCard({
 
       {/* Sheet */}
       <Animated.View style={[styles.sheetWrap, { transform: [{ translateY }] }]}>
-        {/* Close button FORA do overflow:hidden — garante recebimento de toque no Android */}
-        <Pressable
-          onPress={handleClose}
-          hitSlop={16}
-          style={({ pressed }) => [
-            styles.closeBtnFixed,
-            { backgroundColor: theme.bg.base, borderColor: theme.border.default },
-            pressed && { opacity: 0.6, transform: [{ scale: 0.92 }] },
-          ]}
-        >
-          <Text style={[styles.closeBtnText, { color: theme.text.primary }]}>✕</Text>
-        </Pressable>
-
         <View style={[
           styles.sheet,
           {
@@ -360,6 +347,19 @@ export function BottomSheetCard({
             </View>
           </ScrollView>
         </View>
+
+        {/* Close button renderizado DEPOIS do sheet — fica por cima e recebe os toques */}
+        <Pressable
+          onPress={handleClose}
+          hitSlop={16}
+          style={({ pressed }) => [
+            styles.closeBtnFixed,
+            { backgroundColor: theme.bg.base, borderColor: theme.border.default },
+            pressed && { opacity: 0.6, transform: [{ scale: 0.92 }] },
+          ]}
+        >
+          <Text style={[styles.closeBtnText, { color: theme.text.primary }]}>✕</Text>
+        </Pressable>
       </Animated.View>
     </Modal>
   );
