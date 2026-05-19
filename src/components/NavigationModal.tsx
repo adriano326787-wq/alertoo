@@ -118,10 +118,21 @@ export function NavigationModal({
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [followUser, setFollowUser] = useState(false); // só ativa na fase navigating
+  const [followUser, setFollowUser] = useState(false);
   const [showStepsList, setShowStepsList] = useState(false);
   const [arrived, setArrived] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+
+  // ─── Posição interpolada (30 fps entre GPS fixes) ────────────────────────
+  // Evita o "pulo" de ~10 m a cada 1 segundo de GPS.
+  const [markerPos, setMarkerPos] = useState<Coords | null>(initialOrigin);
+  const interpFromRef  = useRef<Coords | null>(null);
+  const interpTargetRef = useRef<Coords | null>(null);
+  const interpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Rota percorrida (para colorir em azul mais claro)
+  const [traveledPolyline, setTraveledPolyline] = useState<Coords[]>([]);
+  const traveledRef = useRef<Coords[]>([]);
 
   // ─── Reset ao abrir/fechar
   useEffect(() => {
@@ -141,6 +152,49 @@ export function NavigationModal({
   useEffect(() => {
     return () => { try { Speech.stop(); } catch {} };
   }, []);
+
+  // ─── Interpolação suave entre GPS fixes (30 fps) ──────────────────────────
+  useEffect(() => {
+    if (!userPos) return;
+
+    const target = userPos;
+    const from   = interpFromRef.current ?? target;
+    const t0     = Date.now();
+    // Interpola em 850 ms (ligeiramente abaixo do intervalo de 1 s do GPS)
+    const DURATION = 850;
+
+    if (interpTimerRef.current) clearInterval(interpTimerRef.current);
+
+    interpTimerRef.current = setInterval(() => {
+      const t = Math.min(1, (Date.now() - t0) / DURATION);
+      const lat = from.latitude  + (target.latitude  - from.latitude)  * t;
+      const lon = from.longitude + (target.longitude - from.longitude) * t;
+      const pos: Coords = { latitude: lat, longitude: lon };
+      setMarkerPos({ ...pos });
+
+      if (t >= 1) {
+        interpFromRef.current = target;
+        clearInterval(interpTimerRef.current!);
+        // Acrescenta ponto à rota percorrida
+        traveledRef.current = [...traveledRef.current, target];
+        if (traveledRef.current.length > 500) traveledRef.current.shift(); // limite memória
+        setTraveledPolyline([...traveledRef.current]);
+      }
+    }, 33); // ~30 fps
+
+    return () => { if (interpTimerRef.current) clearInterval(interpTimerRef.current); };
+  }, [userPos]);
+
+  // Limpa tudo ao fechar
+  useEffect(() => {
+    if (!visible) {
+      if (interpTimerRef.current) clearInterval(interpTimerRef.current);
+      traveledRef.current = [];
+      setTraveledPolyline([]);
+      interpFromRef.current  = null;
+      interpTargetRef.current = null;
+    }
+  }, [visible]);
 
   // ─── GPS watch
   useEffect(() => {
@@ -270,19 +324,19 @@ export function NavigationModal({
     }
   }, [userPos, route, arrived, voiceEnabled, phase]);
 
-  // ─── Câmera follow (só na fase navigating) — animação suave 300ms
+  // ─── Câmera follow — 200ms, usa posição interpolada para suavidade máxima
   useEffect(() => {
-    if (phase !== 'navigating' || !followUser || !userPos || !mapRef.current) return;
+    if (phase !== 'navigating' || !followUser || !markerPos || !mapRef.current) return;
     mapRef.current.animateCamera(
       {
-        center: userPos,
+        center: markerPos,
         zoom: 17.5,
         pitch: 55,
         heading: userHeading,
       },
-      { duration: 300 }
+      { duration: 200 }
     );
-  }, [userPos, userHeading, followUser, phase]);
+  }, [markerPos, userHeading, followUser, phase]);
 
   // ─── Limpar timer de auto-recentrar ao desmontar
   useEffect(() => {
@@ -426,23 +480,27 @@ export function NavigationModal({
             }
           }}
         >
-          {/* MARCADOR DO USUÁRIO — seta rotativa com círculo */}
-          {userPos && (
+          {/* MARCADOR DO USUÁRIO — seta de navegação com interpolação */}
+          {markerPos && (
             <Marker
-              coordinate={userPos}
-              anchor={{ x: 0.5, y: 0.5 }}
+              coordinate={markerPos}
+              anchor={{ x: 0.5, y: 0.6 }}
               rotation={userHeading}
               flat
-              tracksViewChanges={false}
-              zIndex={100}
+              tracksViewChanges   // sempre atualiza view (heading + pos)
+              zIndex={200}
             >
               <View style={styles.arrowMarker}>
-                {/* Sombra/halo externo */}
+                {/* Halo de precisão pulsante */}
                 <View style={styles.arrowHalo} />
-                {/* Círculo principal */}
-                <View style={styles.arrowCircle}>
-                  {/* Triângulo (seta) apontando para cima */}
-                  <View style={styles.arrowTriangle} />
+                {/* Sombra-cone de direção */}
+                <View style={styles.arrowBeam} />
+                {/* Corpo principal da seta — chevron */}
+                <View style={styles.arrowBody}>
+                  {/* Ponta da seta (triângulo) */}
+                  <View style={styles.arrowTip} />
+                  {/* Base circular */}
+                  <View style={styles.arrowBase} />
                 </View>
               </View>
             </Marker>
@@ -460,13 +518,50 @@ export function NavigationModal({
             </View>
           </Marker>
 
-          {/* ROTA */}
+          {/* ROTA — ainda não percorrida (azul) */}
           {route && route.polyline.length > 0 && (
             <Polyline
               coordinates={route.polyline}
-              strokeWidth={8}
+              strokeWidth={9}
               strokeColor="#1A73E8"
               geodesic
+              lineCap="round"
+              lineJoin="round"
+            />
+          )}
+
+          {/* ROTA — borda branca para dar profundidade */}
+          {route && route.polyline.length > 0 && (
+            <Polyline
+              coordinates={route.polyline}
+              strokeWidth={13}
+              strokeColor="rgba(255,255,255,0.55)"
+              geodesic
+              zIndex={1}
+            />
+          )}
+
+          {/* ROTA — azul por cima da borda */}
+          {route && route.polyline.length > 0 && (
+            <Polyline
+              coordinates={route.polyline}
+              strokeWidth={9}
+              strokeColor="#1A73E8"
+              geodesic
+              zIndex={2}
+              lineCap="round"
+            />
+          )}
+
+          {/* ROTA PERCORRIDA — cinza opaco por cima */}
+          {traveledPolyline.length > 1 && (
+            <Polyline
+              coordinates={traveledPolyline}
+              strokeWidth={9}
+              strokeColor="rgba(150,160,175,0.85)"
+              geodesic
+              zIndex={3}
+              lineCap="round"
             />
           )}
         </MapView>
@@ -720,26 +815,67 @@ const gmShadow = {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#e8eaed' },
 
-  // ─── Seta do usuário
-  arrowMarker: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  // ─── Seta de navegação (chevron Google Maps)
+  arrowMarker: {
+    width: 56, height: 72,
+    alignItems: 'center', justifyContent: 'flex-end',
+  },
+  // Halo de precisão GPS
   arrowHalo: {
-    position: 'absolute', width: 48, height: 48, borderRadius: 24,
-    backgroundColor: 'rgba(26,115,232,0.2)',
+    position: 'absolute',
+    width: 56, height: 56,
+    bottom: 8,
+    borderRadius: 28,
+    backgroundColor: 'rgba(26,115,232,0.18)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(26,115,232,0.35)',
   },
-  arrowCircle: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#1A73E8',
-    borderWidth: 2.5, borderColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
-    elevation: 6,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35, shadowRadius: 4,
-  },
-  arrowTriangle: {
+  // Cone de direção (feixe apontando para frente)
+  arrowBeam: {
+    position: 'absolute',
+    bottom: 28,           // nasce do centro do círculo
     width: 0, height: 0,
-    borderLeftWidth: 7, borderRightWidth: 7, borderBottomWidth: 13,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    borderBottomColor: '#fff', marginTop: -3,
+    borderLeftWidth: 16,
+    borderRightWidth: 16,
+    borderBottomWidth: 36,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: 'rgba(26,115,232,0.22)',
+    transform: [{ rotate: '180deg' }], // aponta para cima (frente)
+  },
+  // Container do corpo da seta
+  arrowBody: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginBottom: 4,
+  },
+  // Ponta triangular — aponta para cima (frente do veículo)
+  arrowTip: {
+    width: 0, height: 0,
+    borderLeftWidth: 11,
+    borderRightWidth: 11,
+    borderBottomWidth: 20,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#1A73E8',
+    // sombra
+    elevation: 8,
+    shadowColor: '#1A73E8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+  },
+  // Base circular (traseira do veículo)
+  arrowBase: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#1A73E8',
+    borderWidth: 3, borderColor: '#fff',
+    marginTop: -5,          // sobrepõe levemente a ponta
+    elevation: 8,
+    shadowColor: '#1A73E8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
   },
 
   // ─── Destino marker
