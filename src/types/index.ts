@@ -34,12 +34,15 @@ export interface EventCategoryMeta {
 }
 
 export const EVENT_CATEGORIES: Record<EventCategory, EventCategoryMeta> = {
-  drunkcheck:  { label: 'Lei Seca',           emoji: '🍺', color: '#00897B', defaultTtlMinutes: 60 },
-  policeblitz: { label: 'Blitz Policial',     emoji: '👮', color: '#3949AB', defaultTtlMinutes: 60 },
-  accident:    { label: 'Acidente',           emoji: '🚗', color: '#E53935', defaultTtlMinutes: 60 },
-  roadwork:    { label: 'Obras',              emoji: '🚧', color: '#FB8C00', defaultTtlMinutes: 60 },
-  flood:       { label: 'Alagamento',         emoji: '🌊', color: '#1E88E5', defaultTtlMinutes: 60 },
-  closure:     { label: 'Interdição',         emoji: '🚫', color: '#8E24AA', defaultTtlMinutes: 60 },
-  traffic:     { label: 'Congestionamento',   emoji: '🐢', color: '#F4511E', defaultTtlMinutes: 60 },
-  hazard:      { label: 'Perigo na via',      emoji: '⚠️', color: '#FFB300', defaultTtlMinutes: 60 },
+  // Eventos que se resolvem rapidamente
+  traffic:     { label: 'Congestionamento',   emoji: '🐢', color: '#F4511E', defaultTtlMinutes: 30  },
+  hazard:      { label: 'Perigo na via',      emoji: '⚠️', color: '#FFB300', defaultTtlMinutes: 45  },
+  accident:    { label: 'Acidente',           emoji: '🚗', color: '#E53935', defaultTtlMinutes: 90  },
+  // Eventos de duração média (blitz, fiscalizações)
+  policeblitz: { label: 'Blitz Policial',     emoji: '👮', color: '#3949AB', defaultTtlMinutes: 180 },
+  drunkcheck:  { label: 'Lei Seca',           emoji: '🍺', color: '#00897B', defaultTtlMinutes: 240 },
+  // Eventos de longa duração (condições climáticas, infraestrutura)
+  flood:       { label: 'Alagamento',         emoji: '🌊', color: '#1E88E5', defaultTtlMinutes: 300 },
+  closure:     { label: 'Interdição',         emoji: '🚫', color: '#8E24AA', defaultTtlMinutes: 720 },
+  roadwork:    { label: 'Obras',              emoji: '🚧', color: '#FB8C00', defaultTtlMinutes: 4320 }, // 72 h
 };

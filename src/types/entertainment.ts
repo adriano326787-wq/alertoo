@@ -1,6 +1,23 @@
 export type EntertainmentCategory = 'bar' | 'restaurant' | 'party' | 'show' | 'festival' | 'club';
 
-export const ENTERTAINMENT_TTL_HOURS = 48;
+/**
+ * TTL por categoria de entretenimento (em horas).
+ *
+ * Eventos de curta duração (show, party, club) expiram mais rápido
+ * para manter o mapa limpo. Festivais duram mais. Bar/restaurante
+ * exibem promoções/destaque do dia por ~36 h.
+ *
+ * Eventos promovidos têm expiresAt estendido até o fim da promoção
+ * (ver promotionService.createPromotion).
+ */
+export const ENTERTAINMENT_TTL_HOURS: Record<EntertainmentCategory, number> = {
+  show:       18, // noite do show + manhã seguinte
+  party:      20, // noite da festa + início da manhã
+  club:       20, // mesma lógica de party
+  bar:        36, // destaque de hoje e amanhã
+  restaurant: 36, // idem
+  festival:   72, // cobre fins de semana completos
+};
 
 export interface EntertainmentEvent {
   id: string;

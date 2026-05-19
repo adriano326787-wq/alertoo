@@ -158,13 +158,18 @@ export async function createPromotion(params: {
     creditsUsed: config.creditsRequired,
   });
 
-  // Atualiza o documento do evento com os dados da promoção
+  // Atualiza o documento do evento com os dados da promoção.
+  // IMPORTANTE: estende expiresAt até o fim da promoção — sem isso, o evento
+  // desaparece do mapa após o TTL original (ex: 18 h para show) mesmo com
+  // promoção ativa de 7–30 dias (bug crítico corrigido aqui).
   await updateDoc(doc(db, 'entertainment_events', eventId), {
     isFeatured: config.showFeatured,
     promotionTier: tier,
     promotionEndDate: Timestamp.fromMillis(endDate),
-    promotionPhotoUrl: allPhotoUrls[0] ?? null,       // primeira foto (legacy)
+    promotionPhotoUrl: allPhotoUrls[0] ?? null,
     promotionPhotoUrls: allPhotoUrls.length > 0 ? allPhotoUrls : null,
+    // Garante que o evento fique visível durante toda a promoção
+    expiresAt: Timestamp.fromMillis(endDate),
   });
 
   return {
@@ -240,11 +245,17 @@ export async function getEventActivePromotion(
 
 export async function cancelPromotion(promotionId: string, eventId: string): Promise<void> {
   await updateDoc(doc(db, PROMOTIONS_COL, promotionId), { status: 'expired' });
+
+  // Ao cancelar, reduz expiresAt para "agora + 2 h" (grace period)
+  // para o evento não sumir imediatamente mas também não ficar 30 dias sem promoção.
+  const gracePeriod = Timestamp.fromMillis(Date.now() + 2 * 60 * 60 * 1000);
   await updateDoc(doc(db, 'entertainment_events', eventId), {
     isFeatured: false,
     promotionTier: null,
     promotionEndDate: null,
     promotionPhotoUrl: null,
+    promotionPhotoUrls: null,
+    expiresAt: gracePeriod,
   });
 }
 

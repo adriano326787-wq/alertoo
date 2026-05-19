@@ -216,7 +216,8 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
       throw new Error(`Aguarde ${remaining}s antes de criar outro evento.`);
     }
 
-    const expiresAt = Timestamp.fromMillis(now + ENTERTAINMENT_TTL_HOURS * 60 * 60 * 1000);
+    const ttlHours = ENTERTAINMENT_TTL_HOURS[category] ?? 36;
+    const expiresAt = Timestamp.fromMillis(now + ttlHours * 60 * 60 * 1000);
 
     // 1) Cria o documento sem foto primeiro (rápido — usuário não espera)
     const docRef = await addDoc(collection(db, COLLECTION), {
