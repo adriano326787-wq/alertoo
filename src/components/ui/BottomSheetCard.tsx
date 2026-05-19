@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/useTheme';
 import { palette, radius, spacing, typography, shadow, platformShadow, motion } from '../../theme/tokens';
 
-const { height: SCREEN_H } = Dimensions.get('window');
+const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get('window');
 
 export interface SheetAction {
   icon: string;
@@ -38,9 +38,13 @@ interface Props {
   visible: boolean;
   onClose: () => void;
 
+  /** Uma foto — mantido para compatibilidade retroativa */
   imageUrl?: string | null;
+  /** Múltiplas fotos — habilita carousel com swipe e dots. Tem prioridade sobre imageUrl */
+  imageUrls?: string[];
   imageHeight?: number;
   imageOverlay?: React.ReactNode;
+  onImagePress?: (uri: string) => void;
 
   category?: string;
   title: string;
@@ -59,8 +63,10 @@ export function BottomSheetCard({
   visible,
   onClose,
   imageUrl,
+  imageUrls,
   imageHeight = 180,
   imageOverlay,
+  onImagePress,
   category,
   title,
   subtitle,
@@ -80,6 +86,14 @@ export function BottomSheetCard({
   const [modalVisible, setModalVisible] = useState(false);
   const isAnimatingClose = useRef(false);
 
+  // Carousel state
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const carouselRef = useRef<ScrollView>(null);
+  // Resolve lista de fotos: imageUrls tem prioridade
+  const photos = (imageUrls && imageUrls.length > 0)
+    ? imageUrls
+    : imageUrl ? [imageUrl] : [];
+
   const translateY = useRef(new Animated.Value(SCREEN_H)).current;
   const backdrop   = useRef(new Animated.Value(0)).current;
 
@@ -87,6 +101,8 @@ export function BottomSheetCard({
   useEffect(() => {
     if (visible) {
       isAnimatingClose.current = false;
+      setCarouselIndex(0);
+      carouselRef.current?.scrollTo({ x: 0, animated: false });
       setModalVisible(true);
       // Pequeno delay para garantir que o Modal está montado antes da animação
       requestAnimationFrame(() => {
@@ -172,17 +188,56 @@ export function BottomSheetCard({
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} bounces>
-            {/* HERO IMAGE */}
-            {imageUrl ? (
+            {/* HERO / CAROUSEL */}
+            {photos.length > 0 ? (
               <View style={[styles.heroWrap, { height: imageHeight, backgroundColor: theme.brand.surface }]}>
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={StyleSheet.absoluteFill}
-                  resizeMode="cover"
-                />
+                {/* Scroll horizontal de fotos */}
+                <ScrollView
+                  ref={carouselRef}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  scrollEventThrottle={16}
+                  onMomentumScrollEnd={(e) => {
+                    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+                    setCarouselIndex(idx);
+                  }}
+                  style={{ width: SCREEN_W, height: imageHeight }}
+                >
+                  {photos.map((uri, i) => (
+                    <Pressable
+                      key={i}
+                      onPress={() => onImagePress?.(uri)}
+                      style={{ width: SCREEN_W, height: imageHeight }}
+                    >
+                      <Image
+                        source={{ uri }}
+                        style={{ width: SCREEN_W, height: imageHeight }}
+                        resizeMode="cover"
+                      />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+
+                {/* Overlay do tier (badge) */}
                 {imageOverlay ? (
                   <View style={styles.heroOverlay} pointerEvents="box-none">
                     {imageOverlay}
+                  </View>
+                ) : null}
+
+                {/* Dots — só quando há mais de 1 foto */}
+                {photos.length > 1 ? (
+                  <View style={styles.dotsRow}>
+                    {photos.map((_, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.dot,
+                          i === carouselIndex ? styles.dotActive : styles.dotInactive,
+                        ]}
+                      />
+                    ))}
                   </View>
                 ) : null}
               </View>
@@ -340,13 +395,34 @@ const styles = StyleSheet.create({
   },
   closeBtnText: { fontSize: 14, fontWeight: '900', lineHeight: 16, includeFontPadding: false },
 
-  heroWrap: { width: '100%', backgroundColor: '#000', position: 'relative' },
+  heroWrap: { width: '100%', backgroundColor: '#000', overflow: 'hidden' },
   heroOverlay: {
     position: 'absolute',
     top: 12, left: 12, right: 12,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    pointerEvents: 'box-none',
+  },
+  dotsRow: {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 7, height: 7, borderRadius: 4,
+  },
+  dotActive: {
+    backgroundColor: '#fff',
+    width: 20,
+  },
+  dotInactive: {
+    backgroundColor: 'rgba(255,255,255,0.45)',
   },
 
   body: {

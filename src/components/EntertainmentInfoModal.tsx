@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, Dimensions, Modal, Pressable, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Image, Dimensions, Modal, Pressable, StatusBar } from 'react-native';
 import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo } from '../utils/time';
@@ -44,7 +44,6 @@ export function EntertainmentInfoModal({
         ? event.promotionPhotoUrls
         : [event.promotionPhotoUrl ?? event.photoUrl].filter(Boolean) as string[])
     : [];
-  const hasMultiplePhotos = allPhotos.length > 1;
 
   // Deriva os dados do evento apenas quando disponível
   const meta = event
@@ -114,9 +113,10 @@ export function EntertainmentInfoModal({
       <BottomSheetCard
         visible={!!event}
         onClose={onClose}
-        imageUrl={allPhotos[0] ?? undefined}
-        imageHeight={200}
+        imageUrls={allPhotos.length > 0 ? allPhotos : undefined}
+        imageHeight={220}
         imageOverlay={heroOverlay}
+        onImagePress={(uri) => setLightboxPhoto(uri)}
         tag={tag}
         category={event && meta ? `${meta.emoji} ${tEntCat(event.category).toUpperCase()}` : ''}
         title={event?.title ?? ''}
@@ -129,30 +129,6 @@ export function EntertainmentInfoModal({
           onPress: () => setNavVisible(true),
         } : undefined}
         quickActions={quickActions}
-        footer={hasMultiplePhotos ? (
-          <View style={styles.galleryWrap}>
-            <Text style={styles.galleryLabel}>📸 Mais fotos</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.galleryScroll}
-            >
-              {allPhotos.map((uri, i) => (
-                <Pressable
-                  key={i}
-                  onPress={() => setLightboxPhoto(uri)}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-                >
-                  <Image
-                    source={{ uri }}
-                    style={styles.galleryThumb}
-                    resizeMode="cover"
-                  />
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        ) : undefined}
       />
 
       {/* Lightbox de foto em tela cheia */}
@@ -219,25 +195,6 @@ const styles = StyleSheet.create({
   heroChipText: {
     color: '#fff', fontSize: 11, fontWeight: '900', letterSpacing: 0.4,
   },
-  galleryWrap: {
-    marginTop: 8,
-  },
-  galleryLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 8,
-  },
-  galleryScroll: {
-    gap: 8,
-    paddingRight: 4,
-  },
-  galleryThumb: {
-    width: 120,
-    height: 80,
-    borderRadius: 8,
-  },
-
   // Lightbox
   lightboxBg: {
     flex: 1,
