@@ -79,22 +79,19 @@ export function filterRoadEvents(events: RoadEvent[], tier: ZoomTier): RoadEvent
   }
 
   if (tier === 'medium') {
-    // Eventos com pelo menos 1 confirmação líquida, ou recentes (< 15 min)
-    const fifteenMin = 15 * 60 * 1000;
-    return active
-      .filter((e) =>
-        (e.confirmations ?? 0) - (e.denials ?? 0) >= 1 ||
-        Date.now() - e.createdAt < fifteenMin
-      )
-      .sort((a, b) => roadScore(b) - roadScore(a))
-      .slice(0, 80);
+    // Mostra todos os eventos ativos ordenados por relevância
+    return [...active].sort((a, b) => roadScore(b) - roadScore(a)).slice(0, 120);
   }
 
-  // distant — com pelo menos 2 confirmações líquidas (era 3, agora mais permissivo)
+  // distant — 1+ confirmação líquida OU criado nas últimas 2h
+  const twoHours = 2 * 60 * 60 * 1000;
   return active
-    .filter((e) => (e.confirmations ?? 0) - (e.denials ?? 0) >= 2)
+    .filter((e) =>
+      (e.confirmations ?? 0) - (e.denials ?? 0) >= 1 ||
+      Date.now() - e.createdAt < twoHours
+    )
     .sort((a, b) => roadScore(b) - roadScore(a))
-    .slice(0, 30);
+    .slice(0, 60);
 }
 
 /**
@@ -112,26 +109,20 @@ export function filterEntEvents(events: EntertainmentEvent[], tier: ZoomTier): E
   }
 
   if (tier === 'medium') {
-    // Patrocinados (qualquer tier) + populares (≥2 likes) + recentes (< 1h)
-    const oneHour = 60 * 60 * 1000;
-    return events
-      .filter((e) =>
-        isActivePromotion(e) ||
-        (e.likes?.length ?? 0) >= 2 ||
-        Date.now() - e.createdAt < oneHour
-      )
-      .sort((a, b) => entScore(b) - entScore(a))
-      .slice(0, 80);
+    // Mostra todos os eventos — ordenados por score
+    return [...events].sort((a, b) => entScore(b) - entScore(a)).slice(0, 120);
   }
 
-  // distant — Ouro + Prata + eventos com ≥5 likes (antes era só Ouro)
+  // distant — qualquer promovido OU ≥2 likes OU criado nas últimas 6h
+  const sixHours = 6 * 60 * 60 * 1000;
   return events
     .filter((e) =>
-      (isActivePromotion(e) && (e.promotionTier === 'ouro' || e.promotionTier === 'prata')) ||
-      (e.likes?.length ?? 0) >= 5
+      isActivePromotion(e) ||
+      (e.likes?.length ?? 0) >= 2 ||
+      Date.now() - e.createdAt < sixHours
     )
     .sort((a, b) => entScore(b) - entScore(a))
-    .slice(0, 25);
+    .slice(0, 60);
 }
 
 // ─── Labels de UI ─────────────────────────────────────────────────────────────

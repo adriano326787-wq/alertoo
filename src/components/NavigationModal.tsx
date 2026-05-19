@@ -102,6 +102,7 @@ export function NavigationModal({
   const lastRerouteAtRef = useRef<number>(0);
   const prevUserPosRef = useRef<Coords | null>(null);
   const announcedRef = useRef<Set<string>>(new Set());
+  const autoRecenterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cachedLat = useAppStore((s) => s.userLat);
   const cachedLon = useAppStore((s) => s.userLon);
@@ -269,7 +270,7 @@ export function NavigationModal({
     }
   }, [userPos, route, arrived, voiceEnabled, phase]);
 
-  // ─── Câmera follow (só na fase navigating)
+  // ─── Câmera follow (só na fase navigating) — animação suave 300ms
   useEffect(() => {
     if (phase !== 'navigating' || !followUser || !userPos || !mapRef.current) return;
     mapRef.current.animateCamera(
@@ -279,9 +280,16 @@ export function NavigationModal({
         pitch: 55,
         heading: userHeading,
       },
-      { duration: 500 }
+      { duration: 300 }
     );
   }, [userPos, userHeading, followUser, phase]);
+
+  // ─── Limpar timer de auto-recentrar ao desmontar
+  useEffect(() => {
+    return () => {
+      if (autoRecenterTimerRef.current) clearTimeout(autoRecenterTimerRef.current);
+    };
+  }, []);
 
   // ─── Step atual
   const curStepIdx = useMemo(() => {
@@ -409,7 +417,14 @@ export function NavigationModal({
           zoomEnabled
           scrollEnabled
           rotateEnabled
-          onPanDrag={() => phase === 'navigating' && setFollowUser(false)}
+          onPanDrag={() => {
+            if (phase === 'navigating') {
+              setFollowUser(false);
+              // Auto-recentrar após 5 segundos sem arrastar
+              if (autoRecenterTimerRef.current) clearTimeout(autoRecenterTimerRef.current);
+              autoRecenterTimerRef.current = setTimeout(() => setFollowUser(true), 5000);
+            }
+          }}
         >
           {/* MARCADOR DO USUÁRIO — seta rotativa com círculo */}
           {userPos && (
@@ -563,7 +578,7 @@ export function NavigationModal({
               <TouchableOpacity
                 style={styles.stepsCloseBtn}
                 onPress={() => setShowStepsList(false)}
-                hitSlop={10}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Text style={styles.stepsCloseBtnText}>✕</Text>
               </TouchableOpacity>
@@ -795,7 +810,8 @@ const styles = StyleSheet.create({
   stepsPanel: {
     position: 'absolute', left: 14, right: 14,
     backgroundColor: '#fff',
-    borderRadius: 14, padding: 12, elevation: 12,
+    borderRadius: 14, padding: 12, elevation: 20,
+    zIndex: 20,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25, shadowRadius: 8,
   },
@@ -807,11 +823,11 @@ const styles = StyleSheet.create({
   },
   stepsTitle: { fontSize: 14, fontWeight: '800', color: '#1a1a1a' },
   stepsCloseBtn: {
-    width: 28, height: 28, borderRadius: 14,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: '#F1F5F9',
     alignItems: 'center', justifyContent: 'center',
   },
-  stepsCloseBtnText: { fontSize: 13, fontWeight: '800', color: '#475569' },
+  stepsCloseBtnText: { fontSize: 15, fontWeight: '900', color: '#475569' },
   stepRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingVertical: 10, paddingHorizontal: 8,
