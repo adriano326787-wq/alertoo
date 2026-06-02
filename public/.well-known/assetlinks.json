@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.alertoo.app",
+      "sha256_cert_fingerprints": [
+        "EA:69:E9:8D:FE:99:80:BD:6C:96:4D:E7:49:1B:6E:49:06:29:95:33:0F:42:3D:66:11:1C:10:7D:2A:17:07:16"
+      ]
+    }
+  }
+]

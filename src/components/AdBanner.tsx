@@ -1,39 +1,73 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
+/**
+ * AdBanner — componente de banner AdMob.
+ *
+ * Usa o SDK real (react-native-google-mobile-ads) quando instalado,
+ * ou o stub localizado em src/stubs/admob-stub.js como fallback.
+ *
+ * Para ativar o SDK real:
+ *   1. npm install react-native-google-mobile-ads@17+
+ *   2. npx expo run:android  (rebuild necessário)
+ *   3. Adicionar App ID no AndroidManifest.xml (ver adsService.ts)
+ *   4. Trocar AD_UNITS.BANNER_* pelos IDs reais no painel AdMob
+ */
 
-// ─── AdBanner DESABILITADO TEMPORARIAMENTE ─────────────────────────────────────
-//
-//  Por que: react-native-google-mobile-ads@16.3.3 tem incompatibilidade com
-//  New Architecture (Bridgeless) do RN — o módulo Kotlin não estende a spec
-//  gerada pelo codegen, então TurboModuleRegistry.getEnforcing falha no boot.
-//
-//  Para reativar quando uma versão compatível for lançada (v17+):
-//    1. Atualizar: npm i react-native-google-mobile-ads@latest
-//    2. Rebuild Android: rm -rf android/app/build && ./gradlew assembleDebug
-//    3. Reverter este arquivo para a versão com import BannerAd
-//
-// ─────────────────────────────────────────────────────────────────────────────
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import { BannerAd as SDKBannerAd, BannerAdSize, AD_UNITS } from '../services/adsService';
+
+export { BannerAdSize };
 
 interface Props {
-  size?: any;
+  /** Qual unidade de anúncio usar. Default: lista de eventos de trânsito */
+  unitId?: string;
+  size?: keyof typeof BannerAdSize | string;
   style?: object;
+  /** Label exibido acima do banner */
+  label?: string;
 }
 
-export function AdBanner({ style }: Props) {
-  // Placeholder invisível — mantém a API mas não renderiza nada
-  return <View style={[styles.hidden, style]} />;
-}
+export function AdBanner({
+  unitId = AD_UNITS.BANNER_ROAD_LIST,
+  size = BannerAdSize?.ANCHORED_ADAPTIVE_BANNER ?? 'ANCHORED_ADAPTIVE_BANNER',
+  style,
+  label = 'Publicidade',
+}: Props) {
+  const [adFailed, setAdFailed] = useState(false);
 
-// Re-exporta os tipos como any pra não quebrar quem importa BannerAdSize
-export const BannerAdSize = {
-  BANNER: 'BANNER',
-  LARGE_BANNER: 'LARGE_BANNER',
-  MEDIUM_RECTANGLE: 'MEDIUM_RECTANGLE',
-  FULL_BANNER: 'FULL_BANNER',
-  LEADERBOARD: 'LEADERBOARD',
-  ANCHORED_ADAPTIVE_BANNER: 'ANCHORED_ADAPTIVE_BANNER',
-} as const;
+  // No stub o BannerAd retorna View vazia (height:0) — não exibe nada visível
+  // Quando o SDK real estiver instalado, exibe o banner real
+  if (adFailed || Platform.OS === 'ios') {
+    // iOS não configurado ainda — retorna nada
+    return null;
+  }
+
+  return (
+    <View style={[styles.container, style]}>
+      <Text style={styles.label}>{label}</Text>
+      <SDKBannerAd
+        unitId={unitId}
+        size={size}
+        onAdFailedToLoad={() => setAdFailed(true)}
+      />
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-  hidden: { height: 0, overflow: 'hidden' },
+  container: {
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E2E8F0',
+  },
+  label: {
+    fontSize: 9,
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+  },
 });

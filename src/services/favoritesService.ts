@@ -16,13 +16,13 @@
 import {
   collection,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot,
   query,
   orderBy,
   Timestamp,
-  getDocs,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -45,10 +45,10 @@ export async function toggleFavorite(
 ): Promise<boolean /* nowFavorite */> {
   if (uid === 'anonymous' || !uid) return false;
   const ref = doc(db, 'users', uid, 'favorites', fav.eventId);
-  // Tenta ler pra decidir se vai criar ou deletar
+  // #1 — lê apenas o documento alvo (O(1)) em vez de toda a coleção (O(n))
   try {
-    const snapshot = await getDocs(query(subColl(uid)));
-    const exists = snapshot.docs.some((d) => d.id === fav.eventId);
+    const snapshot = await getDoc(ref);
+    const exists = snapshot.exists();
     if (exists) {
       await deleteDoc(ref);
       return false;
@@ -105,7 +105,7 @@ export function subscribeFavorites(
     });
     callback(list);
   }, (err) => {
-    console.warn('[favorites] snapshot error:', err.code);
+    if (__DEV__) console.warn('[favorites] snapshot error:', err.code);
     callback([]);
   });
 }

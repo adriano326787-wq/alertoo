@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { rf } from './src/utils/responsive';
-import { View, ActivityIndicator, Text, StyleSheet, Linking } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import { View, ActivityIndicator, Text, StyleSheet, Linking, Animated } from 'react-native';
+import { StripeProvider } from '@stripe/stripe-react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -9,6 +9,7 @@ import { SystemBars } from 'react-native-edge-to-edge';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from './src/services/firebase';
 import { requestNotificationPermission } from './src/services/notificationService';
+import * as Notifications from 'expo-notifications';
 import { setCurrentUser } from './src/services/authService';
 import { useUserStore } from './src/store/userStore';
 import { useEventsStore } from './src/store/eventsStore';
@@ -16,17 +17,20 @@ import { RoadEventsScreen } from './src/screens/RoadEventsScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { EntertainmentScreen } from './src/screens/EntertainmentScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { LeaderboardScreen } from './src/screens/LeaderboardScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
 import { OnboardingScreen, shouldShowOnboarding } from './src/screens/OnboardingScreen';
 import { RankBadge } from './src/components/RankBadge';
-import { loadSavedLang } from './src/utils/i18n';
+import { loadSavedLang, tf } from './src/utils/i18n';
 import { useT } from './src/hooks/useT';
-import { parseEventDeepLink } from './src/utils/deepLinks';
+import { parseEventDeepLink, parsePaymentDeepLink } from './src/utils/deepLinks';
 import { useAppStore } from './src/store/appStore';
 import { initSentry, setSentryUser } from './src/services/sentry';
 import { initAnalytics, identify, resetAnalytics, track } from './src/services/analytics';
 import { useFavoritesStore } from './src/store/favoritesStore';
+import { initializeAds } from './src/services/adsService';
+import { clearAdminCache } from './src/services/adminService';
 
 // Inicializa Sentry o mais cedo possível (antes do componente)
 initSentry();
@@ -37,6 +41,12 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  // #35 — warm-start toast: shown briefly when the user is already logged in at launch
+  const [warmToast, setWarmToast] = useState<string | null>(null);
+  const warmToastShown = useRef(false);
+  // #20 — in-app notification toast (shown when a notification arrives in foreground)
+  const [inAppNotif, setInAppNotif] = useState<{ title: string; body: string } | null>(null);
+  const inAppNotifTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { profile, loadProfile, subscribeToProfile, clearProfile } = useUserStore();
   const profileUnsubRef = useRef<(() => void) | null>(null);
 
@@ -56,6 +66,8 @@ export default function App() {
     initAnalytics().then(() => {
       track('app_opened');
     }).catch(() => {});
+    // AdMob — inicializa SDK (gracefully ignora se não instalado)
+    initializeAds().catch(() => {});
   }, []);
 
   // ─── Deep links ─────────────────────────────────────────────────────────────
@@ -66,15 +78,42 @@ export default function App() {
       const parsed = parseEventDeepLink(url);
       if (parsed) {
         useAppStore.getState().setPendingDeepLink(parsed);
+        return;
+      }
+      const paymentResult = parsePaymentDeepLink(url);
+      if (paymentResult) {
+        useAppStore.getState().setMPPaymentReturn(paymentResult);
       }
     };
 
-    // App aberto via deep link (cold start)
     Linking.getInitialURL().then(handleUrl).catch(() => {});
-
-    // App já estava aberto, recebeu um novo link
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
-    return () => sub.remove();
+
+    // #20 — Show in-app toast when notification arrives in foreground
+    const notifReceivedSub = Notifications.addNotificationReceivedListener((notification) => {
+      const { title, body } = notification.request.content;
+      if (title) {
+        if (inAppNotifTimer.current) clearTimeout(inAppNotifTimer.current);
+        setInAppNotif({ title, body: body ?? '' });
+        inAppNotifTimer.current = setTimeout(() => setInAppNotif(null), 4000);
+      }
+    });
+
+    // #33 — Navigate to event when user taps a local notification
+    const notifSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as Record<string, any>;
+      const { eventId, eventType } = data ?? {};
+      if (eventId && (eventType === 'road' || eventType === 'entertainment')) {
+        useAppStore.getState().setPendingDeepLink({ type: eventType, id: eventId });
+      }
+    });
+
+    return () => {
+      sub.remove();
+      notifReceivedSub.remove();
+      notifSub.remove();
+      if (inAppNotifTimer.current) clearTimeout(inAppNotifTimer.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -115,12 +154,23 @@ export default function App() {
         useFavoritesStore.getState().subscribe();
       } else {
         clearProfile();
+        clearAdminCache();
         setSentryUser(null);
         resetAnalytics();
       }
 
       setUser(u);
       setReady(true);
+
+      // #35 — show warm-start toast only on the very first auth state resolution
+      if (!warmToastShown.current && u && !u.isAnonymous) {
+        warmToastShown.current = true;
+        const name = u.displayName?.split(' ')[0] ?? null;
+        if (name) {
+          setWarmToast(name);
+          setTimeout(() => setWarmToast(null), 3000);
+        }
+      }
     });
 
     return () => {
@@ -150,7 +200,6 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SystemBars style="light" />
-        <StatusBar style="light" translucent />
         <OnboardingScreen onDone={() => setShowOnboarding(false)} />
       </SafeAreaProvider>
     );
@@ -160,7 +209,6 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SystemBars style="dark" />
-        <StatusBar style="dark" translucent />
         <AuthScreen onAuthenticated={handleAuthenticated} />
       </SafeAreaProvider>
     );
@@ -172,7 +220,6 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <SystemBars style="dark" />
-        <StatusBar style="dark" translucent />
         <EmailVerificationScreen
           user={user}
           onVerified={() => setUser({ ...user, emailVerified: true } as any)}
@@ -183,14 +230,30 @@ export default function App() {
 
   // useSafeAreaInsets precisa estar dentro do SafeAreaProvider
   // por isso usamos um componente interno
+  const stripeKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
+
   return (
+    <StripeProvider publishableKey={stripeKey} merchantIdentifier="merchant.com.alertoo.app">
     <SafeAreaProvider>
       <SystemBars style="dark" />
-      <StatusBar style="dark" translucent />
       <NavigationContainer>
         <AppTabs profile={profile} />
       </NavigationContainer>
+      {/* #35 — warm-start toast */}
+      {warmToast && (
+        <View style={styles.warmToast} pointerEvents="none">
+          <Text style={styles.warmToastText}>👋 {tf('welcome_back', { name: warmToast! })}</Text>
+        </View>
+      )}
+      {/* #20 — in-app notification toast (foreground) */}
+      {inAppNotif && (
+        <View style={styles.inAppNotif} pointerEvents="none">
+          <Text style={styles.inAppNotifTitle} numberOfLines={1}>{inAppNotif.title}</Text>
+          {!!inAppNotif.body && <Text style={styles.inAppNotifBody} numberOfLines={2}>{inAppNotif.body}</Text>}
+        </View>
+      )}
     </SafeAreaProvider>
+    </StripeProvider>
   );
 }
 
@@ -242,6 +305,14 @@ function AppTabs({ profile }: { profile: any }) {
             }}
           />
           <Tab.Screen
+            name="Ranking"
+            component={LeaderboardScreen}
+            options={{
+              tabBarLabel: t('tab_ranking') || 'Ranking',
+              tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>🏆</Text>,
+            }}
+          />
+          <Tab.Screen
             name="Perfil"
             component={ProfileScreen}
             options={{
@@ -266,4 +337,22 @@ const styles = StyleSheet.create({
     fontSize: 42, fontWeight: '900', color: '#fff',
     letterSpacing: -1, marginBottom: 4,
   },
+  warmToast: {
+    position: 'absolute', bottom: 80, left: 24, right: 24,
+    backgroundColor: 'rgba(30,41,59,0.92)', borderRadius: 14,
+    paddingHorizontal: 18, paddingVertical: 12, alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.20, shadowRadius: 8, elevation: 10,
+  },
+  warmToastText: { fontSize: rf(14), fontWeight: '600', color: '#fff' },
+  inAppNotif: {
+    position: 'absolute', top: 56, left: 16, right: 16,
+    backgroundColor: 'rgba(30,41,59,0.95)', borderRadius: 14,
+    paddingHorizontal: 16, paddingVertical: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25, shadowRadius: 8, elevation: 12,
+    borderLeftWidth: 4, borderLeftColor: '#FF5722',
+  },
+  inAppNotifTitle: { fontSize: rf(14), fontWeight: '700', color: '#fff', marginBottom: 2 },
+  inAppNotifBody: { fontSize: rf(12), color: 'rgba(255,255,255,0.75)' },
 });

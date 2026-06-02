@@ -1,0 +1,20 @@
+diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapMarker.java
+@@ -524,7 +524,13 @@ public class MapMarker extends MapFeature {
+
+   private Bitmap createDrawable() {
+-    int width = this.width <= 0 ? 100 : this.width;
+-    int height = this.height <= 0 ? 100 : this.height;
+-    this.buildDrawingCache();
++    // Fabric (New Architecture): SizeReportingShadowNode may not report dimensions correctly,
++    // so this.width/height can be 0. Use the actual View layout dimensions first, then
++    // fall back to the shadow-node values, then to 100 as a last resort.
++    int actualW = getWidth();
++    int actualH = getHeight();
++    int width  = actualW > 0 ? actualW  : (this.width  <= 0 ? 100 : this.width);
++    int height = actualH > 0 ? actualH : (this.height <= 0 ? 100 : this.height);
++    this.buildDrawingCache();
+
+     // Do not create the doublebuffer-bitmap each time. reuse it to save memory.
+     Bitmap bitmap = mLastBitmapCreated;

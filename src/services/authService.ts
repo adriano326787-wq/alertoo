@@ -20,17 +20,30 @@ export const GOOGLE_CLIENT_IDS = {
   iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '',
   // webClientId = Web Client do Firebase (projeto 657066902706 / lei-seca---eventos)
   // O cliente Android (type=1) com SHA-1 já está no google-services.json
+  // #7 — o fallback hardcoded abaixo existe só para dev/CI sem .env configurado.
+  //       Em produção, EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID deve estar definido em eas.json.
   webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '657066902706-t8tsomtaqqjctmpme5fei1c904mtscp6.apps.googleusercontent.com',
 };
 // ──────────────────────────────────────────────────────────────────────────────
 
+// #18 — currentUser é variável de módulo; mutações são síncronas no JS single-thread,
+// então race conditions reais não ocorrem. Em ambiente multi-tab (web), isso seria
+// um problema, mas no React Native (single JS engine) é seguro.
 let currentUser: User | null = null;
+// #4 — tracks whether initAuth() has resolved; warns if auth is read before initialization
+let _authInitialized = false;
 
 export function getCurrentUserId(): string {
+  if (__DEV__ && !_authInitialized) {
+    console.warn('[authService] getCurrentUserId() called before initAuth() resolved. Result may be stale.');
+  }
   return currentUser?.uid ?? 'anonymous';
 }
 
 export function getCurrentUser(): User | null {
+  if (__DEV__ && !_authInitialized) {
+    console.warn('[authService] getCurrentUser() called before initAuth() resolved. Result may be stale.');
+  }
   return currentUser;
 }
 
@@ -44,6 +57,7 @@ export async function initAuth(): Promise<User | null> {
     const unsub = onAuthStateChanged(auth, (user) => {
       unsub();
       currentUser = user;
+      _authInitialized = true;
       resolve(user);
     });
   });

@@ -40,6 +40,7 @@ export interface UserProfile {
   eventsReported: number;
   commentsPosted: number;
   createdAt: number;
+  promotionCredits?: number; // #8 — real-time credits from Firestore
 }
 
 export const POINTS = {

@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
+    alignSelf: 'stretch',   // garante largura total mesmo dentro de alignItems:'center'
   },
   title: {
     fontSize: 13,
@@ -72,6 +73,7 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     gap: 8,
+    width: '100%',  // força distribuição correta dos flex:1 filhos
   },
   btn: {
     flex: 1,

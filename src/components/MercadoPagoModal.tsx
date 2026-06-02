@@ -1,50 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Modal, Linking, Alert,
+  Modal, Linking, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useT } from '../hooks/useT';
 
-// ─── Links de pagamento do Mercado Pago ────────────────────────────────────────
-// Crie os links em: https://www.mercadopago.com.br/links
-// e substitua as URLs abaixo pelos seus links reais.
+// ─── Cloud Function para criar preferência de doação ──────────────────────────
+// O valor exato é pré-preenchido no checkout do Mercado Pago.
+const functions = getFunctions(undefined, 'us-central1');
 
-const MP_URL = 'https://link.mercadopago.com.br/alertoo';
+// Link genérico de fallback caso a Cloud Function falhe
+const MP_FALLBACK_URL = 'https://link.mercadopago.com.br/alertoo';
 
 export const DONATE_OPTIONS = [
-  {
-    label: 'Café',
-    emoji: '☕',
-    amount: 'R$ 5',
-    description: 'Um café para o time',
-    url: MP_URL,
-    color: '#795548',
-  },
-  {
-    label: 'Apoio',
-    emoji: '🙌',
-    amount: 'R$ 10',
-    description: 'Ajuda com o servidor',
-    url: MP_URL,
-    color: '#1976D2',
-  },
-  {
-    label: 'Parceiro',
-    emoji: '🚀',
-    amount: 'R$ 25',
-    description: 'Parceiro do Alertoo',
-    url: MP_URL,
-    color: '#7B1FA2',
-  },
-  {
-    label: 'Herói',
-    emoji: '🏆',
-    amount: 'R$ 50',
-    description: 'Herói da comunidade',
-    url: MP_URL,
-    color: '#F9A825',
-  },
+  { labelKey: 'donate_tier_cafe_label',     descKey: 'donate_tier_cafe_desc',     emoji: '☕', amount: 5,  color: '#795548' },
+  { labelKey: 'donate_tier_apoio_label',    descKey: 'donate_tier_apoio_desc',    emoji: '🙌', amount: 10, color: '#1976D2' },
+  { labelKey: 'donate_tier_parceiro_label', descKey: 'donate_tier_parceiro_desc', emoji: '🚀', amount: 25, color: '#7B1FA2' },
+  { labelKey: 'donate_tier_heroi_label',    descKey: 'donate_tier_heroi_desc',    emoji: '🏆', amount: 50, color: '#F9A825' },
 ];
 
 interface Props {
@@ -54,11 +28,28 @@ interface Props {
 
 export function MercadoPagoModal({ visible, onClose }: Props) {
   const t = useT();
-  function handleSelect(url: string) {
-    onClose();
-    Linking.openURL(url).catch(() =>
-      Alert.alert('Erro', 'Não foi possível abrir o Mercado Pago. Verifique sua conexão.')
-    );
+  const [loadingAmount, setLoadingAmount] = useState<number | null>(null);
+
+  async function handleSelect(amount: number) {
+    if (loadingAmount) return; // evita duplo toque
+    setLoadingAmount(amount);
+    try {
+      const call = httpsCallable<{ amount: number }, { initPoint: string }>(
+        functions,
+        'createDonationPreference',
+      );
+      const res = await call({ amount });
+      onClose();
+      await Linking.openURL(res.data.initPoint);
+    } catch {
+      // Fallback: abre link genérico sem valor pré-preenchido
+      onClose();
+      Linking.openURL(MP_FALLBACK_URL).catch(() =>
+        Alert.alert(t('error'), t('donate_mp_failed')),
+      );
+    } finally {
+      setLoadingAmount(null);
+    }
   }
 
   function handleBack() {
@@ -87,10 +78,7 @@ export function MercadoPagoModal({ visible, onClose }: Props) {
             <View style={styles.heroSection}>
               <Text style={styles.heroEmoji}>💛</Text>
               <Text style={styles.heroTitle}>{t('support_modal_hero')}</Text>
-              <Text style={styles.heroDesc}>
-                O Alertoo é desenvolvido com muito carinho e mantido sem anúncios intrusivos.
-                Sua doação ajuda a pagar servidores, mapas e novidades.
-              </Text>
+              <Text style={styles.heroDesc}>{t('support_modal_body')}</Text>
               <View style={styles.mpBadge}>
                 <Text style={styles.mpBadgeText}>{t('support_modal_secure')}</Text>
               </View>
@@ -99,19 +87,30 @@ export function MercadoPagoModal({ visible, onClose }: Props) {
             <Text style={styles.chooseLabel}>{t('support_choose_value')}</Text>
 
             <View style={styles.grid}>
-              {DONATE_OPTIONS.map((opt) => (
-                <TouchableOpacity
-                  key={opt.amount}
-                  style={[styles.option, { borderColor: opt.color }]}
-                  onPress={() => handleSelect(opt.url)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.optionEmoji}>{opt.emoji}</Text>
-                  <Text style={[styles.optionAmount, { color: opt.color }]}>{opt.amount}</Text>
-                  <Text style={styles.optionLabel}>{opt.label}</Text>
-                  <Text style={styles.optionDesc}>{opt.description}</Text>
-                </TouchableOpacity>
-              ))}
+              {DONATE_OPTIONS.map((opt) => {
+                const isLoading = loadingAmount === opt.amount;
+                const isDisabled = loadingAmount !== null;
+                return (
+                  <TouchableOpacity
+                    key={opt.amount}
+                    style={[styles.option, { borderColor: opt.color }, isDisabled && styles.optionDisabled]}
+                    onPress={() => handleSelect(opt.amount)}
+                    activeOpacity={0.7}
+                    disabled={isDisabled}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color={opt.color} style={{ marginVertical: 16 }} />
+                    ) : (
+                      <>
+                        <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                        <Text style={[styles.optionAmount, { color: opt.color }]}>R$ {opt.amount}</Text>
+                        <Text style={styles.optionLabel}>{t(opt.labelKey)}</Text>
+                        <Text style={styles.optionDesc}>{t(opt.descKey)}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
@@ -155,6 +154,7 @@ const styles = StyleSheet.create({
     padding: 16, alignItems: 'center',
     backgroundColor: '#fafafa',
   },
+  optionDisabled: { opacity: 0.5 },
   optionEmoji: { fontSize: 28, marginBottom: 6 },
   optionAmount: { fontSize: 22, fontWeight: '900', marginBottom: 2 },
   optionLabel: { fontSize: 13, fontWeight: '700', color: '#333', marginBottom: 2 },

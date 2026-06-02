@@ -19,6 +19,7 @@ import {
   StyleSheet,
   Dimensions,
   Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/useTheme';
@@ -88,6 +89,7 @@ export function BottomSheetCard({
 
   // Carousel state
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [outerScrollEnabled, setOuterScrollEnabled] = useState(true);
   const carouselRef = useRef<ScrollView>(null);
   // Resolve lista de fotos: imageUrls tem prioridade
   const photos = (imageUrls && imageUrls.length > 0)
@@ -167,14 +169,30 @@ export function BottomSheetCard({
           },
           platformShadow(shadow.xl),
         ]}>
-          {/* TOP BAR FIXA — só handle (close foi para fora do overflow:hidden) */}
+          {/* TOP BAR FIXA — handle centralizado + botão X no fluxo normal (sem absolute) */}
           <View style={styles.topBar}>
+            {/* Espaçador esquerdo para simetria */}
+            <View style={styles.topBarSpacer} />
+            {/* Handle centralizado */}
             <View style={styles.handleArea}>
               <View style={[styles.handle, { backgroundColor: theme.border.strong }]} />
             </View>
+            {/* Botão fechar — no fluxo normal: touch area sempre correta */}
+            <TouchableOpacity
+              onPress={handleClose}
+              hitSlop={12}
+              activeOpacity={0.7}
+              style={[styles.closeBtn, { backgroundColor: theme.bg.base, borderColor: theme.border.default }]}
+            >
+              <Text style={[styles.closeBtnText, { color: theme.text.primary }]}>✕</Text>
+            </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} bounces>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            bounces
+            scrollEnabled={outerScrollEnabled}
+          >
             {/* HERO / CAROUSEL */}
             {photos.length > 0 ? (
               <View style={[styles.heroWrap, { height: imageHeight, backgroundColor: theme.brand.surface }]}>
@@ -185,10 +203,16 @@ export function BottomSheetCard({
                   pagingEnabled
                   showsHorizontalScrollIndicator={false}
                   scrollEventThrottle={16}
+                  nestedScrollEnabled
+                  decelerationRate="fast"
+                  disableIntervalMomentum
+                  onScrollBeginDrag={() => setOuterScrollEnabled(false)}
                   onMomentumScrollEnd={(e) => {
                     const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
                     setCarouselIndex(idx);
+                    setOuterScrollEnabled(true);
                   }}
+                  onScrollEndDrag={() => setOuterScrollEnabled(true)}
                   style={{ width: SCREEN_W, height: imageHeight }}
                 >
                   {photos.map((uri, i) => (
@@ -200,7 +224,7 @@ export function BottomSheetCard({
                       <Image
                         source={{ uri }}
                         style={{ width: SCREEN_W, height: imageHeight }}
-                        resizeMode="cover"
+                        resizeMode="contain" // #2 — promo-marketing: never crop paid photos
                       />
                     </Pressable>
                   ))}
@@ -213,19 +237,54 @@ export function BottomSheetCard({
                   </View>
                 ) : null}
 
-                {/* Dots — só quando há mais de 1 foto */}
+                {/* Setas + dots — só quando há mais de 1 foto */}
                 {photos.length > 1 ? (
-                  <View style={styles.dotsRow}>
-                    {photos.map((_, i) => (
-                      <View
-                        key={i}
-                        style={[
-                          styles.dot,
-                          i === carouselIndex ? styles.dotActive : styles.dotInactive,
-                        ]}
-                      />
-                    ))}
-                  </View>
+                  <>
+                    {/* Seta esquerda */}
+                    {carouselIndex > 0 && (
+                      <Pressable
+                        style={[styles.carouselArrow, styles.carouselArrowLeft]}
+                        onPress={() => {
+                          const next = carouselIndex - 1;
+                          carouselRef.current?.scrollTo({ x: next * SCREEN_W, animated: true });
+                          setCarouselIndex(next);
+                        }}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.carouselArrowText}>‹</Text>
+                      </Pressable>
+                    )}
+                    {/* Seta direita */}
+                    {carouselIndex < photos.length - 1 && (
+                      <Pressable
+                        style={[styles.carouselArrow, styles.carouselArrowRight]}
+                        onPress={() => {
+                          const next = carouselIndex + 1;
+                          carouselRef.current?.scrollTo({ x: next * SCREEN_W, animated: true });
+                          setCarouselIndex(next);
+                        }}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.carouselArrowText}>›</Text>
+                      </Pressable>
+                    )}
+                    {/* Contador + dots */}
+                    <View style={styles.dotsRow}>
+                      {photos.map((_, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.dot,
+                            i === carouselIndex ? styles.dotActive : styles.dotInactive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                    {/* Contador numérico */}
+                    <View style={styles.photoCounter}>
+                      <Text style={styles.photoCounterText}>{carouselIndex + 1}/{photos.length}</Text>
+                    </View>
+                  </>
                 ) : null}
               </View>
             ) : null}
@@ -300,7 +359,11 @@ export function BottomSheetCard({
                   onPress={primaryAction.onPress}
                   disabled={primaryAction.disabled}
                 >
-                  <Text style={styles.primaryBtnText}>{primaryAction.icon} {primaryAction.label}</Text>
+                  {/* Emoji e label em Text separados — evita clipping no Android com emoji + bold */}
+                  <View style={styles.primaryBtnInner}>
+                    <Text style={styles.primaryBtnIcon}>{primaryAction.icon}</Text>
+                    <Text style={styles.primaryBtnText} numberOfLines={1}>{primaryAction.label}</Text>
+                  </View>
                 </Pressable>
               ) : null}
 
@@ -348,18 +411,6 @@ export function BottomSheetCard({
           </ScrollView>
         </View>
 
-        {/* Close button renderizado DEPOIS do sheet — fica por cima e recebe os toques */}
-        <Pressable
-          onPress={handleClose}
-          hitSlop={16}
-          style={({ pressed }) => [
-            styles.closeBtnFixed,
-            { backgroundColor: theme.bg.base, borderColor: theme.border.default },
-            pressed && { opacity: 0.6, transform: [{ scale: 0.92 }] },
-          ]}
-        >
-          <Text style={[styles.closeBtnText, { color: theme.text.primary }]}>✕</Text>
-        </Pressable>
       </Animated.View>
     </Modal>
   );
@@ -373,25 +424,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Top bar — só handle centralizado (close button foi para fora do overflow:hidden)
+  // Top bar — row: [spacer | handle | closeBtn]
   topBar: {
-    height: 36,
-    paddingHorizontal: 16,
+    height: 48,
+    paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  handleArea: { alignItems: 'center', justifyContent: 'center' },
+  topBarSpacer: { width: 44 },
+  handleArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   handle: { width: 38, height: 4, borderRadius: 2 },
-  // Close button fica no sheetWrap (acima do overflow:hidden)
-  closeBtnFixed: {
-    position: 'absolute',
-    top: 6, right: 12,
+  // Botão fechar no fluxo normal — sem position:absolute, touch area sempre correta
+  closeBtn: {
     width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1,
-    zIndex: 200,
-    elevation: 10,
   },
   closeBtnText: { fontSize: 14, fontWeight: '900', lineHeight: 16, includeFontPadding: false },
 
@@ -423,6 +470,32 @@ const styles = StyleSheet.create({
   },
   dotInactive: {
     backgroundColor: 'rgba(255,255,255,0.45)',
+  },
+  carouselArrow: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -22,
+    width: 36, height: 44,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  carouselArrowLeft:  { left: 8 },
+  carouselArrowRight: { right: 8 },
+  carouselArrowText: {
+    color: '#fff', fontSize: 28, fontWeight: '300', lineHeight: 32, includeFontPadding: false,
+  },
+  photoCounter: {
+    position: 'absolute',
+    top: 10, right: 10,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 12,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  photoCounterText: {
+    color: '#fff', fontSize: 11, fontWeight: '700',
   },
 
   body: {
@@ -461,7 +534,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...platformShadow(shadow.md),
   },
-  primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.3, includeFontPadding: false },
+  // Emoji e label separados — evita clipping Android (emoji misturado com bold)
+  primaryBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  primaryBtnIcon: { fontSize: 17, includeFontPadding: false },
+  primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.3, includeFontPadding: false, flexShrink: 1 },
 
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing[3] },
   quickBtn: {

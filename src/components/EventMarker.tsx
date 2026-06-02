@@ -1,20 +1,23 @@
 /**
- * EventMarker — sistema de cards para eventos de estrada.
+ * EventMarker — círculos coloridos para eventos de trânsito.
  *
- * Hierarquia:
- *   - AlertCard    → eventos com ≥3 confirmações líquidas (urgência)
- *   - StandardCard → eventos orgânicos
+ * Hierarquia visual:
+ *   - AlertPin  → eventos com ≥3 confirmações líquidas — pulse vermelho de urgência
+ *   - DropPin   → eventos orgânicos                    — círculo limpo com ícone
  *
- * Compat: exporta GlassPin (alias StandardCard) e CountBadge.
+ * Tamanho varia por zoom: sm=40 | md=50 | lg=62
+ *
+ * tracksViewChanges: fica true até onLayout disparar (layout completo no nativo),
+ * então false após 100ms — garante bitmap capturado após layout real.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
 import { ZoomTier } from '../utils/mapZoom';
 import { palette, shadow, platformShadow } from '../theme/tokens';
-import { StandardCard, AlertCard } from './ui/PinCard';
+import { DropPin, AlertPin } from './ui/Pin';
 
 interface Props {
   event: RoadEvent;
@@ -24,32 +27,53 @@ interface Props {
 
 const FALLBACK_META = { color: '#607D8B', emoji: '📍' };
 
-function cardSize(zoom: ZoomTier): 'sm' | 'md' | 'lg' {
-  return zoom === 'distant' ? 'sm' : zoom === 'medium' ? 'md' : 'lg';
+function pinSize(zoom: ZoomTier): number {
+  return zoom === 'distant' ? 30 : zoom === 'medium' ? 38 : 46;
 }
 
 export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
   const meta = EVENT_CATEGORIES[event.category] ?? FALLBACK_META;
   const [tracks, setTracks] = useState(true);
+  const layoutDoneRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const netConfirms = (event.confirmations ?? 0) - (event.denials ?? 0);
   const isAlert = netConfirms >= 3;
 
-  const contentKey = [
-    event.category,
-    event.title,
-    isAlert ? 'A' : 'S',
-    zoomTier,
-  ].join('|');
+  const contentKey = [event.category, isAlert ? 'A' : 'S', zoomTier].join('|');
 
+  // Resetar tracking quando o conteúdo muda
+  // fallbackRef garante que tracksViewChanges vira false mesmo se onLayout não disparar
+  const fallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    layoutDoneRef.current = false;
     setTracks(true);
-    const t = setTimeout(() => setTracks(false), isAlert ? 2500 : 800);
-    return () => clearTimeout(t);
-  }, [contentKey, isAlert]);
+    // Fallback: 1000ms sem onLayout → força false (New Architecture às vezes atrasa onLayout)
+    if (fallbackRef.current) clearTimeout(fallbackRef.current);
+    fallbackRef.current = setTimeout(() => setTracks(false), 1000);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (fallbackRef.current) clearTimeout(fallbackRef.current);
+    };
+  }, [contentKey]);
 
-  const size = cardSize(zoomTier);
+  // onLayout: disparado após o layout nativo estar completo
+  // Aguarda 500ms — Fabric é assíncrono e 100ms é curto demais para captura de bitmap
+  const handleLayout = useCallback(() => {
+    if (layoutDoneRef.current) return;
+    layoutDoneRef.current = true;
+    if (fallbackRef.current) clearTimeout(fallbackRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setTracks(false), 500);
+  }, []);
 
+  const size = pinSize(zoomTier);
+
+  const confirmations = event.confirmations ?? 0;
+  // #18 — mostra badge de confirmações quando há pelo menos 1 (estilo Waze)
+  const showBadge = confirmations > 0 && zoomTier !== 'distant';
+
+  // ─── ALERTA → AlertPin com pulse de urgência ──────────────────────────────────
   if (isAlert) {
     return (
       <Marker
@@ -59,25 +83,37 @@ export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
         tracksViewChanges={tracks}
         zIndex={40}
       >
-        <AlertCard
-          color={meta.color || palette.alert}
-          icon={meta.emoji}
-          label={event.title}
-          size={size}
-        />
+        <View collapsable={false}>
+          <AlertPin
+            size={size}
+            color={meta.color || palette.alert}
+            icon={meta.emoji}
+            onLayout={handleLayout}
+          />
+          {showBadge && <CountBadge count={confirmations} color="#43A047" />}
+        </View>
       </Marker>
     );
   }
 
+  // ─── PADRÃO → DropPin simples ─────────────────────────────────────────────────
   return (
     <Marker
       coordinate={{ latitude: event.latitude, longitude: event.longitude }}
-      anchor={{ x: 0.5, y: 1 }}
+      anchor={{ x: 0.5, y: 0.5 }}
       onPress={() => onPress(event)}
       tracksViewChanges={tracks}
       zIndex={1}
     >
-      <StandardCard color={meta.color} icon={meta.emoji} label={event.title} size={size} />
+      <View collapsable={false}>
+        <DropPin
+          size={size}
+          color={meta.color}
+          icon={meta.emoji}
+          onLayout={handleLayout}
+        />
+        {showBadge && <CountBadge count={confirmations} color="#43A047" />}
+      </View>
     </Marker>
   );
 }
@@ -93,13 +129,12 @@ interface GlassPinProps {
   size?: number;
 }
 
-/** Alias retrocompatível — agora renderiza um StandardCard sem label. */
-export function GlassPin({ color, emoji, size }: GlassPinProps) {
-  const cardSz: 'sm' | 'md' | 'lg' = size && size < 40 ? 'sm' : size && size < 50 ? 'md' : 'lg';
-  return <StandardCard color={color} icon={emoji} size={cardSz} />;
+/** Alias retrocompatível — agora renderiza um DropPin circular. */
+export function GlassPin({ color, emoji, size = 50 }: GlassPinProps) {
+  return <DropPin size={size} color={color} icon={emoji} />;
 }
 
-/** Badge de contagem compacto — sem mudanças */
+/** Badge de contagem compacto */
 export function CountBadge({ count, color = palette.brand[500] }: { count: number; color?: string }) {
   if (count <= 0) return null;
   const label = count > 99 ? '99+' : String(count);

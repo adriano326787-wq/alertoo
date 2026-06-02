@@ -35,7 +35,17 @@ export interface ComputeRouteOptions {
   languageCode?: string;
 }
 
+import { getCurrentLang } from '../utils/i18n';
+
 const ENDPOINT = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+
+// #8 Ciclo 8 — mapeia idioma do app para BCP-47 esperado pela Routes API
+const LANG_TO_BCP47: Record<string, string> = {
+  pt: 'pt-BR',
+  en: 'en-US',
+  es: 'es-419',
+  fr: 'fr-FR',
+};
 
 // ─── Polyline decoder (algoritmo do Google) ──────────────────────────────────
 export function decodePolyline(encoded: string): Coords[] {
@@ -141,7 +151,8 @@ export async function computeRoute(
     travelMode: opts.travelMode ?? 'DRIVE',
     routingPreference: opts.routingPreference ?? 'TRAFFIC_AWARE',
     computeAlternativeRoutes: false,
-    languageCode: opts.languageCode ?? 'pt-BR',
+    // #8 Ciclo 8 — idioma segue o idioma atual do app em vez de hardcode 'pt-BR'
+    languageCode: opts.languageCode ?? LANG_TO_BCP47[getCurrentLang()] ?? 'pt-BR',
     units: 'METRIC',
     polylineQuality: 'HIGH_QUALITY',
     polylineEncoding: 'ENCODED_POLYLINE',
@@ -160,15 +171,25 @@ export async function computeRoute(
     'routes.legs.steps.endLocation',
   ].join(',');
 
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': fieldMask,
-    },
-    body: JSON.stringify(body),
-  });
+  // #4 Ciclo 8 — AbortController com timeout de 15s para não ficar pendurado
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
+  let res: Response;
+  try {
+    res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': fieldMask,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');

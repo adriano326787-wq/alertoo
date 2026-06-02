@@ -32,26 +32,8 @@ interface Slide {
   bg: string;
 }
 
-const SLIDES_PT: Slide[] = [
-  {
-    emoji: '🗺️',
-    title: 'Tudo que acontece perto de você',
-    subtitle: 'Eventos, alertas de trânsito e o que está bombando agora — em tempo real no mapa.',
-    bg: '#FF5722',
-  },
-  {
-    emoji: '🎉',
-    title: 'Descubra rolês incríveis',
-    subtitle: 'Festas, shows, restaurantes e festivais. Salve os seus preferidos pra voltar depois.',
-    bg: '#6A1B9A',
-  },
-  {
-    emoji: '🚦',
-    title: 'Chegue mais rápido',
-    subtitle: 'Navegação GPS com instruções por voz e alertas da comunidade pra evitar engarrafamentos.',
-    bg: '#1E88E5',
-  },
-];
+const SLIDE_EMOJIS = ['🗺️', '🎉', '🚦'];
+const SLIDE_COLORS = ['#FF5722', '#6A1B9A', '#1E88E5'];
 
 interface Props {
   onDone: () => void;
@@ -65,7 +47,12 @@ export function OnboardingScreen({ onDone }: Props) {
   const listRef = useRef<FlatList<Slide>>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
-  const slides = SLIDES_PT;
+  const slides: Slide[] = SLIDE_EMOJIS.map((emoji, i) => ({
+    emoji,
+    title: t(`onboarding_title_${i + 1}` as any),
+    subtitle: t(`onboarding_sub_${i + 1}` as any),
+    bg: SLIDE_COLORS[i],
+  }));
   const isLast = index === slides.length - 1;
 
   const handleNext = () => {

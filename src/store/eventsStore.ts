@@ -8,36 +8,47 @@ import {
   onSnapshot,
   query,
   where,
+  orderBy,
+  limit,
   Timestamp,
-  deleteDoc,
   runTransaction,
   arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { getCurrentUserId } from '../services/authService';
 import { awardPoints } from '../services/userService';
+import { t, tf } from '../utils/i18n';
+import { trackEventCreated } from '../services/reviewService';
 import { RoadEvent, EventCategory, EVENT_CATEGORIES } from '../types';
 import { POINTS } from '../types/user';
-import { notifyIfNearby } from '../services/notificationService';
+import { notifyIfNearby, sendLocalNotification } from '../services/notificationService';
+import { loadSavedRoutes, isPointNearRoute } from '../components/SavedRouteModal';
 import { useAppStore } from './appStore';
 
 const EVENTS_COLLECTION = 'events';
 const FILTER_KEY = 'road_events_filter';
 const RATE_LIMIT_MS = 30_000; // 30 segundos entre eventos
 
+// #3 Ciclo 8 — knownIds em nível de módulo (sobrevive a re-subscribe sem gerar notificações duplicadas)
+const _knownEventIds = new Set<string>();
+
 interface EventsState {
   events: RoadEvent[];
   loading: boolean;
+  isFromCache: boolean;        // #34 — offline indicator
   filterStateUF: string | null;
   filterCityName: string | null;
   // controle interno
   _subscriberCount: number;
   _unsub: (() => void) | null;
+  _expiryTimer: ReturnType<typeof setInterval> | null; // #1 — stored in state to survive hot-reload
   _lastEventAt: number | null;
 
   setFilter: (stateUF: string | null, cityName: string | null) => void;
   loadFilter: () => Promise<void>;
-  subscribeToEvents: () => () => void;
+  _subscriptionStateUF: string | null;    // #1 — stateUF da query ativa
+  subscribeToEvents: (stateUF?: string | null) => () => void;
+  reloadEvents: () => void;               // #4 — força re-subscribe (usado no refresh)
   getFilteredEvents: () => RoadEvent[];
   addEvent: (params: {
     category: EventCategory;
@@ -56,11 +67,14 @@ interface EventsState {
 export const useEventsStore = create<EventsState>((set, get) => ({
   events: [],
   loading: true,
+  isFromCache: false,
   filterStateUF: null,
   filterCityName: null,
   _subscriberCount: 0,
   _unsub: null,
+  _expiryTimer: null,
   _lastEventAt: null,
+  _subscriptionStateUF: null,
 
   // ─── Filtro com persistência ──────────────────────────────────────────────
   setFilter: (stateUF, cityName) => {
@@ -89,36 +103,52 @@ export const useEventsStore = create<EventsState>((set, get) => ({
   },
 
   // ─── Subscription com ref-count (evita duplicar onSnapshot) ──────────────
-  subscribeToEvents: () => {
+  subscribeToEvents: (stateUF = null) => {
     const state = get();
 
-    if (state._subscriberCount > 0) {
-      // Já existe uma assinatura ativa — apenas incrementa o contador
+    // #1/#13 — Se já existe assinatura para o mesmo stateUF, apenas ref-count.
+    // Importante: se stateUF difere do ativo, ignora ref-count e reabre a query.
+    if (state._subscriberCount > 0 && state._subscriptionStateUF === (stateUF ?? null)) {
       set({ _subscriberCount: state._subscriberCount + 1 });
       return () => {
         set((s) => {
           const count = s._subscriberCount - 1;
           if (count <= 0 && s._unsub) {
+            if (s._expiryTimer) clearInterval(s._expiryTimer);
             s._unsub();
-            return { _subscriberCount: 0, _unsub: null };
+            return { _subscriberCount: 0, _unsub: null, _expiryTimer: null };
           }
           return { _subscriberCount: count };
         });
       };
     }
 
-    // Primeira assinatura — abre o onSnapshot
-    const q = query(
-      collection(db, EVENTS_COLLECTION),
-      where('expiresAt', '>', Timestamp.now())
-    );
+    // stateUF diferente ou primeira assinatura — fecha a anterior e abre nova
+    const prev = get();
+    if (prev._expiryTimer) clearInterval(prev._expiryTimer);
+    if (prev._unsub) { prev._unsub(); }
 
-    // Converte doc Firestore → RoadEvent, já filtrando expirados no cliente
-    // (o onSnapshot não reavalia o filtro de tempo automaticamente)
+    // #1 — Filtro geográfico quando stateUF é conhecido; limit(300) como safety net
+    // #13 — orderBy garante ordem consistente e viabiliza índice composto no Firestore
+    const q = stateUF
+      ? query(
+          collection(db, EVENTS_COLLECTION),
+          where('stateUF', '==', stateUF),
+          where('expiresAt', '>', Timestamp.now()),
+          orderBy('expiresAt', 'desc'),
+          limit(300)
+        )
+      : query(
+          collection(db, EVENTS_COLLECTION),
+          where('expiresAt', '>', Timestamp.now()),
+          orderBy('expiresAt', 'desc'),
+          limit(300)
+        );
+
     function docToEvent(d: any): RoadEvent | null {
       const data = d.data();
       const expiresAt = (data.expiresAt as Timestamp).toMillis();
-      if (expiresAt <= Date.now()) return null; // expirou desde a última atualização
+      if (expiresAt <= Date.now()) return null;
       return {
         id: d.id,
         category: data.category,
@@ -138,7 +168,6 @@ export const useEventsStore = create<EventsState>((set, get) => ({
       };
     }
 
-    let knownIds = new Set<string>();
     let isFirstLoad = true;
 
     const unsub = onSnapshot(q, (snapshot) => {
@@ -146,67 +175,119 @@ export const useEventsStore = create<EventsState>((set, get) => ({
         .map(docToEvent)
         .filter((e): e is RoadEvent => e !== null);
 
-      // Notifica novos eventos após a primeira carga
+
+      // #34 — offline indicator from Firestore metadata
+      const fromCache = snapshot.metadata.fromCache;
+
       if (!isFirstLoad) {
         const { userLat, userLon } = useAppStore.getState();
-        if (userLat != null && userLon != null) {
-          events.forEach((e) => {
-            if (!knownIds.has(e.id)) {
+
+        // Carrega rotas salvas uma vez para os novos eventos deste snapshot
+        const newEvents = events.filter((e) => !_knownEventIds.has(e.id));
+
+        if (newEvents.length > 0) {
+          // Verifica proximidade com posição do usuário
+          if (userLat != null && userLon != null) {
+            newEvents.forEach((e) => {
               const meta = EVENT_CATEGORIES[e.category];
               notifyIfNearby({
                 eventTitle: e.title,
                 eventEmoji: meta.emoji,
                 eventType: 'road',
+                eventId: e.id,
                 eventLat: e.latitude,
                 eventLon: e.longitude,
                 userLat,
                 userLon,
               }).catch(() => {});
-            }
-          });
+            });
+          }
+
+          // Verifica corredor das rotas salvas
+          loadSavedRoutes().then((routes) => {
+            const enabledRoutes = routes.filter((r) => r.enabled);
+            if (enabledRoutes.length === 0) return;
+            newEvents.forEach((e) => {
+              const meta = EVENT_CATEGORIES[e.category];
+              for (const route of enabledRoutes) {
+                if (isPointNearRoute(
+                  e.latitude, e.longitude,
+                  route.originLat, route.originLon,
+                  route.destLat, route.destLon,
+                )) {
+                  sendLocalNotification(
+                    `${meta.emoji} ${e.title}`,
+                    `Na sua rota "${route.name}"`,
+                    { eventType: 'road', eventId: e.id },
+                  ).catch(() => {});
+                  break; // uma notificação por evento (evita spam se várias rotas batem)
+                }
+              }
+            });
+          }).catch(() => {});
         }
       }
 
-      knownIds = new Set(events.map((e) => e.id));
+      events.forEach((e) => _knownEventIds.add(e.id));
       isFirstLoad = false;
-      set({ events, loading: false });
+      set({ events, loading: false, isFromCache: fromCache });
+    }, (err) => {
+      // #5 — trata erros de permissão/rede do Firestore em vez de silenciar
+      if (__DEV__) console.error('[RoadStore] Firestore onSnapshot error:', err.code, err.message);
+      set({ loading: false });
     });
 
-    // Timer: remove eventos expirados do estado a cada 60 segundos,
-    // sem esperar uma modificação no Firestore
+    // #1 — Store timer in Zustand state so it survives hot-reload / re-init
+    // #12 — prev timer já foi limpo em linha 121; novo timer criado aqui é o único ativo
     const expiryTimer = setInterval(() => {
       const now = Date.now();
       set((s) => {
         const filtered = s.events.filter((e) => e.expiresAt > now);
-        if (filtered.length === s.events.length) return s; // nada mudou
+        if (filtered.length === s.events.length) return s;
         return { events: filtered };
       });
     }, 60_000);
 
-    set({ _subscriberCount: 1, _unsub: unsub });
+    set({ _subscriberCount: 1, _unsub: unsub, _expiryTimer: expiryTimer, _subscriptionStateUF: stateUF ?? null });
 
     return () => {
       set((s) => {
         const count = s._subscriberCount - 1;
         if (count <= 0 && s._unsub) {
-          clearInterval(expiryTimer);
+          if (s._expiryTimer) clearInterval(s._expiryTimer);
           s._unsub();
-          return { _subscriberCount: 0, _unsub: null };
+          return { _subscriberCount: 0, _unsub: null, _expiryTimer: null };
         }
         return { _subscriberCount: count };
       });
     };
   },
 
+  // #4 — Força re-subscribe (usado pelo handleRefresh da RoadEventsScreen)
+  reloadEvents: () => {
+    const s = get();
+    if (s._expiryTimer) clearInterval(s._expiryTimer);
+    if (s._unsub) s._unsub();
+    set({ _subscriberCount: 0, _unsub: null, _expiryTimer: null, loading: true });
+    // Re-subscribe com o mesmo stateUF que estava ativo
+    get().subscribeToEvents(s._subscriptionStateUF);
+  },
+
   // ─── Criar evento (com rate limiting) ────────────────────────────────────
   addEvent: async ({ category, title, description, latitude, longitude, stateUF, cityName, countryCode }) => {
     const uid = getCurrentUserId();
+
+    // #3 — block anonymous users (entertainment store already does this; now road does too)
+    if (!uid || uid === 'anonymous') {
+      throw new Error(t('login_required_road')); // #5 Ciclo 8 — i18n
+    }
+
     const now = Date.now();
 
     const { _lastEventAt } = get();
     if (_lastEventAt && now - _lastEventAt < RATE_LIMIT_MS) {
       const remaining = Math.ceil((RATE_LIMIT_MS - (now - _lastEventAt)) / 1000);
-      throw new Error(`Aguarde ${remaining}s antes de criar outro evento.`);
+      throw new Error(tf('rate_limit_wait', { remaining })); // #5 Ciclo 8 — i18n
     }
 
     const meta = EVENT_CATEGORIES[category];
@@ -230,10 +311,8 @@ export const useEventsStore = create<EventsState>((set, get) => ({
     });
 
     set({ _lastEventAt: now });
-
-    if (uid !== 'anonymous') {
-      awardPoints(uid, POINTS.ROAD_EVENT_CREATED, 'eventsReported').catch(() => {});
-    }
+    awardPoints(uid, POINTS.ROAD_EVENT_CREATED, 'eventsReported').catch(() => {});
+    trackEventCreated().catch(() => {});
   },
 
   // ─── Confirmar (transação atômica, sem voto duplo) ────────────────────────
@@ -274,14 +353,13 @@ export const useEventsStore = create<EventsState>((set, get) => ({
       ownerId = data.userId;
       const newDenials = (data.denials ?? 0) + 1;
       if (newDenials >= 10) {
-        // Deleta atomicamente dentro da transação
         tx.delete(ref);
       } else {
         tx.update(ref, { denials: newDenials, voters: arrayUnion(uid) });
       }
     });
 
-    if (!alreadyVoted && ownerId && ownerId !== 'anonymous') {
+    if (!alreadyVoted && ownerId && ownerId !== 'anonymous' && ownerId !== uid) {
       awardPoints(ownerId, POINTS.DENIAL_RECEIVED).catch(() => {});
     }
   },

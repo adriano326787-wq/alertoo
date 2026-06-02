@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Alert, ScrollView, Image,
@@ -10,17 +10,19 @@ import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertain
 import { AddEntertainmentModal } from '../components/AddEntertainmentModal';
 import { CommentsModal } from '../components/CommentsModal';
 import { EntertainmentInfoModal } from '../components/EntertainmentInfoModal';
-import { getCurrentUserId } from '../services/authService';
+import { getCurrentUserId, getCurrentUser } from '../services/authService';
 import { useUserStore } from '../store/userStore';
 import { timeAgo, timeLeft } from '../utils/time';
 import { resolveStateUF } from '../utils/brazilGeo';
 import { useAppStore } from '../store/appStore';
 import { useT } from '../hooks/useT';
-import { tEntCat, tTier, tf } from '../utils/i18n';
+import { useTick } from '../hooks/useTick';
+import { tEntCat, tTier, tf, t } from '../utils/i18n';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { rw, rh, rf } from '../utils/responsive';
 import { AdBanner } from '../components/AdBanner';
 import { BannerAdSize } from '../components/AdBanner';
+import { useInterstitialAd } from '../hooks/useInterstitialAd';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PROMOTION_TIERS } from '../types/promotion';
 import { ShareSheet } from '../components/ShareSheet';
@@ -34,20 +36,23 @@ interface PendingAdd {
 
 function EventCard({
   event,
+  currentUid,
   onLike,
   onOpenComments,
   onGoToMap,
   onShare,
 }: {
   event: EntertainmentEvent;
+  currentUid: string;
   onLike: (id: string) => void;
   onOpenComments: (event: EntertainmentEvent) => void;
   onGoToMap: (event: EntertainmentEvent) => void;
   onShare: (event: EntertainmentEvent) => void;
 }) {
   const t = useT();
+  useTick(); // #14 — re-renders every 60s so timeAgo/timeLeft stay fresh
   const meta = ENTERTAINMENT_CATEGORIES[event.category] ?? { emoji: '📍', color: '#607D8B', label: event.category };
-  const myUid = getCurrentUserId() ?? '';
+  const myUid = currentUid;
   const likes = Array.isArray(event.likes) ? event.likes : [];
   const liked = likes.includes(myUid);
   const isOwner = event.userId === myUid;
@@ -138,6 +143,21 @@ function EventCard({
   );
 }
 
+// ─── Image com fallback em erro de rede ──────────────────────────────────────
+function ImageWithFallback({
+  uri, style, fallbackColor, fallbackEmoji,
+}: { uri: string; style: any; fallbackColor: string; fallbackEmoji: string }) {
+  const [error, setError] = React.useState(false);
+  if (error) {
+    return (
+      <View style={[style, { backgroundColor: fallbackColor, alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={{ fontSize: 32 }}>{fallbackEmoji}</Text>
+      </View>
+    );
+  }
+  return <Image source={{ uri }} style={style} resizeMode="cover" onError={() => setError(true)} />;
+}
+
 // ─── Carrossel de eventos patrocinados ───────────────────────────────────────
 function FeaturedStrip({
   events,
@@ -160,7 +180,12 @@ function FeaturedStrip({
             <TouchableOpacity key={ev.id} style={styles.stripCard} onPress={() => onPress(ev)} activeOpacity={0.88}>
               {/* Foto ou cor sólida de fundo — prefere foto de promoção, cai para foto do evento */}
               {(ev.promotionPhotoUrl ?? ev.photoUrl) ? (
-                <Image source={{ uri: (ev.promotionPhotoUrl ?? ev.photoUrl)! }} style={styles.stripPhoto} resizeMode="cover" />
+                <ImageWithFallback
+                  uri={(ev.promotionPhotoUrl ?? ev.photoUrl)!}
+                  style={styles.stripPhoto}
+                  fallbackColor={tierConfig?.pinColor ?? meta.color}
+                  fallbackEmoji={meta.emoji}
+                />
               ) : (
                 <View style={[styles.stripPhoto, { backgroundColor: tierConfig?.pinColor ?? meta.color, alignItems: 'center', justifyContent: 'center' }]}>
                   <Text style={{ fontSize: 32 }}>{meta.emoji}</Text>
@@ -187,6 +212,9 @@ function FeaturedStrip({
 export function EntertainmentScreen() {
   const t = useT();
   const { top: topInset } = useSafeAreaInsets();
+
+  // AdMob — interstitial após criar evento
+  const { showAfterEvent } = useInterstitialAd();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<{ Entretenimento: { eventId?: string } }, 'Entretenimento'>>();
   const focusOnMap = useAppStore((s) => s.focusOnMap);
@@ -202,29 +230,37 @@ export function EntertainmentScreen() {
   const [shareTarget, setShareTarget] = useState<EntertainmentEvent | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // #2 — isMounted guard previne setState em componente desmontado durante refresh
+  const isMountedRef = useRef(true);
+  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
-  const { events: allEvents, loading, hasMore, subscribe, toggleLike, loadMore } = useEntertainmentStore();
+  const { events: allEvents, loading, hasMore, error: storeError, subscribe, forceRefresh, toggleLike, loadMore } = useEntertainmentStore();
+  const handleLike = useCallback(async (eventId: string) => {
+    try { await toggleLike(eventId); } catch { /* optimistic update já revertido pelo store */ }
+  }, [toggleLike]);
+  // UID calculado uma vez por render da tela, não dentro de cada EventCard (item 21)
+  const currentUid = useMemo(() => getCurrentUserId() ?? '', []);
   const setUserCountryCode = useAppStore((s) => s.setUserCountryCode);
   const setUserStateUF = useAppStore((s) => s.setUserStateUF);
   const userStateUF = useAppStore((s) => s.userStateUF);
   // Detecta estado do usuário automaticamente ao montar
   const { detecting, locationDenied } = useUserLocation();
 
-  // Filtro: só eventos do estado do usuário (ou sem estado definido — legado)
-  // · se GPS negado/falhou/sem região: exibe tudo
-  // · enquanto detecta: spinner (não filtra ainda)
-  // Ordenação: destaques primeiro, depois por data de criação
-  const events = (() => {
+  // #24 — tick so featuredEvents re-filters when promotionEndDate passes (avoids stale promoted events)
+  useTick(60_000);
+
+  // Filtro + sort memoizados (item 14/15) — recalcula só quando allEvents/userStateUF muda
+  const events = useMemo(() => {
+    const now = Date.now();
     let filtered: typeof allEvents;
     if (locationDenied || !userStateUF) {
-      filtered = allEvents;
+      // #30 — skip events that slipped through the store expiry filter
+      filtered = allEvents.filter((e) => e.expiresAt > now);
     } else {
-      // Filtro estrito: apenas eventos do estado do usuário
-      filtered = allEvents.filter((e) => e.stateUF === userStateUF);
+      filtered = allEvents.filter((e) => e.stateUF === userStateUF && e.expiresAt > now);
     }
-
     const tierWeight = (e: typeof allEvents[0]) => {
-      if (!e.promotionTier || !e.promotionEndDate || e.promotionEndDate <= Date.now()) return 0;
+      if (!e.promotionTier || !e.promotionEndDate || e.promotionEndDate <= now) return 0; // `now` from above
       return e.promotionTier === 'ouro' ? 3 : e.promotionTier === 'prata' ? 2 : 1;
     };
     return [...filtered].sort((a, b) => {
@@ -233,55 +269,96 @@ export function EntertainmentScreen() {
       if (wa !== wb) return wb - wa;
       return b.createdAt - a.createdAt;
     });
-  })();
+  }, [allEvents, userStateUF, locationDenied]);
 
-  // Eventos em destaque Prata/Ouro para o carrossel
-  const featuredEvents = events.filter(
-    (e) => e.promotionTier && ['prata', 'ouro'].includes(e.promotionTier)
-      && e.promotionEndDate && e.promotionEndDate > Date.now()
-  );
+  // Eventos em destaque Prata/Ouro para o carrossel (memoizado, item 15)
+  const featuredEvents = useMemo(() => {
+    const now = Date.now();
+    return events.filter(
+      (e) => e.promotionTier && ['prata', 'ouro'].includes(e.promotionTier)
+        && e.promotionEndDate && e.promotionEndDate > now
+    );
+  }, [events]);
 
   useEffect(() => {
     const unsub = subscribe();
     return unsub;
   }, []);
 
-  // Abre automaticamente um evento quando navega do perfil com eventId
+  // #10 — Abre automaticamente um evento quando navega com eventId.
+  // Não descarta silenciosamente quando events ainda não carregou:
+  // o effect re-executa quando events muda, então o evento será encontrado
+  // assim que o store receber o primeiro snapshot.
   useEffect(() => {
     const eventId = route.params?.eventId;
-    if (!eventId || events.length === 0) return;
+    if (!eventId) return;
+    if (loading) return; // aguarda o primeiro snapshot
     const found = events.find((e) => e.id === eventId);
     if (found) setSelectedEvent(found);
-  }, [route.params?.eventId, events]);
+  }, [route.params?.eventId, events, loading]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    // onSnapshot já mantém os dados atualizados — apenas re-assina para garantir
-    const unsub = subscribe();
-    await new Promise((r) => setTimeout(r, 600));
-    unsub();
-    setRefreshing(false);
-  }, [subscribe]);
+    // #4 — forceRefresh reinicia a subscription sem duplicar o ref-count
+    forceRefresh();
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        pollInterval = setInterval(() => {
+          if (!useEntertainmentStore.getState().loading) {
+            clearInterval(pollInterval!);
+            pollInterval = null;
+            resolve();
+          }
+        }, 100);
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+    ]);
+    if (pollInterval !== null) clearInterval(pollInterval);
+    // #2 — só atualiza estado se o componente ainda estiver montado
+    if (isMountedRef.current) setRefreshing(false);
+  }, [forceRefresh]);
 
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
-    await loadMore();
-    setLoadingMore(false);
+    try {
+      await loadMore(); // item 29: agora tem try/catch no store e aqui também
+    } catch {
+      Alert.alert(t('error'), t('error_load_more'));
+    } finally {
+      setLoadingMore(false);
+    }
   }, [hasMore, loadingMore, loadMore]);
 
   const handleAdd = useCallback(async () => {
+    // Guard: apenas usuários autenticados podem criar eventos de entretenimento
+    const user = getCurrentUser();
+    const uid = getCurrentUserId();
+    const isAnon = !user || user.isAnonymous || uid === 'anonymous';
+    if (isAnon) {
+      Alert.alert(t('login_required'), t('login_required_ent'));
+      return;
+    }
+
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permissão negada', 'Ative a localização para adicionar eventos.');
+        Alert.alert(t('location_permission_denied'), t('location_permission_msg'));
         return;
       }
+      // #3 — tratamento explícito: tenta posição em cache, cai para GPS atual,
+      // e propaga o erro caso ambos falhem (ex: GPS desativado)
       let loc;
       try {
         const cached = await Location.getLastKnownPositionAsync({ maxAge: 60000 });
-        loc = cached ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (cached) {
+          loc = cached;
+        } else {
+          loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        }
       } catch (_) {
+        // last known falhou — tenta GPS direto; se falhar, o catch externo exibe o erro
         loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       }
       let stateUF: string | undefined;
@@ -306,20 +383,24 @@ export function EntertainmentScreen() {
       });
       setAddVisible(true);
     } catch (err) {
-      Alert.alert('Erro', 'Não foi possível obter sua localização. Verifique o GPS.');
+      Alert.alert(t('error'), t('location_fetch_error'));
     }
   }, []);
 
-  // Injeta um marcador de anúncio a cada 5 eventos
+  // Injeta anúncios com ID estável baseado no ID do evento âncora, não no índice (item 22)
+  // Evita re-mount do AdBanner quando novos eventos chegam no topo da lista
   type ListItem = EntertainmentEvent | { __ad: true; id: string };
   const AD_INTERVAL = 5;
-  const listData: ListItem[] = [];
-  events.forEach((ev, i) => {
-    listData.push(ev);
-    if ((i + 1) % AD_INTERVAL === 0) {
-      listData.push({ __ad: true, id: `ad-ent-${i}` });
-    }
-  });
+  const listData: ListItem[] = useMemo(() => {
+    const result: ListItem[] = [];
+    events.forEach((ev, i) => {
+      result.push(ev);
+      if ((i + 1) % AD_INTERVAL === 0) {
+        result.push({ __ad: true, id: `ad-after-${ev.id}` });
+      }
+    });
+    return result;
+  }, [events]);
 
   return (
     <View style={styles.container}>
@@ -338,6 +419,16 @@ export function EntertainmentScreen() {
           <Text style={styles.addBtnText}>{t('ent_add')}</Text>
         </TouchableOpacity>
       </View>
+
+      {storeError && (
+        <TouchableOpacity
+          style={styles.errorBanner}
+          onPress={handleRefresh}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.errorBannerText}>⚠ {storeError} {t('error_retry_suffix')}</Text>
+        </TouchableOpacity>
+      )}
 
       {(loading || (detecting && !userStateUF)) ? (
         <View style={styles.loaderWrap}>
@@ -366,7 +457,8 @@ export function EntertainmentScreen() {
             return (
               <EventCard
                 event={item}
-                onLike={toggleLike}
+                currentUid={currentUid}
+                onLike={handleLike}
                 onOpenComments={setSelectedEvent}
                 onGoToMap={handleGoToMap}
                 onShare={setShareTarget}
@@ -378,6 +470,9 @@ export function EntertainmentScreen() {
               <Text style={styles.emptyEmoji}>🎪</Text>
               <Text style={styles.emptyText}>{t('ent_empty')}</Text>
               <Text style={styles.emptyHint}>{t('ent_empty_hint')}</Text>
+              <TouchableOpacity style={styles.emptyAddBtn} onPress={handleAdd}>
+                <Text style={styles.emptyAddText}>+ {t('ent_add')}</Text>
+              </TouchableOpacity>
             </View>
           }
           ListFooterComponent={
@@ -400,26 +495,32 @@ export function EntertainmentScreen() {
           cityName={pending.cityName}
           countryCode={pending.countryCode}
           onClose={() => { setAddVisible(false); setPending(null); }}
+          onEventCreated={showAfterEvent}
         />
       )}
 
       {/* Modal de detalhes do evento */}
+      {/* #21 — resolve live event from store so commentCount stays fresh when CommentsModal posts */}
       <EntertainmentInfoModal
-        event={selectedEvent}
+        event={selectedEvent ? (allEvents.find(e => e.id === selectedEvent.id) ?? selectedEvent) : null}
         onLike={(id) => { toggleLike(id); }}
         onComment={(ev) => { setSelectedEvent(null); setCommentTarget(ev); }}
         onGoToMap={(ev) => { setSelectedEvent(null); handleGoToMap(ev); }}
         onClose={() => setSelectedEvent(null)}
       />
 
-      {commentTarget && (
-        <CommentsModal
-          visible={!!commentTarget}
-          eventId={commentTarget.id}
-          eventTitle={commentTarget.title}
-          onClose={() => setCommentTarget(null)}
-        />
-      )}
+      {commentTarget && (() => {
+        // #29 — resolve fresh event from store so title/commentCount reflect latest state
+        const liveTarget = allEvents.find((e) => e.id === commentTarget.id) ?? commentTarget;
+        return (
+          <CommentsModal
+            visible={!!commentTarget}
+            eventId={liveTarget.id}
+            eventTitle={liveTarget.title}
+            onClose={() => setCommentTarget(null)}
+          />
+        );
+      })()}
 
       {shareTarget && (
         <ShareSheet
@@ -439,6 +540,11 @@ export function EntertainmentScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F1F5F9' },
+  errorBanner: {
+    backgroundColor: '#FFF3E0', paddingHorizontal: 16, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: '#FFB74D',
+  },
+  errorBannerText: { fontSize: 13, color: '#E65100', fontWeight: '600' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingBottom: 12,
@@ -511,6 +617,8 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: rf(52) },
   emptyText: { fontSize: rf(16), fontWeight: '600', color: '#555' },
   emptyHint: { fontSize: rf(13), color: '#aaa', textAlign: 'center', paddingHorizontal: rw(32) },
+  emptyAddBtn: { marginTop: rh(12), backgroundColor: '#6A1B9A', borderRadius: 12, paddingHorizontal: rw(24), paddingVertical: rh(12) },
+  emptyAddText: { color: '#fff', fontSize: rf(14), fontWeight: '700' },
   footerLoader: { marginVertical: rh(16) },
   loadMoreBtn: { alignItems: 'center', paddingVertical: rh(14) },
   loadMoreText: { fontSize: rf(14), fontWeight: '600', color: '#FF5722' },

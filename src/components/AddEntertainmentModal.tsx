@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Image,
+  StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Image, Keyboard,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { EntertainmentCategory, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { useEntertainmentStore } from '../store/entertainmentStore';
 import { validateEventContent } from '../utils/contentFilter';
 import { useT } from '../hooks/useT';
 import { tEntCat } from '../utils/i18n';
+import { useTick } from '../hooks/useTick';
 
 interface Props {
   visible: boolean;
@@ -17,9 +19,11 @@ interface Props {
   cityName?: string;
   countryCode?: string;
   onClose: () => void;
+  /** Chamado APÓS o evento ser criado com sucesso (antes de onClose) */
+  onEventCreated?: () => void;
 }
 
-export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, countryCode, onClose }: Props) {
+export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, countryCode, onClose, onEventCreated }: Props) {
   const t = useT();
   const [category, setCategory] = useState<EntertainmentCategory>('bar');
   const [title, setTitle] = useState('');
@@ -27,12 +31,79 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
   const [address, setAddress] = useState('');
   const [saving, setSaving] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [geocodedStreet, setGeocodedStreet] = useState<string | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const geocodedRef = useRef<string | null>(null);
   const addEvent = useEntertainmentStore((s) => s.addEvent);
+  const _lastEventAt = useEntertainmentStore((s) => s._lastEventAt);
+  const RATE_LIMIT_MS = 30_000;
+  // #31 — only tick every second when actually rate-limited (avoids wasted re-renders)
+  const isRateLimitedInitial = !!_lastEventAt && (Date.now() - _lastEventAt < RATE_LIMIT_MS);
+  useTick(isRateLimitedInitial ? 1000 : 0);
+  const rateLimitSecondsLeft = _lastEventAt
+    ? Math.max(0, Math.ceil((RATE_LIMIT_MS - (Date.now() - _lastEventAt)) / 1000))
+    : 0;
+  const isRateLimited = rateLimitSecondsLeft > 0;
+
+  // #10 — Reseta campos ao fechar (evita que valores anteriores persistam na próxima abertura)
+  useEffect(() => {
+    if (!visible) {
+      setTitle('');
+      setDescription('');
+      setCategory('bar');
+      setPhotoUri(null);
+      // address e geocodedStreet são resetados no useEffect de geocoding abaixo
+    }
+  }, [visible]);
+
+  // Ao abrir o modal, faz reverse geocoding da coordenada e pré-preenche o endereço
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    setGeocodedStreet(null);
+    setAddress('');
+    geocodedRef.current = null;
+    setGeocoding(true);
+    Location.reverseGeocodeAsync({ latitude: coordinate.latitude, longitude: coordinate.longitude })
+      .then(([place]) => {
+        if (cancelled || !place) return;
+        // Monta string: "Rua do Catete, 456 — Botafogo"
+        const parts: string[] = [];
+        if (place.street) parts.push(place.street);
+        if (place.streetNumber) parts[0] = (parts[0] ?? '') + ', ' + place.streetNumber;
+        if (place.district || place.subregion) parts.push(place.district ?? place.subregion ?? '');
+        const suggested = parts.filter(Boolean).join(' — ');
+        setGeocodedStreet(suggested || null);
+        geocodedRef.current = suggested || null;
+        setAddress(suggested);
+      })
+      .catch(() => { /* sem internet ou permissão — campo fica livre */ })
+      // #32 — check `cancelled` in finally so unmounted component doesn't setState
+      .finally(() => { if (!cancelled) setGeocoding(false); });
+    return () => { cancelled = true; };
+  }, [visible, coordinate.latitude, coordinate.longitude]);
+
+  // Confirma descarte se o usuário preencheu algum campo (item 19)
+  const handleRequestClose = () => {
+    const hasContent = title.trim() || description.trim() || photoUri;
+    if (hasContent) {
+      Alert.alert(
+        t('discard_draft_title'),
+        t('discard_draft_msg'),
+        [
+          { text: t('keep_editing'), style: 'cancel' },
+          { text: t('discard'), style: 'destructive', onPress: onClose },
+        ]
+      );
+    } else {
+      onClose();
+    }
+  };
 
   const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permissão necessária', 'Precisamos de acesso à galeria pra escolher a foto.');
+      Alert.alert(t('permission_required'), t('gallery_permission_msg'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -42,19 +113,49 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      // #19 — rejeita fotos maiores que 8 MB para evitar uploads lentos e erros de Storage
+      if (asset.fileSize && asset.fileSize > 8 * 1024 * 1024) {
+        Alert.alert(t('photo_too_large'), t('photo_too_large_msg'));
+        return;
+      }
+      setPhotoUri(asset.uri);
     }
   };
 
   const handleSubmit = async () => {
     if (!title.trim()) return;
 
-    const contentError = validateEventContent({ title, description, address });
-    if (contentError) {
-      Alert.alert('Conteúdo inadequado', contentError);
+    // #3 — validate coordinates before submitting (guards against NaN from bad map tap)
+    if (!isFinite(coordinate.latitude) || !isFinite(coordinate.longitude)) {
+      Alert.alert(t('error') || 'Erro', t('invalid_location') || 'Localização inválida. Tente novamente.');
       return;
     }
 
+    // Endereço obrigatório
+    if (!address.trim()) {
+      Alert.alert(t('address_required'), t('address_required_msg'));
+      return;
+    }
+    // Validação de endereço: ≥2 tokens E ≥5 chars E pelo menos uma letra OU dígito
+    // Aceita "Rua 123", "Av. 9 de Julho", "123 Main St" etc.
+    const trimmedAddress = address.trim();
+    if (
+      trimmedAddress.split(/\s+/).filter(Boolean).length < 2 ||
+      trimmedAddress.length < 5 ||
+      !/[a-zA-ZÀ-ú0-9]/.test(trimmedAddress)
+    ) {
+      Alert.alert(t('address_incomplete'), t('address_incomplete_msg'));
+      return;
+    }
+
+    const contentError = validateEventContent({ title, description, address });
+    if (contentError) {
+      Alert.alert(t('inappropriate_content'), contentError);
+      return;
+    }
+
+    Keyboard.dismiss(); // #17 — fecha teclado antes do spinner aparecer
     setSaving(true);
     try {
       await addEvent({
@@ -73,19 +174,22 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
       setDescription('');
       setAddress('');
       setPhotoUri(null);
+      setGeocodedStreet(null);
+      geocodedRef.current = null;
+      onEventCreated?.();
       onClose();
     } catch (err: any) {
-      Alert.alert('Não foi possível publicar', err?.message ?? 'Tente novamente.');
+      Alert.alert(t('publish_failed'), err?.message ?? t('error'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleRequestClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.sheet}>
           <View style={styles.handle} />
@@ -116,7 +220,10 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
               ))}
             </ScrollView>
 
-            <Text style={styles.label}>{t('add_event_name')} *</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>{t('add_event_name')} *</Text>
+              <Text style={styles.charCount}>{title.length}/80</Text>
+            </View>
             <TextInput
               style={styles.input}
               placeholder={t('add_ent_name_ph')}
@@ -126,7 +233,10 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
               maxLength={80}
             />
 
-            <Text style={styles.label}>{t('add_description')}</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>{t('add_description')}</Text>
+              <Text style={styles.charCount}>{description.length}/300</Text>
+            </View>
             <TextInput
               style={[styles.input, styles.multiline]}
               placeholder={t('add_ent_desc_ph')}
@@ -137,18 +247,32 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
               maxLength={300}
             />
 
-            <Text style={styles.label}>{t('add_address')}</Text>
+            <Text style={styles.label}>
+              {t('add_address')} *{' '}
+              {geocoding && <Text style={styles.labelHint}>{t('geocoding_searching')}</Text>}
+            </Text>
+            {geocodedStreet && (
+              <View style={styles.geocodeBadge}>
+                <Text style={styles.geocodeBadgeText} numberOfLines={1}>
+                  📍 {t('geocode_suggestion')}: {geocodedStreet}
+                </Text>
+              </View>
+            )}
             <TextInput
-              style={styles.input}
-              placeholder={t('add_ent_addr_ph')}
+              style={[styles.input, !address.trim() && styles.inputError]}
+              placeholder={geocoding ? t('geocoding_detecting') : t('address_placeholder')}
               placeholderTextColor="#aaa"
               value={address}
               onChangeText={setAddress}
               maxLength={150}
+              autoCorrect={false}
             />
+            {!address.trim() && !geocoding && (
+              <Text style={styles.fieldRequired}>{t('field_required_address')}</Text>
+            )}
 
             {/* Foto opcional */}
-            <Text style={styles.label}>📷 Foto (opcional)</Text>
+            <Text style={styles.label}>{t('photo_optional')}</Text>
             {photoUri ? (
               <View style={styles.photoPreviewWrap}>
                 <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
@@ -167,16 +291,18 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
             )}
 
             <View style={styles.footer}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleRequestClose}>
                 <Text style={styles.cancelText}>{t('filter_cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.submitBtn, (!title.trim() || saving) && styles.submitBtnDisabled]}
+                style={[styles.submitBtn, (!title.trim() || !address.trim() || saving || isRateLimited) && styles.submitBtnDisabled]}
                 onPress={handleSubmit}
-                disabled={!title.trim() || saving}
+                disabled={!title.trim() || !address.trim() || saving || isRateLimited}
               >
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
+                ) : isRateLimited ? (
+                  <Text style={styles.submitText}>⏳ {rateLimitSecondsLeft}s</Text>
                 ) : (
                   <Text style={styles.submitText}>{t('add_publish')}</Text>
                 )}
@@ -196,14 +322,28 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
   locationBadge: { backgroundColor: '#F3E5F5', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginBottom: 16 },
   locationBadgeText: { fontSize: 13, color: '#6A1B9A', fontWeight: '600' },
-  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  label: { fontSize: 14, fontWeight: '600', color: '#333' },
+  charCount: { fontSize: 12, color: '#aaa' },
   chips: { gap: 8, paddingVertical: 2, marginBottom: 16 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 2, backgroundColor: '#fff' },
   chipEmoji: { fontSize: 18 },
   chipLabel: { fontSize: 13, fontWeight: '600', color: '#333' },
   chipLabelSelected: { color: '#fff' },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 12, fontSize: 14, color: '#1a1a1a', marginBottom: 16 },
-  multiline: { minHeight: 80, textAlignVertical: 'top' },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 12, fontSize: 14, color: '#1a1a1a', marginBottom: 4 },
+  inputError: { borderColor: '#FF7043' },
+  fieldRequired: { fontSize: 12, color: '#FF7043', marginBottom: 12, marginLeft: 2 },
+  labelHint: { fontSize: 12, color: '#999', fontWeight: '400' },
+  geocodeBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 6,
+    flexDirection: 'row',
+  },
+  geocodeBadgeText: { fontSize: 12, color: '#2E7D32', flex: 1 },
+  multiline: { minHeight: 80, textAlignVertical: 'top', marginBottom: 16 },
   footer: { flexDirection: 'row', gap: 12, marginTop: 4 },
   cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
   cancelText: { fontSize: 15, fontWeight: '600', color: '#666' },

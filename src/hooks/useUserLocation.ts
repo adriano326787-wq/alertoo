@@ -88,16 +88,22 @@ export function useUserLocation() {
         if (stateUF) {
           setUserStateUF(stateUF);
           await AsyncStorage.setItem(STATE_STORAGE_KEY, stateUF).catch(() => {});
-        } else if (!userStateUF) {
-          // GPS não retornou estado e não tem cache → mostra tudo
-          if (!cancelled) setLocationDenied(true);
+        } else {
+          // #8 — lê do store (não do closure) para pegar o valor mais recente
+          const currentStateUF = useAppStore.getState().userStateUF;
+          if (!currentStateUF) {
+            // GPS não retornou estado e não tem cache → mostra tudo
+            if (!cancelled) setLocationDenied(true);
+          }
         }
 
       } catch (_) {
         // GPS indisponível — se não tem cache, libera sem filtro
         if (!cancelled) {
           const hasCache = await AsyncStorage.getItem(STATE_STORAGE_KEY).catch(() => null);
-          if (!hasCache && !userStateUF) setLocationDenied(true);
+          // #8 — lê do store (não do closure) para pegar o valor mais recente
+          const currentStateUF = useAppStore.getState().userStateUF;
+          if (!hasCache && !currentStateUF) setLocationDenied(true);
         }
       } finally {
         if (!cancelled) setDetecting(false);

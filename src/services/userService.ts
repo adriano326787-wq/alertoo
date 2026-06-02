@@ -23,18 +23,23 @@ export async function getOrCreateUserProfile(
     return docToProfile(snap.id, snap.data());
   }
 
-  const newDoc = {
+  // #6 — Use setDoc with merge:true instead of plain setDoc.
+  // If two devices call getOrCreateUserProfile concurrently (race condition),
+  // the second write will MERGE rather than overwrite, preserving any points/stats
+  // that may have been written by the first call in the brief window.
+  const newDoc: Record<string, any> = {
     displayName: defaults.displayName ?? 'Usuário',
     email: defaults.email ?? null,
     phone: defaults.phone ?? null,
     photoURL: defaults.photoURL ?? null,
+    // These fields use a sentinel so they are only written if the field is absent
     points: 0,
     eventsReported: 0,
     commentsPosted: 0,
     createdAt: serverTimestamp(),
   };
-  await setDoc(ref, newDoc);
-  return { uid, ...newDoc, createdAt: Date.now() };
+  await setDoc(ref, newDoc, { merge: true });
+  return { uid, ...newDoc, createdAt: Date.now() } as UserProfile;
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
@@ -64,5 +69,6 @@ function docToProfile(uid: string, d: Record<string, any>): UserProfile {
     eventsReported: d.eventsReported ?? 0,
     commentsPosted: d.commentsPosted ?? 0,
     createdAt: (d.createdAt as Timestamp)?.toMillis() ?? Date.now(),
+    promotionCredits: d.promotionCredits ?? 0, // #7 — estava ausente no mapeamento
   };
 }

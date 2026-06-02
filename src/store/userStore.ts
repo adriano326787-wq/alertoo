@@ -23,33 +23,58 @@ export const useUserStore = create<UserState>((set, get) => ({
   isAdmin: false,
 
   loadProfile: async (uid, defaults) => {
-    const profile = await getOrCreateUserProfile(uid, defaults ?? {});
-    const isAdmin = await checkIsAdmin(defaults?.email ?? profile.email);
-    set({ profile, isAdmin });
+    try {
+      const profile = await getOrCreateUserProfile(uid, defaults ?? {});
+      // email pode ser null se conta Google não expõe e-mail — passamos null de forma segura
+      const emailToCheck = defaults?.email ?? profile.email ?? null;
+      const isAdmin = await checkIsAdmin(emailToCheck);
+      set({ profile, isAdmin });
+    } catch (err) {
+      if (__DEV__) console.error('[userStore] loadProfile failed:', err);
+      // Não propaga — app continua funcional sem perfil (usuário verá estado vazio)
+    }
   },
 
   // Ponto 3 — Assina em tempo real o documento do usuário no Firestore
   subscribeToProfile: (uid: string) => {
     const ref = doc(db, 'users', uid);
-    const unsub = onSnapshot(ref, (snap) => {
-      if (!snap.exists()) return;
+    // #17 — track whether this specific snapshot callback is still current.
+    // Prevents a stale async checkIsAdmin from overwriting state after sign-out.
+    let cancelled = false;
+    // #5 — track last checked email to skip redundant checkIsAdmin calls
+    let lastCheckedEmail: string | null | undefined = undefined;
+
+    const unsub = onSnapshot(ref, async (snap) => {
+      if (!snap.exists() || cancelled) return;
       const d = snap.data();
-      const { Timestamp } = require('firebase/firestore');
-      set({
-        profile: {
-          uid: snap.id,
-          displayName: d.displayName ?? 'Usuário',
-          email: d.email ?? null,
-          phone: d.phone ?? null,
-          photoURL: d.photoURL ?? null,
-          points: d.points ?? 0,
-          eventsReported: d.eventsReported ?? 0,
-          commentsPosted: d.commentsPosted ?? 0,
-          createdAt: (d.createdAt as any)?.toMillis?.() ?? Date.now(),
-        },
-      });
+      const profile: UserProfile = {
+        uid: snap.id,
+        displayName: d.displayName ?? 'Usuário',
+        email: d.email ?? null,
+        phone: d.phone ?? null,
+        photoURL: d.photoURL ?? null,
+        points: d.points ?? 0,
+        eventsReported: d.eventsReported ?? 0,
+        commentsPosted: d.commentsPosted ?? 0,
+        createdAt: (d.createdAt as any)?.toMillis?.() ?? Date.now(),
+        promotionCredits: d.promotionCredits ?? 0,
+      };
+      const currentEmail = d.email ?? null;
+      if (lastCheckedEmail !== currentEmail) {
+        // #5 — only call checkIsAdmin when email actually changed (or on first snapshot)
+        lastCheckedEmail = currentEmail;
+        const isAdmin = await checkIsAdmin(currentEmail);
+        if (!cancelled) set({ profile, isAdmin });
+      } else {
+        // email unchanged — skip async admin check, just update profile fields
+        if (!cancelled) set({ profile });
+      }
     });
-    return unsub;
+
+    return () => {
+      cancelled = true; // #17 — prevent stale async writes after unsubscribe
+      unsub();
+    };
   },
 
   clearProfile: () => { clearAdminCache(); set({ profile: null, isAdmin: false }); },

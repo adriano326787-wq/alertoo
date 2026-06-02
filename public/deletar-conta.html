@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Excluir Conta — Alertoo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #1a1a1a;
+      line-height: 1.7;
+    }
+    header {
+      background: #FF5722;
+      color: #fff;
+      padding: 32px 24px 24px;
+      text-align: center;
+    }
+    header h1 { font-size: 28px; font-weight: 900; }
+    header p  { font-size: 14px; opacity: 0.85; margin-top: 6px; }
+    main {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 24px;
+      margin: 20px 0;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 800;
+      color: #1a1a1a;
+      margin-bottom: 12px;
+    }
+    p  { font-size: 14px; color: #444; margin-bottom: 12px; }
+    ul { margin: 8px 0 12px 20px; }
+    li { font-size: 14px; color: #444; margin-bottom: 6px; }
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .step:last-child { border-bottom: none; }
+    .step-num {
+      background: #FF5722;
+      color: #fff;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .step-text { font-size: 14px; color: #333; }
+    .step-text strong { color: #1a1a1a; }
+    .warning {
+      background: #FFF8F0;
+      border-left: 4px solid #FF9800;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 16px 0;
+      font-size: 14px;
+      color: #555;
+    }
+    .email-btn {
+      display: inline-block;
+      background: #FF5722;
+      color: #fff;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      margin-top: 8px;
+    }
+    .email-btn:hover { background: #e64a19; }
+    footer {
+      text-align: center;
+      font-size: 12px;
+      color: #aaa;
+      padding: 24px;
+      border-top: 1px solid #eee;
+    }
+    a { color: #FF5722; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🚦 Alertoo</h1>
+  <p>Exclusão de Conta e Dados</p>
+</header>
+
+<main>
+
+  <div class="warning">
+    ⚠️ A exclusão da conta é permanente e não pode ser desfeita. Todos os seus dados serão removidos.
+  </div>
+
+  <div class="card">
+    <h2>Excluir pelo app (recomendado)</h2>
+    <p>A forma mais rápida de excluir sua conta é diretamente pelo aplicativo:</p>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">Abra o <strong>Alertoo</strong> no seu celular</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">Toque no ícone de <strong>Perfil</strong> (canto inferior direito)</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">Role até o final e toque em <strong>"Excluir conta"</strong></div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-text">Confirme a exclusão. Sua conta e dados serão removidos em até <strong>30 dias</strong>.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Solicitar por e-mail</h2>
+    <p>Se preferir ou não tiver acesso ao app, envie um e-mail solicitando a exclusão:</p>
+    <ul>
+      <li>Assunto: <strong>Exclusão de conta Alertoo</strong></li>
+      <li>Inclua o e-mail cadastrado na sua conta</li>
+      <li>Responderemos em até <strong>5 dias úteis</strong></li>
+    </ul>
+    <a class="email-btn" href="mailto:privacidade@alertoo.app?subject=Exclusão%20de%20conta%20Alertoo">
+      📧 Enviar solicitação
+    </a>
+  </div>
+
+  <div class="card">
+    <h2>O que é excluído</h2>
+    <ul>
+      <li>✅ Conta e dados de autenticação</li>
+      <li>✅ Perfil e foto de perfil</li>
+      <li>✅ Alertas e eventos criados</li>
+      <li>✅ Histórico de atividade</li>
+      <li>✅ Tokens de notificação</li>
+    </ul>
+    <p style="margin-top:12px; font-size:13px; color:#888;">
+      Logs de transações financeiras são mantidos por 5 anos conforme exigência fiscal (LGPD, art. 16).
+      Esses registros são anonimizados e não permitem identificar você.
+    </p>
+  </div>
+
+  <p style="text-align:center; font-size:13px; color:#888; margin-top:8px;">
+    Dúvidas? Consulte nossa <a href="/privacidade">Política de Privacidade</a>
+    ou entre em contato: <a href="mailto:privacidade@alertoo.app">privacidade@alertoo.app</a>
+  </p>
+
+</main>
+
+<footer>
+  © 2025 Alertoo · Em conformidade com a LGPD (Lei nº 13.709/2018)
+</footer>
+
+</body>
+</html>

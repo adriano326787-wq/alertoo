@@ -19,13 +19,10 @@ import { useT } from '../hooks/useT';
 import { User } from 'firebase/auth';
 
 // webClientId = cliente tipo 3 (web) do mesmo projeto Firebase
-console.log('=== CONFIGURANDO GOOGLE SIGNIN ===');
-console.log('webClientId:', GOOGLE_CLIENT_IDS.webClientId);
 GoogleSignin.configure({
   webClientId: GOOGLE_CLIENT_IDS.webClientId,
   offlineAccess: false,
 });
-console.log('Google SignIn configurado com sucesso');
 
 interface GoogleBtnProps {
   onSuccess: (idToken: string | null, accessToken?: string | null) => void;
@@ -36,17 +33,12 @@ function GoogleAuthButton({ onSuccess, disabled }: GoogleBtnProps) {
   const t = useT();
   async function handlePress() {
     try {
-      console.log('[GoogleSignIn] checando Play Services...');
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
       // Limpa sessão cacheada (pode estar apontando para projeto antigo após troca de config)
-      try {
-        await GoogleSignin.signOut();
-      } catch {}
+      try { await GoogleSignin.signOut(); } catch {}
 
-      console.log('[GoogleSignIn] abrindo seletor de conta...');
       const userInfo: any = await GoogleSignin.signIn();
-      console.log('[GoogleSignIn] resposta:', JSON.stringify(userInfo, null, 2));
 
       // Lib v16: { type: 'success', data: { idToken, user: {...} } }
       // Lib antigas: { idToken, user: {...} }
@@ -57,26 +49,19 @@ function GoogleAuthButton({ onSuccess, disabled }: GoogleBtnProps) {
         null;
 
       if (!idToken) {
-        Alert.alert(
-          'Erro',
-          'Não foi possível obter o ID token do Google.\n\n' +
-          'Verifique se o SHA-1 do app está registrado no Firebase Console e se o Web Client ID corresponde ao mesmo projeto.'
-        );
+        Alert.alert(t('error'), t('auth_google_token_error'));
         return;
       }
 
-      console.log('[GoogleSignIn] idToken obtido, prosseguindo para Firebase...');
+      if (__DEV__) console.log('[GoogleSignIn] idToken obtido, prosseguindo para Firebase...');
       onSuccess(idToken, null);
     } catch (error: any) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) return;
       if (error.code === statusCodes.IN_PROGRESS) return;
       const code = error.code ?? 'sem código';
       const msg = error.message ?? 'erro desconhecido';
-      console.error('[GoogleSignIn] erro:', code, msg, error);
-      Alert.alert(
-        'Erro Google',
-        `Código: ${code}\n\nMensagem: ${msg}`,
-      );
+      if (__DEV__) console.error('[GoogleSignIn] erro:', code, msg, error);
+      Alert.alert(t('auth_google_error_title'), `Código: ${code}\n\nMensagem: ${msg}`);
     }
   }
 
@@ -108,17 +93,20 @@ export function AuthScreen({ onAuthenticated }: Props) {
 
   const [mode, setMode] = useState<Mode>('login');
 
-  // Lê a aba pendente definida pelo perfil anônimo
+  // Lê a aba pendente definida pelo perfil anônimo (item 11: deps corretas)
   useEffect(() => {
     if (pendingAuthTab) {
       setMode(pendingAuthTab);
       setPendingAuthTab(null);
     }
-  }, []);
+  }, [pendingAuthTab]);
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Recuperação de senha
   const [resetVisible, setResetVisible] = useState(false);
@@ -137,7 +125,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
       });
       onAuthenticated(user);
     } catch (err: any) {
-      Alert.alert('Erro Google', err?.message ?? 'Não foi possível entrar com Google.');
+      Alert.alert(t('auth_google_error_title'), err?.message ?? t('auth_google_signin_failed'));
     } finally {
       setLoading(false);
     }
@@ -146,7 +134,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
 
   async function handlePasswordReset() {
     if (!resetEmail.trim()) {
-      Alert.alert('Informe o e-mail', 'Digite o e-mail cadastrado para receber o link.');
+      Alert.alert(t('auth_reset_no_email_title'), t('auth_reset_no_email_msg'));
       return;
     }
     setResetLoading(true);
@@ -156,10 +144,10 @@ export function AuthScreen({ onAuthenticated }: Props) {
     } catch (err: any) {
       const code = err?.code ?? '';
       const msg =
-        code === 'auth/user-not-found'  ? 'Nenhuma conta encontrada com este e-mail.' :
-        code === 'auth/invalid-email'   ? 'E-mail inválido.' :
-        'Não foi possível enviar o e-mail. Tente novamente.';
-      Alert.alert('Erro', msg);
+        code === 'auth/user-not-found'  ? t('auth_reset_user_not_found') :
+        code === 'auth/invalid-email'   ? t('auth_reset_invalid_email') :
+        t('auth_reset_failed');
+      Alert.alert(t('error'), msg);
     } finally {
       setResetLoading(false);
     }
@@ -177,11 +165,11 @@ export function AuthScreen({ onAuthenticated }: Props) {
       const user = await signInAnon();
       // Tenta criar perfil mas não bloqueia a navegação se falhar
       try {
-        await loadProfile(user.uid, { displayName: 'Visitante' });
+        await loadProfile(user.uid, { displayName: t('auth_anon_display_name') });
       } catch (_) {}
       onAuthenticated(user);
     } catch (err: any) {
-      Alert.alert('Erro', 'Não foi possível entrar. Verifique se o acesso anônimo está ativado no Firebase Console.');
+      Alert.alert(t('error'), t('auth_anon_failed'));
     } finally {
       setLoading(false);
     }
@@ -189,15 +177,24 @@ export function AuthScreen({ onAuthenticated }: Props) {
 
   async function handleEmailSubmit() {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Campos obrigatórios', 'Preencha e-mail e senha.');
+      Alert.alert(t('auth_required_fields_title'), t('auth_required_email_password_msg'));
+      return;
+    }
+    // #14 — basic email format check before hitting Firebase
+    if (!email.trim().includes('@') || !email.trim().includes('.')) {
+      Alert.alert(t('auth_invalid_email_title'), t('auth_invalid_email_msg'));
       return;
     }
     if (mode === 'register' && !name.trim()) {
-      Alert.alert('Campos obrigatórios', 'Informe seu nome.');
+      Alert.alert(t('auth_required_fields_title'), t('auth_name_required_msg'));
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Senha fraca', 'A senha precisa ter no mínimo 6 caracteres.');
+      Alert.alert(t('auth_weak_password_title'), t('auth_weak_password_msg'));
+      return;
+    }
+    if (mode === 'register' && password !== confirmPassword) {
+      Alert.alert(t('auth_passwords_mismatch_title'), t('auth_passwords_mismatch_msg'));
       return;
     }
     setLoading(true);
@@ -214,14 +211,14 @@ export function AuthScreen({ onAuthenticated }: Props) {
     } catch (err: any) {
       const code = err?.code ?? '';
       const msg =
-        code === 'auth/wrong-password'       ? 'Senha incorreta.' :
-        code === 'auth/invalid-credential'   ? 'E-mail ou senha incorretos.' :
-        code === 'auth/user-not-found'       ? 'E-mail não encontrado.' :
-        code === 'auth/email-already-in-use' ? 'Este e-mail já está cadastrado.' :
-        code === 'auth/weak-password'        ? 'Senha fraca (mínimo 6 caracteres).' :
-        code === 'auth/invalid-email'        ? 'E-mail inválido.' :
-        err?.message ?? 'Erro ao autenticar. Tente novamente.';
-      Alert.alert('Erro', msg);
+        code === 'auth/wrong-password'       ? t('auth_wrong_password') :
+        code === 'auth/invalid-credential'   ? t('auth_invalid_credential') :
+        code === 'auth/user-not-found'       ? t('auth_user_not_found') :
+        code === 'auth/email-already-in-use' ? t('auth_email_in_use') :
+        code === 'auth/weak-password'        ? t('auth_weak_password') :
+        code === 'auth/invalid-email'        ? t('auth_invalid_email_code') :
+        err?.message ?? t('auth_failed');
+      Alert.alert(t('error'), msg);
     } finally {
       setLoading(false);
     }
@@ -269,10 +266,10 @@ export function AuthScreen({ onAuthenticated }: Props) {
         <View style={styles.form}>
           {mode === 'register' && (
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Nome</Text>
+              <Text style={styles.inputLabel}>{t('auth_name_label')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Seu nome completo"
+                placeholder={t('auth_name_placeholder')}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -297,20 +294,54 @@ export function AuthScreen({ onAuthenticated }: Props) {
 
           <View style={styles.inputWrapper}>
             <Text style={styles.inputLabel}>{t('auth_password')}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Mínimo 6 caracteres"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholderTextColor="#bbb"
-            />
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder={t('auth_password_placeholder')}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                placeholderTextColor="#bbb"
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword((v) => !v)}
+                accessibilityLabel={showPassword ? t('auth_hide_password') : t('auth_show_password')}
+              >
+                <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {mode === 'register' && (
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>{t('auth_confirm_password_label')}</Text>
+              <View style={styles.passwordRow}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder={t('auth_confirm_password_placeholder')}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showConfirmPassword}
+                  placeholderTextColor="#bbb"
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowConfirmPassword((v) => !v)}
+                  accessibilityLabel={showConfirmPassword ? t('auth_hide_confirm_password') : t('auth_show_confirm_password')}
+                >
+                  <Text style={styles.eyeIcon}>{showConfirmPassword ? '🙈' : '👁'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {mode === 'login' && (
             <TouchableOpacity
               style={styles.forgotBtn}
               onPress={() => { setResetEmail(email); setResetVisible(true); }}
+              accessibilityRole="link"
+              accessibilityLabel={t('auth_forgot')}
             >
               <Text style={styles.forgotText}>{t('auth_forgot')}</Text>
             </TouchableOpacity>
@@ -344,6 +375,8 @@ export function AuthScreen({ onAuthenticated }: Props) {
           style={styles.anonBtn}
           onPress={handleAnonSignIn}
           disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel={t('auth_continue_anon')}
         >
           <Text style={styles.anonBtnText}>{t('auth_continue_anon')}</Text>
         </TouchableOpacity>
@@ -364,9 +397,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
               <>
                 <Text style={styles.modalIcon}>🔐</Text>
                 <Text style={styles.modalTitle}>{t('auth_forgot_title')}</Text>
-                <Text style={styles.modalDesc}>
-                  Informe seu e-mail e enviaremos um link para redefinir sua senha.
-                </Text>
+                <Text style={styles.modalDesc}>{t('auth_forgot_desc')}</Text>
                 <TextInput
                   style={styles.modalInput}
                   placeholder="seu@email.com"
@@ -396,12 +427,10 @@ export function AuthScreen({ onAuthenticated }: Props) {
                 <Text style={styles.modalIcon}>✅</Text>
                 <Text style={styles.modalTitle}>{t('auth_sent_title')}</Text>
                 <Text style={styles.modalDesc}>
-                  Enviamos o link de recuperação para:{'\n'}
+                  {t('auth_reset_sent_desc')}{'\n'}
                   <Text style={styles.modalEmail}>{resetEmail}</Text>
                 </Text>
-                <Text style={styles.modalHint}>
-                  Verifique também a pasta de spam caso não encontre.
-                </Text>
+                <Text style={styles.modalHint}>{t('auth_reset_spam_hint')}</Text>
                 <TouchableOpacity style={styles.modalBtn} onPress={handleCloseReset}>
                   <Text style={styles.modalBtnText}>{t('auth_close')}</Text>
                 </TouchableOpacity>
@@ -448,6 +477,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     fontSize: 15, color: '#1a1a1a', backgroundColor: '#fafafa',
   },
+  passwordRow: { flexDirection: 'row', alignItems: 'center' },
+  passwordInput: { flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRightWidth: 0 },
+  eyeBtn: {
+    height: 52, paddingHorizontal: 14,
+    borderWidth: 1.5, borderColor: '#e8e8e8', borderLeftWidth: 0,
+    borderTopRightRadius: 13, borderBottomRightRadius: 13,
+    backgroundColor: '#fafafa', alignItems: 'center', justifyContent: 'center',
+  },
+  eyeIcon: { fontSize: 18 },
 
   primaryBtn: {
     backgroundColor: '#FF5722', borderRadius: 13,

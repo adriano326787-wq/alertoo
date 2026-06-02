@@ -1,157 +1,152 @@
 /**
- * Pin primitives — formas reutilizáveis para os marcadores do mapa.
+ * Pin primitives — círculos para os marcadores do mapa.
  *
- * Tipos:
- *   - DropPin: gota moderna (padrão)
- *   - PremiumPin: gota premium com glow + borda gold
- *   - AlertPin: alerta com pulse animação
- *   - LivePin: círculo com badge LIVE
- *   - PartnerPin: retângulo arredondado para parceiros
- *
- * Todos respondem a `size`, `color`, `icon` (emoji ou texto).
+ * REGRAS ANDROID (react-native-maps custom markers, Old Architecture):
+ *   1. O wrapper externo DEVE ter width e height explícitos
+ *   2. O wrapper externo DEVE ter collapsable={false}
+ *      (sem isso, o Android colapsa o nó e o bitmap é capturado parcialmente)
+ *   3. NÃO usar elevation/shadow nos filhos do marcador
+ *      (elevation desloca o bitmap capturado pelo mapa)
+ *   4. Animações: useNativeDriver={false}
+ *      (useNativeDriver:true pode causar estado inconsistente no bitmap capture)
  */
 
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, Easing, Image, ImageSourcePropType } from 'react-native';
-import { palette, shadow, platformShadow } from '../../theme/tokens';
+import { palette } from '../../theme/tokens';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BasePinProps
+// ═══════════════════════════════════════════════════════════════════════════════
 
 interface BasePinProps {
   size: number;
   color: string;
-  icon?: string;          // emoji
-  iconColor?: string;     // cor do glifo
+  icon?: string;
+  iconColor?: string;
   logo?: ImageSourcePropType;
-  ringColor?: string;     // halo externo
+  ringColor?: string;
+  onLayout?: () => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  DropPin — gota moderna minimalista (padrão)
-//
-//   ╭───╮
-//   │ ◉ │  ← círculo com ícone branco
-//   ╰─┬─╯
-//     ▼     ← ponta sutil
+//  DropPin — círculo simples com ícone
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function DropPin({ size, color, icon, iconColor = '#fff', logo }: BasePinProps) {
-  const bodyR = size * 0.5;
-  const tipW  = size * 0.32;
-  const tipH  = size * 0.20;
-  const innerSize = size - 6;
-  const iconFontSize = size * 0.46;
+// ─── Dimensões do pin retangular ─────────────────────────────────────────────
+// width = size * 1.6  height = size  borderRadius = 7
+// Mantém proporção legível de pílula/crachá em todos os níveis de zoom.
+
+export function DropPin({ size, color, icon, iconColor = '#fff', logo, onLayout }: BasePinProps) {
+  const pinW = Math.round(size * 1.6);
+  const pinH = size;
+  const iconFontSize = Math.round(size * 0.46);
 
   return (
-    <View style={{ alignItems: 'center' }}>
+    <View
+      collapsable={false}
+      onLayout={onLayout}
+      style={{ width: pinW, height: pinH, overflow: 'hidden' }}
+    >
       <View style={{
-        width: size,
-        height: size,
-        borderRadius: bodyR,
+        width: pinW,
+        height: pinH,
+        borderRadius: 7,
         backgroundColor: color,
         borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.95)',
+        borderColor: '#fff',
         alignItems: 'center',
         justifyContent: 'center',
-        ...platformShadow(shadow.lg),
       }}>
-        {/* Subtle shine no topo (não cobre o ícone) */}
-        <View pointerEvents="none" style={{
-          position: 'absolute',
-          top: 2, left: 2,
-          width: innerSize, height: innerSize * 0.28,
-          borderTopLeftRadius: bodyR - 2,
-          borderTopRightRadius: bodyR - 2,
-          backgroundColor: 'rgba(255,255,255,0.22)',
-        }} />
         {logo ? (
           <Image
             source={logo}
-            style={{ width: innerSize * 0.8, height: innerSize * 0.8, borderRadius: innerSize * 0.4 }}
+            style={{ width: pinH * 0.6, height: pinH * 0.6, borderRadius: 4 }}
             resizeMode="cover"
           />
         ) : (
-          <Text style={{ fontSize: iconFontSize, color: iconColor, includeFontPadding: false }}>
+          <Text style={{
+            fontSize: iconFontSize,
+            lineHeight: iconFontSize + 4,
+            color: iconColor,
+            includeFontPadding: false,
+            textAlignVertical: 'center',
+          }}>
             {icon}
           </Text>
         )}
       </View>
-      {/* Tip — pequena gota para baixo */}
-      <View style={{
-        width: 0, height: 0,
-        borderLeftWidth: tipW / 2,
-        borderRightWidth: tipW / 2,
-        borderTopWidth: tipH,
-        borderLeftColor: 'transparent',
-        borderRightColor: 'transparent',
-        borderTopColor: color,
-        marginTop: -2,
-      }} />
     </View>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  PremiumPin — versão premium com halo gold sutil
+//  PremiumPin — círculo com halo colorido pulsante (promovidos)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function PremiumPin({
-  size, color, icon, iconColor = '#fff', logo, ringColor = palette.gold[400],
+  size, color, icon, iconColor = '#fff', logo, ringColor = palette.gold[400], onLayout,
 }: BasePinProps) {
-  const ring = useRef(new Animated.Value(0.5)).current;
+  const ring = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
     const anim = Animated.loop(Animated.sequence([
-      Animated.timing(ring, { toValue: 0.9, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      Animated.timing(ring, { toValue: 0.5, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(ring, { toValue: 0.9, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+      Animated.timing(ring, { toValue: 0.4, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
     ]));
     anim.start();
     return () => anim.stop();
   }, []);
 
-  const bodyR = size * 0.5;
-  const innerSize = size - 8;
-  const iconFontSize = size * 0.44;
+  const pinW = Math.round(size * 1.6);
+  const pinH = size;
+  const halo = 12;
+  const outer = pinW + halo;
+  const outerH = pinH + halo;
+  const iconFontSize = Math.round(size * 0.44);
 
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', width: size + 18, height: size + 22 }}>
-      {/* Halo gold pulsante */}
+    <View
+      collapsable={false}
+      onLayout={onLayout}
+      style={{ width: outer, height: outerH, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+    >
+      {/* Halo pulsante */}
       <Animated.View style={{
         position: 'absolute',
-        top: (size + 22 - (size + 14)) / 2,
-        width: size + 14,
-        height: size + 14,
-        borderRadius: (size + 14) / 2,
+        top: 0, left: 0,
+        width: outer,
+        height: outerH,
+        borderRadius: 10,
         borderWidth: 2,
         borderColor: ringColor,
-        backgroundColor: 'transparent',
         opacity: ring,
       }} />
-      {/* Corpo do pin */}
+      {/* Retângulo principal */}
       <View style={{
-        width: size, height: size,
-        borderRadius: bodyR,
+        width: pinW,
+        height: pinH,
+        borderRadius: 7,
         backgroundColor: color,
-        borderWidth: 2.5,
+        borderWidth: 2,
         borderColor: ringColor,
-        alignItems: 'center', justifyContent: 'center',
-        ...platformShadow(shadow.glow(ringColor)),
+        alignItems: 'center',
+        justifyContent: 'center',
       }}>
-        {/* Shine sutil */}
-        <View pointerEvents="none" style={{
-          position: 'absolute',
-          top: 2, left: 2,
-          width: innerSize, height: innerSize * 0.28,
-          borderTopLeftRadius: bodyR - 2,
-          borderTopRightRadius: bodyR - 2,
-          backgroundColor: 'rgba(255,255,255,0.24)',
-        }} />
         {logo ? (
           <Image
             source={logo}
-            style={{ width: innerSize * 0.78, height: innerSize * 0.78, borderRadius: innerSize * 0.39 }}
+            style={{ width: pinH * 0.6, height: pinH * 0.6, borderRadius: 4 }}
             resizeMode="cover"
           />
         ) : (
-          <Text style={{ fontSize: iconFontSize, color: iconColor, includeFontPadding: false }}>
+          <Text style={{
+            fontSize: iconFontSize,
+            lineHeight: iconFontSize + 4,
+            color: iconColor,
+            includeFontPadding: false,
+            textAlignVertical: 'center',
+          }}>
             {icon}
           </Text>
         )}
@@ -161,46 +156,63 @@ export function PremiumPin({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  AlertPin — vermelho/laranja, animação pulse (urgência)
+//  AlertPin — círculo com pulse de urgência
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function AlertPin({ size, color = palette.alert, icon }: { size: number; color?: string; icon?: string }) {
-  const pulse = useRef(new Animated.Value(0.4)).current;
+export function AlertPin({ size, color = palette.alert, icon, onLayout }: { size: number; color?: string; icon?: string; onLayout?: () => void }) {
+  const pulse = useRef(new Animated.Value(0.35)).current;
 
   useEffect(() => {
     const anim = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 0.9, duration: 850, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0.4, duration: 850, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0.8,  duration: 850, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      Animated.timing(pulse, { toValue: 0.35, duration: 850, easing: Easing.in(Easing.quad),  useNativeDriver: false }),
     ]));
     anim.start();
     return () => anim.stop();
   }, []);
 
-  const bodyR = size * 0.5;
-  const iconFontSize = size * 0.5;
+  const pinW = Math.round(size * 1.6);
+  const pinH = size;
+  const extra = 14;
+  const outer  = pinW + extra;
+  const outerH = pinH + extra;
+  const iconFontSize = Math.round(size * 0.48);
 
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', width: size + 20, height: size + 20 }}>
-      {/* Pulse externo */}
+    <View
+      collapsable={false}
+      onLayout={onLayout}
+      style={{ width: outer, height: outerH, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+    >
+      {/* Pulse */}
       <Animated.View style={{
         position: 'absolute',
-        width: size + 16,
-        height: size + 16,
-        borderRadius: (size + 16) / 2,
+        top: 0, left: 0,
+        width: outer,
+        height: outerH,
+        borderRadius: 10,
         backgroundColor: color,
         opacity: pulse,
       }} />
-      {/* Corpo */}
+      {/* Retângulo */}
       <View style={{
-        width: size, height: size,
-        borderRadius: bodyR,
+        width: pinW,
+        height: pinH,
+        borderRadius: 7,
         backgroundColor: color,
-        borderWidth: 2.5,
+        borderWidth: 2,
         borderColor: '#fff',
-        alignItems: 'center', justifyContent: 'center',
-        ...platformShadow(shadow.glow(color)),
+        alignItems: 'center',
+        justifyContent: 'center',
       }}>
-        <Text style={{ fontSize: iconFontSize, color: '#fff', fontWeight: '900', includeFontPadding: false }}>
+        <Text style={{
+          fontSize: iconFontSize,
+          lineHeight: iconFontSize + 4,
+          color: '#fff',
+          fontWeight: '900',
+          includeFontPadding: false,
+          textAlignVertical: 'center',
+        }}>
           {icon ?? '!'}
         </Text>
       </View>
@@ -209,82 +221,78 @@ export function AlertPin({ size, color = palette.alert, icon }: { size: number; 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  LivePin — badge LIVE pequeno (eventos em tempo real)
+//  LivePin — círculo com badge LIVE animado
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function LivePin({ size, color, icon }: { size: number; color: string; icon?: string }) {
+export function LivePin({ size, color, icon, onLayout }: { size: number; color: string; icon?: string; onLayout?: () => void }) {
   const dot = useRef(new Animated.Value(0.4)).current;
+
   useEffect(() => {
     const anim = Animated.loop(Animated.sequence([
-      Animated.timing(dot, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.timing(dot, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+      Animated.timing(dot, { toValue: 1,   duration: 600, useNativeDriver: false }),
+      Animated.timing(dot, { toValue: 0.4, duration: 600, useNativeDriver: false }),
     ]));
     anim.start();
     return () => anim.stop();
   }, []);
 
-  const bodyR = size * 0.5;
-  const iconFontSize = size * 0.46;
+  const pinW = Math.round(size * 1.6);
+  const pinH = size;
+  const iconFontSize = Math.round(size * 0.46);
+  const outerW = pinW + 20;
+  const outerH = pinH + 12;
 
   return (
-    <View style={{ alignItems: 'center' }}>
+    <View
+      collapsable={false}
+      onLayout={onLayout}
+      style={{ width: outerW, height: outerH, overflow: 'hidden' }}
+    >
+      {/* Retângulo principal — na base esquerda */}
       <View style={{
-        width: size, height: size,
-        borderRadius: bodyR,
+        position: 'absolute',
+        bottom: 0, left: 0,
+        width: pinW,
+        height: pinH,
+        borderRadius: 7,
         backgroundColor: color,
         borderWidth: 2,
         borderColor: '#fff',
-        alignItems: 'center', justifyContent: 'center',
-        ...platformShadow(shadow.lg),
+        alignItems: 'center',
+        justifyContent: 'center',
       }}>
-        <Text style={{ fontSize: iconFontSize, color: '#fff', includeFontPadding: false }}>{icon}</Text>
-        {/* Badge LIVE */}
-        <View style={{
-          position: 'absolute',
-          top: -6, right: -10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 5,
-          paddingVertical: 1.5,
-          borderRadius: 8,
-          backgroundColor: palette.live,
-          ...platformShadow(shadow.sm),
+        <Text style={{
+          fontSize: iconFontSize,
+          lineHeight: iconFontSize + 4,
+          color: '#fff',
+          includeFontPadding: false,
+          textAlignVertical: 'center',
         }}>
-          <Animated.View style={{
-            width: 5, height: 5,
-            borderRadius: 2.5,
-            backgroundColor: '#fff',
-            marginRight: 3,
-            opacity: dot,
-          }} />
-          <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff', letterSpacing: 0.5 }}>LIVE</Text>
-        </View>
+          {icon}
+        </Text>
       </View>
-    </View>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//  PartnerPin — retângulo corporativo elegante
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export function PartnerPin({ size, color, logo, label }: { size: number; color: string; logo?: ImageSourcePropType; label?: string }) {
-  return (
-    <View style={{
-      paddingHorizontal: 8, paddingVertical: 5,
-      borderRadius: 10,
-      backgroundColor: '#fff',
-      borderWidth: 1.5,
-      borderColor: color,
-      flexDirection: 'row', alignItems: 'center',
-      ...platformShadow(shadow.lg),
-    }}>
-      {logo ? (
-        <Image source={logo} style={{ width: 22, height: 22, borderRadius: 4, marginRight: 6 }} resizeMode="contain" />
-      ) : null}
-      {label ? (
-        <Text style={{ fontSize: 12, fontWeight: '800', color, includeFontPadding: false }}>{label}</Text>
-      ) : null}
+      {/* Badge LIVE — canto superior direito */}
+      <View style={{
+        position: 'absolute',
+        top: 0, right: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 5,
+        paddingVertical: 2,
+        borderRadius: 8,
+        backgroundColor: palette.live,
+      }}>
+        <Animated.View style={{
+          width: 5, height: 5,
+          borderRadius: 2.5,
+          backgroundColor: '#fff',
+          marginRight: 3,
+          opacity: dot,
+        }} />
+        <Text style={{ fontSize: 8, fontWeight: '900', color: '#fff', letterSpacing: 0.5, includeFontPadding: false }}>
+          LIVE
+        </Text>
+      </View>
     </View>
   );
 }
@@ -295,14 +303,19 @@ export function PartnerPin({ size, color, logo, label }: { size: number; color: 
 
 export function ClusterPin({ size, count, color = palette.brand[500] }: { size: number; count: number; color?: string }) {
   const label = count > 99 ? '99+' : String(count);
+  const outer = size + 10;
+
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', width: size + 12, height: size + 12 }}>
-      {/* Halo externo translúcido */}
+    <View
+      collapsable={false}
+      style={{ width: outer, height: outer, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+    >
+      {/* Halo translúcido */}
       <View style={{
         position: 'absolute',
-        width: size + 10,
-        height: size + 10,
-        borderRadius: (size + 10) / 2,
+        top: 0, left: 0,
+        width: outer, height: outer,
+        borderRadius: outer / 2,
         backgroundColor: color + '30',
       }} />
       {/* Corpo */}
@@ -311,9 +324,7 @@ export function ClusterPin({ size, count, color = palette.brand[500] }: { size: 
         borderRadius: size / 2,
         backgroundColor: color,
         alignItems: 'center', justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: '#fff',
-        ...platformShadow(shadow.lg),
+        borderWidth: 2, borderColor: '#fff',
       }}>
         <Text style={{
           fontSize: Math.max(13, size * 0.36),
@@ -324,6 +335,226 @@ export function ClusterPin({ size, count, color = palette.brand[500] }: { size: 
           {label}
         </Text>
       </View>
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PromotedMarkerCard — retângulo de card para eventos promovidos no mapa
+//
+//  Layout:
+//    ┌──────────────────────────┐ ← borda colorida por tier (2-3 px)
+//    │ [foto do evento]  [🥇]  │ ← foto em contain + badge tier no canto
+//    │                          │
+//    ├──────────────────────────┤
+//    │ Nome do Evento Truncado   │ ← faixa de nome (branco, bold)
+//    └────────────┬─────────────┘
+//                 ▼  ← cauda triangular apontando para a coordenada
+//
+//  Regras (promo-marketing skill):
+//    - Foto em `contain` (nunca `cover`) — o organizador pagou para ser visto inteiro
+//    - Letterbox na cor do tier quando a foto não preenche a área
+//    - Animação de halo pulsante SOMENTE no tier Ouro
+//    - Âncora (0.5, 1.0) → cauda aponta para a coordenada exata do evento
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface PromotedCardProps {
+  /** Largura total do card (px) */
+  cardW: number;
+  /** Altura da área de foto (px) */
+  photoH: number;
+  /** Altura da faixa de nome (px) */
+  nameH: number;
+  /** Altura da cauda triangular (px). Default: 8 */
+  tailH?: number;
+  /** URL da foto de promoção do evento */
+  photoUrl?: string | null;
+  /** Título do evento (exibido na faixa inferior) */
+  label: string;
+  /** Emoji da categoria (fallback quando não há foto) */
+  emoji: string;
+  /** Tier de promoção */
+  tier: 'bronze' | 'prata' | 'ouro';
+  /** Cor da borda e cauda (palette.bronze/silver/gold) */
+  borderColor: string;
+  /** Cor de fundo da letterbox (tier colorida, semi-transparente) */
+  letterboxColor: string;
+  onLayout?: () => void;
+  onImageLoad?: () => void;
+}
+
+const TIER_BADGE_EMOJI: Record<string, string> = {
+  bronze: '🥉',
+  prata:  '🥈',
+  ouro:   '🥇',
+};
+
+export function PromotedMarkerCard({
+  cardW,
+  photoH,
+  nameH,
+  tailH = 8,
+  photoUrl,
+  label,
+  emoji,
+  tier,
+  borderColor,
+  letterboxColor,
+  onLayout,
+  onImageLoad,
+}: PromotedCardProps) {
+  const cardH   = photoH + nameH;
+  const totalH  = cardH + tailH;
+  const borderW = tier === 'ouro' ? 3 : tier === 'prata' ? 2.5 : 2;
+  const nameFontSize  = nameH >= 28 ? 12 : 10;
+  const badgeFontSize = photoH >= 70 ? 14 : 11;
+  const emojiFontSize = Math.round(photoH * 0.44);
+
+  // Halo pulsante — somente tier Ouro (recurso visual escasso = percepção de premium)
+  const pulse = useRef(new Animated.Value(0.35)).current;
+  useEffect(() => {
+    if (tier !== 'ouro') return;
+    const anim = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1,    duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+      Animated.timing(pulse, { toValue: 0.35, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+    ]));
+    anim.start();
+    return () => anim.stop();
+  }, [tier]);
+
+  return (
+    <View
+      collapsable={false}
+      onLayout={onLayout}
+      style={{ width: cardW, height: totalH }}
+    >
+      {/* Halo pulsante Ouro (posicionado atrás do card) */}
+      {tier === 'ouro' && (
+        <Animated.View style={{
+          position: 'absolute',
+          top: -4, left: -4,
+          width: cardW + 8,
+          height: cardH + 8,
+          borderRadius: 14,
+          borderWidth: 2,
+          borderColor,
+          opacity: pulse,
+        }} />
+      )}
+
+      {/* Card principal */}
+      <View style={{
+        width: cardW,
+        height: cardH,
+        borderRadius: 10,
+        borderWidth: borderW,
+        borderColor,
+        backgroundColor: '#fff',
+      }}>
+
+        {/* ── Área de foto ─────────────────────────────────────────────── */}
+        <View style={{
+          width: '100%',
+          height: photoH,
+          borderTopLeftRadius: 8,
+          borderTopRightRadius: 8,
+          backgroundColor: letterboxColor,
+          overflow: 'hidden',          // innermost — clip da foto (promo-marketing rule §9)
+        }}>
+          {photoUrl ? (
+            <Image
+              source={{ uri: photoUrl }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="contain"     // nunca cover — organizer pagou pra ver a foto inteira
+              onLoad={onImageLoad}
+            />
+          ) : (
+            // Fallback sem foto: emoji da categoria centralizado na letterbox
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: emojiFontSize, includeFontPadding: false }}>
+                {emoji}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── Badge de tier (sobre a foto, canto superior direito) ─────── */}
+        <View style={{
+          position: 'absolute',
+          top: 4,
+          right: 4,
+          paddingHorizontal: 5,
+          paddingVertical: 2,
+          borderRadius: 6,
+          backgroundColor: 'rgba(0,0,0,0.52)',
+        }}>
+          <Text style={{ fontSize: badgeFontSize, includeFontPadding: false }}>
+            {TIER_BADGE_EMOJI[tier]}
+          </Text>
+        </View>
+
+        {/* ── Faixa de nome ────────────────────────────────────────────── */}
+        <View style={{
+          width: '100%',
+          height: nameH,
+          paddingHorizontal: 6,
+          justifyContent: 'center',
+          borderTopWidth: 1,
+          borderTopColor: borderColor + '50',
+        }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: nameFontSize,
+              fontWeight: '800',
+              color: '#111',
+              includeFontPadding: false,
+            }}
+          >
+            {label}
+          </Text>
+        </View>
+      </View>
+
+      {/* ── Cauda triangular → aponta para a coordenada do evento ─────── */}
+      <View style={{
+        width: 0,
+        height: 0,
+        borderLeftWidth: 7,
+        borderRightWidth: 7,
+        borderTopWidth: tailH,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderTopColor: borderColor,
+        alignSelf: 'center',
+      }} />
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PartnerPin — retângulo corporativo elegante
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function PartnerPin({ size, color, logo, label }: { size: number; color: string; logo?: ImageSourcePropType; label?: string }) {
+  return (
+    <View
+      collapsable={false}
+      style={{
+        paddingHorizontal: 8, paddingVertical: 5,
+        borderRadius: 10,
+        backgroundColor: '#fff',
+        borderWidth: 1.5,
+        borderColor: color,
+        flexDirection: 'row', alignItems: 'center',
+      }}
+    >
+      {logo ? (
+        <Image source={logo} style={{ width: 22, height: 22, borderRadius: 4, marginRight: 6 }} resizeMode="contain" />
+      ) : null}
+      {label ? (
+        <Text style={{ fontSize: 12, fontWeight: '800', color, includeFontPadding: false }}>{label}</Text>
+      ) : null}
     </View>
   );
 }

@@ -4,36 +4,64 @@ service cloud.firestore {
 
     // ── Perfis de usuário ──────────────────────────────────────────────────
     match /users/{userId} {
-      // Qualquer autenticado pode criar seu próprio perfil
       allow create: if request.auth != null && request.auth.uid == userId;
-      // Só o próprio usuário pode editar seu perfil
-      allow update: if request.auth != null && request.auth.uid == userId;
-      // Qualquer autenticado pode ler perfis (para ranking futuro)
+      // Só o próprio usuário edita seu perfil.
+      // Campos controlados por Cloud Functions (promotionCredits) são
+      // escritos pelo admin SDK, que bypassa estas regras — ok.
+      allow update: if request.auth != null && request.auth.uid == userId
+        // Impede que o cliente altere o próprio UID dentro do documento
+        && !('uid' in request.resource.data.diff(resource.data).affectedKeys());
       allow read: if request.auth != null;
     }
 
     // ── Eventos de estrada ─────────────────────────────────────────────────
     match /events/{eventId} {
-      // Qualquer autenticado pode ler e criar
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      // Só o dono pode editar/deletar, ou qualquer um pode confirmar/negar
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null &&
-        (request.auth.uid == resource.data.userId || resource.data.denials >= 9);
+      allow create: if request.auth != null
+        // userId deve ser o próprio uid do criador
+        && request.resource.data.userId == request.auth.uid;
+      // Votação (confirmations/denials/voters): qualquer autenticado pode votar.
+      // Edição de dados básicos (título, descrição, etc.): apenas o dono.
+      // Bloqueia alteração de userId (sequestro) e manipulação direta de denials.
+      allow update: if request.auth != null
+        && !('userId' in request.resource.data.diff(resource.data).affectedKeys())
+        && (
+          // Campos de votação: qualquer autenticado pode alterar
+          isVoteOnlyChange(request.resource.data, resource.data)
+          // Outros campos: apenas o dono do evento
+          || request.auth.uid == resource.data.userId
+        );
+      // Deleção: apenas o dono (não permitir deleção por denials — Cloud Function faz isso)
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
     }
 
     // ── Eventos de entretenimento ──────────────────────────────────────────
     match /entertainment_events/{eventId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        // Bloqueia criação com promoção já ativa (deve ser feita via Cloud Function)
+        && request.resource.data.promotionTier == null
+        && request.resource.data.isFeatured == false;
+      allow update: if request.auth != null
+        // Bloqueia alteração de userId (sequestro de evento)
+        && !('userId' in request.resource.data.diff(resource.data).affectedKeys())
+        && (
+          // Campos de votação: qualquer autenticado pode alterar
+          isVoteOnlyChange(request.resource.data, resource.data)
+          // Campos não-promoção: apenas o dono
+          // Campos de promoção são bloqueados aqui — escritos apenas via admin SDK (Cloud Function)
+          || (request.auth.uid == resource.data.userId
+              && !hasPromoFieldChange(request.resource.data, resource.data))
+        );
       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
 
       // Comentários
       match /comments/{commentId} {
         allow read: if request.auth != null;
-        allow create: if request.auth != null;
+        allow create: if request.auth != null
+          && request.resource.data.userId == request.auth.uid;
         allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
       }
     }
@@ -41,11 +69,13 @@ service cloud.firestore {
     // ── Promoções ──────────────────────────────────────────────────────────
     match /promotions/{promotionId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null &&
-        (request.auth.uid == resource.data.userId);
-      allow delete: if request.auth != null &&
-        request.auth.uid == resource.data.userId;
+      // Só o dono pode criar promoções para seus eventos
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
     }
 
     // ── Favoritos (subcollection de usuário) ──────────────────────────────
@@ -54,9 +84,50 @@ service cloud.firestore {
     }
 
     // ── Compras de créditos ────────────────────────────────────────────────
+    // Apenas Cloud Functions (admin SDK) escrevem — cliente só lê os próprios
     match /credit_purchases/{purchaseId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null;
+      // Bloqueado: use awardAdCredit Cloud Function ou verifyMPPayment em vez disso
+      allow create: if false;
+      allow update: if false;
     }
+
+    // ── Pagamentos pendentes (escrito pela Cloud Function createMPPreference) ──
+    match /pending_payments/{paymentId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if false;
+      allow update: if false;
+    }
+
+    // ── Denúncias de eventos ───────────────────────────────────────────────
+    // ID do documento: {uid}_{eventId} — garante unicidade por usuário/evento
+    match /reports/{reportId} {
+      // Leitura do próprio documento — necessário para checar duplicata antes de criar
+      allow get: if request.auth != null
+        && reportId.matches(request.auth.uid + '_.*');
+      // Criação: autenticado, reporterId deve corresponder ao uid, status inicial = pending
+      allow create: if request.auth != null
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.status == 'pending';
+      // Listagem, atualização e deleção bloqueadas no cliente (admin SDK via Cloud Function)
+      allow list, update, delete: if false;
+    }
+  }
+
+  // ── Helper: detecta mudança em campos de promoção ─────────────────────────
+  function hasPromoFieldChange(newData, oldData) {
+    let promoFields = ['promotionTier', 'promotionEndDate', 'isFeatured',
+                       'promotionPhotoUrl', 'promotionPhotoUrls',
+                       'promotionPackage', 'promotionWeeks', 'promotionActiveDays',
+                       'expiresAt'];
+    return newData.diff(oldData).affectedKeys().hasAny(promoFields);
+  }
+
+  // ── Helper: detecta se a mudança é apenas em campos de votação ────────────
+  // Permite que qualquer autenticado vote, mas impede alteração de outros campos
+  function isVoteOnlyChange(newData, oldData) {
+    let voteFields = ['confirmations', 'denials', 'voters', 'updatedAt'];
+    let changed = newData.diff(oldData).affectedKeys();
+    return changed.hasOnly(voteFields);
   }
 }

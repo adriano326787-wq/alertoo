@@ -1,3 +1,75 @@
+// ─── Pacotes de promoção por dias da semana ───────────────────────────────────
+
+export type PromotionPackageId = 'full' | 'weekend' | 'weekdays' | 'single';
+
+export interface PromotionPackage {
+  id: PromotionPackageId;
+  label: string;
+  emoji: string;
+  /** Dias ativos por padrão: 0=Dom, 1=Seg, ..., 6=Sáb. Vazio para 'single' (usuário escolhe). */
+  defaultActiveDays: number[];
+  description: string;
+}
+
+export const PROMOTION_PACKAGES: Record<PromotionPackageId, PromotionPackage> = {
+  full: {
+    id: 'full',
+    label: 'Semana Completa',
+    emoji: '📅',
+    defaultActiveDays: [0, 1, 2, 3, 4, 5, 6],
+    description: 'Todos os dias da semana',
+  },
+  weekdays: {
+    id: 'weekdays',
+    label: 'Dias Úteis',
+    emoji: '💼',
+    defaultActiveDays: [1, 2, 3, 4, 5],  // Seg–Sex
+    description: 'Segunda a Sexta',
+  },
+  weekend: {
+    id: 'weekend',
+    label: 'Final de Semana',
+    emoji: '🗓️',
+    defaultActiveDays: [5, 6, 0],         // Sex, Sáb, Dom
+    description: 'Sexta, Sábado e Domingo',
+  },
+  single: {
+    id: 'single',
+    label: 'Dia Único',
+    emoji: '📌',
+    defaultActiveDays: [],                // usuário seleciona 1 dia
+    description: '1 dia à sua escolha',
+  },
+};
+
+/** Dias da semana abreviados (0=Dom ... 6=Sáb) */
+export const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+// ─── Matriz de preços: créditos por semana (tier × pacote) ───────────────────
+//
+//  Tier \ Pacote  │ Semana Completa │ Dias Úteis │ Final de Semana │ Dia Único
+//  ───────────────┼─────────────────┼────────────┼─────────────────┼──────────
+//  Bronze  🥉     │       2         │     2      │        1        │    1
+//  Prata   🥈     │       4         │     3      │        2        │    1
+//  Ouro    🥇     │       7         │     5      │        4        │    2
+//
+//  Total = creditsPerWeek × semanas contratadas.
+
+export const PROMOTION_PRICING: Record<string, Record<PromotionPackageId, number>> = {
+  bronze: { full: 2, weekdays: 2, weekend: 1, single: 1 },
+  prata:  { full: 4, weekdays: 3, weekend: 2, single: 1 },
+  ouro:   { full: 7, weekdays: 5, weekend: 4, single: 2 },
+};
+
+/** Retorna os créditos totais para tier + pacote + semanas. */
+export function calcPackageCredits(
+  tier: string,
+  packageId: PromotionPackageId,
+  weeks: number,
+): number {
+  return (PROMOTION_PRICING[tier]?.[packageId] ?? 1) * weeks;
+}
+
 // ─── Tiers de promoção ───────────────────────────────────────────────────────
 export type PromotionTier = 'bronze' | 'prata' | 'ouro';
 
@@ -128,6 +200,12 @@ export interface ActivePromotion {
   endDate: number;           // unix ms
   status: 'active' | 'expired';
   creditsUsed: number;
+  /** Pacote de dias — opcional (null = promoção avulsa sem restrição de dia) */
+  packageId?: PromotionPackageId | null;
+  /** Quantidade de semanas contratadas */
+  weeks?: number | null;
+  /** Dias ativos (0=Dom … 6=Sáb). Null = todos os dias (promoção avulsa) */
+  activeDays?: number[] | null;
 }
 
 // ─── Compra de créditos ───────────────────────────────────────────────────────

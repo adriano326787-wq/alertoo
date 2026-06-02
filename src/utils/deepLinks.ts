@@ -8,6 +8,25 @@
 
 export type DeepLinkEventType = 'road' | 'entertainment';
 
+/** Resultado de retorno do checkout do Mercado Pago via back_url. */
+export type MPPaymentReturn = 'success' | 'failure' | 'pending';
+
+/**
+ * Detecta deep links de retorno do Mercado Pago:
+ *   alertoo://payment/success
+ *   alertoo://payment/failure
+ *   alertoo://payment/pending
+ *
+ * Retorna o status ou null se não for um link de pagamento.
+ */
+export function parsePaymentDeepLink(url: string | null | undefined): MPPaymentReturn | null {
+  if (!url) return null;
+  if (url.startsWith('alertoo://payment/success')) return 'success';
+  if (url.startsWith('alertoo://payment/failure')) return 'failure';
+  if (url.startsWith('alertoo://payment/pending')) return 'pending';
+  return null;
+}
+
 export interface ParsedDeepLink {
   type: DeepLinkEventType;
   id: string;
@@ -32,7 +51,13 @@ const HOST   = 'evento';
  * Enquanto o domínio próprio não existe, o fallback usa:
  *   https://play.google.com/store/apps/details?id=com.alertoo.app&referrer={link}
  */
-const WEB_BASE_URL = 'https://alertoo.app';
+// URL base para links públicos (Firebase Hosting).
+// Quando o domínio alertoo.app estiver configurado com DNS → Firebase,
+// basta trocar esta constante de volta para 'https://alertoo.app'.
+// #18 — single source of truth: regex in parseEventDeepLink is derived from this constant
+const WEB_BASE_URL = 'https://lei-seca---eventos.web.app';
+/** Hostname extraído de WEB_BASE_URL — usado na regex de parseEventDeepLink */
+const WEB_HOST = WEB_BASE_URL.replace(/^https?:\/\//, '');
 const ANDROID_PACKAGE = 'com.alertoo.app';
 
 /**
@@ -98,7 +123,9 @@ export function parseEventDeepLink(url: string | null | undefined): ParsedDeepLi
   // Casos:
   //   "alertoo://evento/road/abc"    → "evento/road/abc"
   //   "https://alertoo.app/evento/road/abc" → "evento/road/abc"
-  const m = url.match(/(?:alertoo:\/\/|alertoo\.app\/)([^?#]+)/i);
+  // #18 — Aceita: alertoo://, alertoo.app/ (futuro), WEB_HOST, e firebaseapp.com fallback
+  const escapedWebHost = WEB_HOST.replace(/\./g, '\\.').replace(/-/g, '\\-');
+  const m = url.match(new RegExp(`(?:alertoo:\\/\\/|(?:alertoo\\.app|${escapedWebHost}|lei\\-seca\\-\\-\\-eventos\\.firebaseapp\\.com)\\/)([^?#]+)`, 'i'));
   if (!m) return null;
 
   const parts = m[1].split('/').filter(Boolean);
@@ -111,5 +138,5 @@ export function parseEventDeepLink(url: string | null | undefined): ParsedDeepLi
   const type = rawType.toLowerCase();
   if (type !== 'road' && type !== 'entertainment') return null;
 
-  return { type, id };
+  return { type, id: decodeURIComponent(id) };
 }

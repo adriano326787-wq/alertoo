@@ -1,18 +1,11 @@
 /**
- * PinCard — retângulos PUROS no mapa (sem cantos arredondados, sem tail).
+ * PinCard — cards de mapa com ícones completos e visíveis.
  *
- * Estilo:
- *   - Retângulos retos (border-radius 0)
- *   - Sem ponta/tail (anchor 0.5, 0.5 — centrado na coordenada)
- *   - Imagem/conteúdo centralizado no meio do card
- *   - Borda fina + sombra suave
- *
- * Tipos:
- *   - StandardCard: ícone + nome centralizados
- *   - PremiumCard:  foto cobrindo todo o card + overlays (tier + nome)
- *   - AlertCard:    bg colorido sólido + ícone + label
- *   - LiveCard:     standard + badge LIVE
- *   - PartnerCard:  branco com logo
+ * Correções v2:
+ *   - Removido overflow:hidden que cortava emojis no Android
+ *   - IconBox agora tem padding próprio ao invés de height:'100%'
+ *   - AlertCard outer wrapper corretamente dimensionado para o pulse
+ *   - Emojis maiores e com lineHeight explícito para não serem clipped
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -20,13 +13,11 @@ import { View, Text, Image, Animated, Easing, ImageSourcePropType, StyleSheet } 
 import { palette, shadow, platformShadow } from '../../theme/tokens';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  StandardCard — retângulo branco, ícone + nome centralizados
+//  StandardCard — pill branco com ícone colorido + label
 //
-//   ┌───────────────┐
-//   │               │
-//   │  🍔  Festival │   ← centralizado vertical e horizontal
-//   │               │
-//   └───────────────┘
+//   ╭──────────────────────╮
+//   │ 🟠  Congestionamento  │
+//   ╰──────────────────────╯
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface StandardCardProps {
@@ -38,40 +29,58 @@ interface StandardCardProps {
 
 export function StandardCard({ color, icon, label, size = 'md' }: StandardCardProps) {
   const config = {
-    sm: { w: 110, h: 36, iconFs: 16, fontSize: 11, padH: 8, iconBoxW: 30 },
-    md: { w: 138, h: 42, iconFs: 18, fontSize: 12, padH: 10, iconBoxW: 34 },
-    lg: { w: 165, h: 50, iconFs: 21, fontSize: 13, padH: 12, iconBoxW: 40 },
+    //             iconBox   cardH  iconFs  labelFs  padH  gap  br
+    sm: { iconBoxW: 32, h: 38, iconFs: 17, fontSize: 11, padH: 8,  gap: 0, br: 19 },
+    md: { iconBoxW: 38, h: 44, iconFs: 20, fontSize: 12, padH: 10, gap: 0, br: 22 },
+    lg: { iconBoxW: 46, h: 52, iconFs: 24, fontSize: 13, padH: 12, gap: 0, br: 26 },
   }[size];
 
   const showLabel = !!label;
   const displayLabel = label && label.length > 18 ? label.slice(0, 16) + '…' : label;
 
+  // Largura total: iconBox + padding esquerda do label + texto estimado + padding direita
+  const approxLabelW = showLabel ? (displayLabel!.length * config.fontSize * 0.62) + config.padH * 2 : 0;
+  const totalW = config.iconBoxW + (showLabel ? approxLabelW : 0);
+
   return (
     <View style={{
-      width: config.w,
       height: config.h,
+      minWidth: config.iconBoxW,
+      maxWidth: showLabel ? 175 : config.iconBoxW,
       backgroundColor: '#ffffff',
       borderWidth: 1.5,
       borderColor: color,
-      borderRadius: 10, // cantos arredondados sutis (estilo Google Maps card)
+      borderRadius: config.br,
       flexDirection: 'row',
       alignItems: 'center',
-      overflow: 'hidden',
+      // SEM overflow:hidden — permite emoji completo no Android
       ...platformShadow(shadow.lg),
     }}>
-      {/* Bloco do ícone — bg colorido categoria */}
+      {/* Bloco do ícone — círculo colorido à esquerda */}
       <View style={{
         width: config.iconBoxW,
-        height: '100%',
+        height: config.h,
+        borderRadius: config.br,
         backgroundColor: color,
         alignItems: 'center',
         justifyContent: 'center',
+        // Garante que o bloco colorido tem cantos arredondados corretos
+        borderTopRightRadius: showLabel ? 0 : config.br,
+        borderBottomRightRadius: showLabel ? 0 : config.br,
       }}>
-        <Text style={{ fontSize: config.iconFs, includeFontPadding: false }}>{icon}</Text>
+        <Text style={{
+          fontSize: config.iconFs,
+          lineHeight: config.iconFs + 6,  // evita clipping vertical no Android
+          includeFontPadding: false,
+          textAlignVertical: 'center',
+        }}>
+          {icon}
+        </Text>
       </View>
+
       {/* Label */}
       {showLabel ? (
-        <View style={{ flex: 1, paddingHorizontal: config.padH }}>
+        <View style={{ flex: 1, paddingHorizontal: config.padH, paddingRight: config.padH + 2 }}>
           <Text
             numberOfLines={1}
             style={{
@@ -79,7 +88,7 @@ export function StandardCard({ color, icon, label, size = 'md' }: StandardCardPr
               fontWeight: '800',
               color: '#0F172A',
               includeFontPadding: false,
-              letterSpacing: -0.1,
+              letterSpacing: -0.2,
             }}
           >
             {displayLabel}
@@ -91,17 +100,7 @@ export function StandardCard({ color, icon, label, size = 'md' }: StandardCardPr
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  PremiumCard — retângulo grande com foto centralizada + overlays
-//
-//   ┌────────────────┐
-//   │ 🥇 OURO        │  ← chip tier overlay top
-//   │                │
-//   │  [FOTO COVER]  │  ← foto preenche todo o card
-//   │   centralizada │
-//   │           🎤   │  ← mini-badge overlay bottom-right
-//   ├────────────────┤
-//   │  Nome evento   │  ← faixa de nome bg semi-transparente
-//   └────────────────┘
+//  PremiumCard — retângulo com foto + overlays de tier
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface PremiumCardProps {
@@ -164,7 +163,6 @@ export function PremiumCard({
         }} />
       ) : null}
 
-      {/* Card retangular com cantos arredondados sutis */}
       <View style={{
         width: dim.w,
         height: dim.h,
@@ -175,7 +173,6 @@ export function PremiumCard({
         overflow: 'hidden',
         ...platformShadow(shadow.glow(tm.color)),
       }}>
-        {/* Foto cover centralizada (preenche todo o card) */}
         {showPhoto ? (
           <Image
             source={{ uri: photoUrl! }}
@@ -186,11 +183,10 @@ export function PremiumCard({
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-            <Text style={{ fontSize: dim.h * 0.45, includeFontPadding: false }}>{icon}</Text>
+            <Text style={{ fontSize: dim.h * 0.45, lineHeight: dim.h * 0.52, includeFontPadding: false }}>{icon}</Text>
           </View>
         )}
 
-        {/* OVERLAYS */}
         {/* Tier chip top-left */}
         <View style={{
           position: 'absolute',
@@ -200,9 +196,10 @@ export function PremiumCard({
           paddingHorizontal: 6,
           paddingVertical: 3,
           backgroundColor: tm.color,
+          borderRadius: 6,
           ...platformShadow(shadow.sm),
         }}>
-          <Text style={{ fontSize: dim.badgeFs + 1, marginRight: 3, lineHeight: dim.badgeFs + 3 }}>{tm.emoji}</Text>
+          <Text style={{ fontSize: dim.badgeFs + 1, marginRight: 3, lineHeight: dim.badgeFs + 4 }}>{tm.emoji}</Text>
           <Text style={{
             fontSize: dim.badgeFs,
             fontWeight: '900',
@@ -212,7 +209,6 @@ export function PremiumCard({
           }}>{tm.label}</Text>
         </View>
 
-        {/* Estrela Ouro top-right */}
         {tier === 'ouro' ? (
           <Text style={{
             position: 'absolute',
@@ -224,22 +220,21 @@ export function PremiumCard({
           }}>★</Text>
         ) : null}
 
-        {/* Mini-badge categoria (bottom-right, só quando há foto) */}
         {showPhoto ? (
           <View style={{
             position: 'absolute',
             bottom: 28, right: 6,
-            width: 24, height: 24,
+            width: 26, height: 26,
+            borderRadius: 13,
             backgroundColor: '#fff',
             borderWidth: 1.5, borderColor: tm.color,
             alignItems: 'center', justifyContent: 'center',
             ...platformShadow(shadow.sm),
           }}>
-            <Text style={{ fontSize: 13, includeFontPadding: false }}>{icon}</Text>
+            <Text style={{ fontSize: 14, lineHeight: 18, includeFontPadding: false }}>{icon}</Text>
           </View>
         ) : null}
 
-        {/* Faixa do nome (bottom, bg semi-transparente preto p/ legibilidade) */}
         <View style={{
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
@@ -247,15 +242,12 @@ export function PremiumCard({
           paddingHorizontal: 8,
           paddingVertical: 5,
         }}>
-          <Text
-            numberOfLines={1}
-            style={{
-              fontSize: dim.fs,
-              fontWeight: '800',
-              color: '#fff',
-              includeFontPadding: false,
-            }}
-          >
+          <Text numberOfLines={1} style={{
+            fontSize: dim.fs,
+            fontWeight: '800',
+            color: '#fff',
+            includeFontPadding: false,
+          }}>
             {displayTitle}
           </Text>
         </View>
@@ -265,54 +257,65 @@ export function PremiumCard({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  AlertCard — retângulo colorido sólido + pulse
+//  AlertCard — pill colorido sólido com ícone GRANDE + pulse
 //
-//   ┌────────────────┐
-//   │  ⚠️  Acidente  │  ← centralizado
-//   └────────────────┘
+//   ╭─────────────────────╮
+//   │  ⚠️  Acidente grave  │  ← pulse atrás
+//   ╰─────────────────────╯
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function AlertCard({
   color = palette.alert, icon = '⚠️', label, size = 'md',
 }: { color?: string; icon?: string; label?: string; size?: 'sm' | 'md' | 'lg' }) {
-  const pulse = useRef(new Animated.Value(0.35)).current;
+  const pulse = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
     const anim = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 0.75, duration: 850, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0.35, duration: 850, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0.7, duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0.3, duration: 900, easing: Easing.in(Easing.quad), useNativeDriver: true }),
     ]));
     anim.start();
     return () => anim.stop();
   }, []);
 
   const dim = {
-    sm: { w: 120, h: 36, iconFs: 14, fontSize: 11, padH: 8, br: 10 },
-    md: { w: 150, h: 42, iconFs: 16, fontSize: 12, padH: 10, br: 11 },
-    lg: { w: 180, h: 50, iconFs: 19, fontSize: 13, padH: 12, br: 12 },
+    //        cardH  iconFs  fontSize  padH   br    pulse
+    sm: { h: 38, iconFs: 18, fontSize: 11, padH: 10, br: 19, pulseExtra: 12 },
+    md: { h: 44, iconFs: 22, fontSize: 12, padH: 12, br: 22, pulseExtra: 14 },
+    lg: { h: 52, iconFs: 26, fontSize: 13, padH: 14, br: 26, pulseExtra: 16 },
   }[size];
 
   const displayLabel = label && label.length > 18 ? label.slice(0, 16) + '…' : label;
 
+  // Estima a largura do card para dimensionar o container do pulse corretamente
+  const approxLabelChars = displayLabel ? displayLabel.length : 0;
+  const approxW = 50 + (approxLabelChars * dim.fontSize * 0.62) + dim.padH * 2;
+  const cardW = Math.min(Math.max(approxW, dim.h * 1.2), 185); // mínimo arredondado, máximo 185
+
+  const outerW = cardW + dim.pulseExtra;
+  const outerH = dim.h + dim.pulseExtra;
+  const pulseOffset = dim.pulseExtra / 2;
+
   return (
-    <View style={{ position: 'relative', padding: 5 }}>
+    // Wrapper com tamanho EXPLÍCITO para o pulse não ser clippado pelo mapa
+    <View style={{ width: outerW, height: outerH, alignItems: 'center', justifyContent: 'center' }}>
       {/* Pulse externo */}
       <Animated.View style={{
         position: 'absolute',
-        top: 0, left: 0,
-        width: dim.w + 10,
-        height: dim.h + 10,
-        borderRadius: dim.br + 4,
+        width: outerW,
+        height: outerH,
+        borderRadius: dim.br + pulseOffset,
         backgroundColor: color,
         opacity: pulse,
       }} />
-      {/* Card sólido */}
+
+      {/* Card pill sólido */}
       <View style={{
-        width: dim.w,
+        width: cardW,
         height: dim.h,
         borderRadius: dim.br,
         backgroundColor: color,
-        borderWidth: 2,
+        borderWidth: 2.5,
         borderColor: '#fff',
         flexDirection: 'row',
         alignItems: 'center',
@@ -320,11 +323,15 @@ export function AlertCard({
         paddingHorizontal: dim.padH,
         ...platformShadow(shadow.glow(color)),
       }}>
+        {/* Ícone GRANDE — sem overflow:hidden para não cortar emoji */}
         <Text style={{
           fontSize: dim.iconFs,
-          marginRight: displayLabel ? 8 : 0,
+          lineHeight: dim.iconFs + 6,
           includeFontPadding: false,
-        }}>{icon}</Text>
+          marginRight: displayLabel ? 8 : 0,
+        }}>
+          {icon}
+        </Text>
         {displayLabel ? (
           <Text
             numberOfLines={1}
@@ -363,20 +370,23 @@ export function LiveCard({
   }, []);
 
   return (
-    <View style={{ position: 'relative' }}>
+    // Wrapper com espaço para o badge LIVE não ser clippado
+    <View style={{ paddingTop: 10, paddingRight: 10 }}>
       <StandardCard color={color} icon={icon} label={label} size={size} />
       <View style={{
         position: 'absolute',
-        top: -6, right: -8,
+        top: 2, right: 2,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 5,
-        paddingVertical: 2,
+        paddingHorizontal: 6,
+        paddingVertical: 2.5,
         backgroundColor: palette.live,
+        borderRadius: 8,
         ...platformShadow(shadow.sm),
       }}>
         <Animated.View style={{
           width: 5, height: 5,
+          borderRadius: 2.5,
           backgroundColor: '#fff',
           marginRight: 3,
           opacity: dot,
@@ -402,6 +412,7 @@ export function PartnerCard({
       backgroundColor: '#fff',
       borderWidth: 1.5,
       borderColor: color,
+      borderRadius: 10,
       flexDirection: 'row', alignItems: 'center',
       ...platformShadow(shadow.lg),
     }}>

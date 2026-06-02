@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -11,12 +11,14 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { EventCategory, EVENT_CATEGORIES } from '../types';
 import { useEventsStore } from '../store/eventsStore';
 import { validateEventContent } from '../utils/contentFilter';
 import { useT } from '../hooks/useT';
 import { tRoadCat } from '../utils/i18n';
+import { useTick } from '../hooks/useTick';
 
 interface Props {
   visible: boolean;
@@ -25,22 +27,64 @@ interface Props {
   cityName?: string;
   countryCode?: string;
   onClose: () => void;
+  /** Chamado APÓS o evento ser criado com sucesso (antes de onClose) */
+  onEventCreated?: () => void;
 }
 
-export function AddEventModal({ visible, coordinate, stateUF, cityName, countryCode, onClose }: Props) {
+export function AddEventModal({ visible, coordinate, stateUF, cityName, countryCode, onClose, onEventCreated }: Props) {
   const t = useT();
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>('drunkcheck');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const addEvent = useEventsStore((s) => s.addEvent);
+  const _lastEventAt = useEventsStore((s) => s._lastEventAt);
+  const RATE_LIMIT_MS = 30_000;
+  // #31 — only tick every second when actually rate-limited (avoids wasted re-renders)
+  const isRateLimitedInitial = !!_lastEventAt && (Date.now() - _lastEventAt < RATE_LIMIT_MS);
+  useTick(isRateLimitedInitial ? 1000 : 0);
+  const rateLimitSecondsLeft = _lastEventAt
+    ? Math.max(0, Math.ceil((RATE_LIMIT_MS - (Date.now() - _lastEventAt)) / 1000))
+    : 0;
+  const isRateLimited = rateLimitSecondsLeft > 0;
+
+  // #28 — Reset category and description when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setSelectedCategory('drunkcheck');
+      setDescription('');
+    }
+  }, [visible]);
+
+  // Confirma descarte se o usuário digitou algo na descrição (item 19)
+  const handleRequestClose = () => {
+    if (description.trim()) {
+      Alert.alert(
+        t('discard_draft_title'),
+        t('discard_draft_msg'),
+        [
+          { text: t('keep_editing'), style: 'cancel' },
+          { text: t('discard'), style: 'destructive', onPress: onClose },
+        ]
+      );
+    } else {
+      onClose();
+    }
+  };
 
   const handleSubmit = async () => {
-    const contentError = validateEventContent({ description });
-    if (contentError) {
-      Alert.alert('Conteúdo inadequado', contentError);
+    // #3 — validate coordinates before submitting (guards against NaN from bad map tap)
+    if (!isFinite(coordinate.latitude) || !isFinite(coordinate.longitude)) {
+      Alert.alert(t('error') || 'Erro', t('invalid_location') || 'Localização inválida. Tente novamente.');
       return;
     }
 
+    const contentError = validateEventContent({ description });
+    if (contentError) {
+      Alert.alert(t('inappropriate_content'), contentError);
+      return;
+    }
+
+    Keyboard.dismiss(); // #17 — fecha teclado antes do spinner aparecer
     setSaving(true);
     try {
       const meta = EVENT_CATEGORIES[selectedCategory];
@@ -55,19 +99,20 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
         countryCode,
       });
       setDescription('');
+      onEventCreated?.();
       onClose();
     } catch (err: any) {
-      Alert.alert('Não foi possível reportar', err?.message ?? 'Tente novamente.');
+      Alert.alert(t('report_failed'), err?.message ?? t('error'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleRequestClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.sheet}>
           <View style={styles.handle} />
@@ -116,16 +161,18 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
             />
 
             <View style={styles.footer}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={onClose} disabled={saving}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleRequestClose} disabled={saving}>
                 <Text style={styles.cancelText}>{t('filter_cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
+                style={[styles.submitBtn, (saving || isRateLimited) && styles.submitBtnDisabled]}
                 onPress={handleSubmit}
-                disabled={saving}
+                disabled={saving || isRateLimited}
               >
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
+                ) : isRateLimited ? (
+                  <Text style={styles.submitText}>⏳ {rateLimitSecondsLeft}s</Text>
                 ) : (
                   <Text style={styles.submitText}>{t('add_road_report')}</Text>
                 )}

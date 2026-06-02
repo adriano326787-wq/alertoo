@@ -34,7 +34,7 @@ export async function uploadEventPhoto(
     uriToUpload = compressed.uri;
   } catch {
     // Nativo indisponível — usa a imagem original sem compressão
-    console.warn('[storageService] expo-image-manipulator indisponível, usando imagem original');
+    if (__DEV__) console.warn('[storageService] expo-image-manipulator indisponível, usando imagem original');
   }
 
   const response = await fetch(uriToUpload);

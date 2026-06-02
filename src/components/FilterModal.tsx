@@ -8,10 +8,12 @@ import {
   ScrollView,
 } from 'react-native';
 import { useEventsStore } from '../store/eventsStore';
+import { useEntertainmentStore } from '../store/entertainmentStore';
 import { useAppStore } from '../store/appStore';
 import { BRAZIL_STATES } from '../utils/brazilGeo';
-import { getRegionLabel, getCityLabel } from '../utils/i18n';
+import { getRegionLabel, getCityLabel, tEntCat } from '../utils/i18n';
 import { useT } from '../hooks/useT';
+import { ENTERTAINMENT_CATEGORIES, EntertainmentCategory } from '../types/entertainment';
 
 interface Props {
   visible: boolean;
@@ -21,10 +23,12 @@ interface Props {
 export function FilterModal({ visible, onClose }: Props) {
   const t = useT();
   const { events, filterStateUF, filterCityName, setFilter } = useEventsStore();
+  const entEvents = useEntertainmentStore((s) => s.events);
   const userCountryCode = useAppStore((s) => s.userCountryCode);
 
   const [tempState, setTempState] = useState<string | null>(filterStateUF);
   const [tempCity, setTempCity] = useState<string | null>(filterCityName);
+  const [tempCategory, setTempCategory] = useState<EntertainmentCategory | null>(null);
 
   // ─── Regiões dinâmicas extraídas dos eventos carregados ───────────────────
   const availableRegions = useMemo(() => {
@@ -47,9 +51,17 @@ export function FilterModal({ visible, onClose }: Props) {
     onClose();
   };
 
+  // Categorias disponíveis nos eventos atuais
+  const availableCategories = useMemo(() => {
+    const seen = new Set<EntertainmentCategory>();
+    entEvents.forEach((e) => seen.add(e.category));
+    return [...seen].sort();
+  }, [entEvents]);
+
   const handleClear = () => {
     setTempState(null);
     setTempCity(null);
+    setTempCategory(null);
     setFilter(null, null);
     onClose();
   };
@@ -121,6 +133,35 @@ export function FilterModal({ visible, onClose }: Props) {
                     </Text>
                   </TouchableOpacity>
                 ))}
+              </ScrollView>
+            </>
+          )}
+
+          {/* ─── Categoria de entretenimento (#9) ──────────────── */}
+          {availableCategories.length > 0 && (
+            <>
+              <Text style={styles.sectionLabel}>{t('filter_category') || 'Categoria de evento'}</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRow}
+                style={styles.chipScroll}
+              >
+                {availableCategories.map((cat) => {
+                  const meta = ENTERTAINMENT_CATEGORIES[cat];
+                  const selected = tempCategory === cat;
+                  return (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[styles.chip, selected && { backgroundColor: meta.color, borderColor: meta.color }]}
+                      onPress={() => setTempCategory(selected ? null : cat)}
+                    >
+                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                        {meta.emoji} {tEntCat(cat)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             </>
           )}

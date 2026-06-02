@@ -30,7 +30,10 @@ import {
   CreditPurchase,
   CREDIT_PACKAGES,
   PROMOTION_TIERS,
+  PROMOTION_PACKAGES,
   PromotionTier,
+  PromotionPackageId,
+  calcPackageCredits,
 } from '../types/promotion';
 
 const USERS_COL      = 'users';
@@ -119,13 +122,38 @@ export async function createPromotion(params: {
   userId: string;
   eventId: string;
   tier: PromotionTier;
-  photoUrl: string | null;       // legacy (primeira foto)
-  photoUrls?: string[];          // array completo de fotos
-  skipCreditCheck?: boolean;     // usado por admins (créditos infinitos)
+  photoUrl: string | null;         // legacy (primeira foto)
+  photoUrls?: string[];            // array completo de fotos
+  skipCreditCheck?: boolean;       // usado por admins (créditos infinitos)
+  /** Pacote de dias. Null = promoção avulsa (comportamento legado). */
+  packageId?: PromotionPackageId | null;
+  weeks?: number;                  // 1–8 semanas (ignorado se packageId=null)
+  activeDays?: number[];           // dias ativos definitivos (0=Dom … 6=Sáb)
 }): Promise<ActivePromotion> {
-  const { userId, eventId, tier, photoUrl, photoUrls, skipCreditCheck = false } = params;
+  const {
+    userId, eventId, tier, photoUrl, photoUrls, skipCreditCheck = false,
+    packageId = null, weeks = 1, activeDays,
+  } = params;
   const allPhotoUrls = photoUrls && photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : []);
   const config = PROMOTION_TIERS[tier];
+
+  // Calcula custo e duração com base no pacote (ou usa legado)
+  let creditsRequired: number;
+  let durationMs: number;
+  let finalActiveDays: number[] | null;
+
+  if (packageId) {
+    const pkg = PROMOTION_PACKAGES[packageId];
+    const days = activeDays && activeDays.length > 0 ? activeDays : pkg.defaultActiveDays;
+    creditsRequired = calcPackageCredits(tier, packageId, weeks);
+    durationMs = weeks * 7 * 24 * 60 * 60 * 1000;
+    finalActiveDays = days;
+  } else {
+    // Promoção avulsa: comportamento legado
+    creditsRequired = config.creditsRequired;
+    durationMs = config.durationDays * 24 * 60 * 60 * 1000;
+    finalActiveDays = null;
+  }
 
   // Verifica e debita créditos (admins pulam essa etapa)
   if (!skipCreditCheck) {
@@ -134,18 +162,18 @@ export async function createPromotion(params: {
       const userSnap = await tx.get(userRef);
       const currentCredits = (userSnap.data()?.promotionCredits as number) ?? 0;
 
-      if (currentCredits < config.creditsRequired) {
+      if (currentCredits < creditsRequired) {
         throw new Error('Créditos insuficientes para esta promoção.');
       }
 
       tx.update(userRef, {
-        promotionCredits: increment(-config.creditsRequired),
+        promotionCredits: increment(-creditsRequired),
       });
     });
   }
 
   const now = Date.now();
-  const endDate = now + config.durationDays * 24 * 60 * 60 * 1000;
+  const endDate = now + durationMs;
 
   const docRef = await addDoc(collection(db, PROMOTIONS_COL), {
     eventId,
@@ -155,7 +183,10 @@ export async function createPromotion(params: {
     startDate: Timestamp.fromMillis(now),
     endDate: Timestamp.fromMillis(endDate),
     status: 'active',
-    creditsUsed: config.creditsRequired,
+    creditsUsed: creditsRequired,
+    packageId: packageId ?? null,
+    weeks: packageId ? weeks : null,
+    activeDays: finalActiveDays,
   });
 
   // Atualiza o documento do evento com os dados da promoção.
@@ -168,6 +199,9 @@ export async function createPromotion(params: {
     promotionEndDate: Timestamp.fromMillis(endDate),
     promotionPhotoUrl: allPhotoUrls[0] ?? null,
     promotionPhotoUrls: allPhotoUrls.length > 0 ? allPhotoUrls : null,
+    promotionPackage: packageId ?? null,
+    promotionWeeks: packageId ? weeks : null,
+    promotionActiveDays: finalActiveDays,
     // Garante que o evento fique visível durante toda a promoção
     expiresAt: Timestamp.fromMillis(endDate),
   });
@@ -181,7 +215,10 @@ export async function createPromotion(params: {
     startDate: now,
     endDate,
     status: 'active',
-    creditsUsed: config.creditsRequired,
+    creditsUsed: creditsRequired,
+    packageId,
+    weeks: packageId ? weeks : null,
+    activeDays: finalActiveDays,
   };
 }
 
@@ -196,6 +233,7 @@ export async function getUserPromotions(userId: string): Promise<ActivePromotion
   const snap = await getDocs(q);
   return snap.docs.map((d) => {
     const data = d.data();
+    const endMs = (data.endDate as Timestamp).toMillis();
     return {
       id: d.id,
       eventId: data.eventId,
@@ -203,9 +241,12 @@ export async function getUserPromotions(userId: string): Promise<ActivePromotion
       tier: data.tier,
       photoUrl: data.photoUrl ?? null,
       startDate: (data.startDate as Timestamp).toMillis(),
-      endDate: (data.endDate as Timestamp).toMillis(),
-      status: data.endDate.toMillis() > Date.now() ? 'active' : 'expired',
+      endDate: endMs,
+      status: endMs > Date.now() ? 'active' : 'expired',
       creditsUsed: data.creditsUsed,
+      packageId: data.packageId ?? null,
+      weeks: data.weeks ?? null,
+      activeDays: data.activeDays ?? null,
     } as ActivePromotion;
   });
 }
@@ -238,6 +279,9 @@ export async function getEventActivePromotion(
     endDate,
     status: 'active',
     creditsUsed: data.creditsUsed,
+    packageId: data.packageId ?? null,
+    weeks: data.weeks ?? null,
+    activeDays: data.activeDays ?? null,
   };
 }
 
@@ -255,6 +299,9 @@ export async function cancelPromotion(promotionId: string, eventId: string): Pro
     promotionEndDate: null,
     promotionPhotoUrl: null,
     promotionPhotoUrls: null,
+    promotionPackage: null,
+    promotionWeeks: null,
+    promotionActiveDays: null,
     expiresAt: gracePeriod,
   });
 }
@@ -277,6 +324,65 @@ export async function createMPPreferenceCloud(
 }
 
 /**
+ * Gera pagamento PIX via Mercado Pago — retorna QR Code e código copia-e-cola.
+ */
+export async function createPixPaymentCloud(
+  packageId: CreditPackageId,
+  payerEmail?: string,
+): Promise<{ paymentId: string; pixCode: string; pixQrBase64: string | null; expiresAt: number }> {
+  const call = httpsCallable<
+    { packageId: string; payerEmail?: string },
+    { paymentId: string; pixCode: string; pixQrBase64: string | null; expiresAt: number }
+  >(functions, 'createPixPayment');
+  const res = await call({ packageId, payerEmail });
+  return res.data;
+}
+
+/**
+ * Verifica status de pagamento PIX por paymentId (polling).
+ */
+export async function verifyPixPaymentCloud(
+  paymentId: string,
+): Promise<{ status: 'approved' | 'pending' | 'rejected'; credits?: number }> {
+  const call = httpsCallable<
+    { paymentId: string },
+    { status: 'approved' | 'pending' | 'rejected'; credits?: number }
+  >(functions, 'verifyPixPayment');
+  const res = await call({ paymentId });
+  return res.data;
+}
+
+// ─── Stripe — Pagamentos internacionais ──────────────────────────────────────
+
+/**
+ * Cria um PaymentIntent Stripe e retorna o clientSecret para o Payment Sheet.
+ */
+export async function createStripePaymentIntentCloud(
+  packageId: CreditPackageId,
+): Promise<{ paymentIntentId: string; clientSecret: string; amount: number; currency: string }> {
+  const call = httpsCallable<
+    { packageId: string },
+    { paymentIntentId: string; clientSecret: string; amount: number; currency: string }
+  >(functions, 'createStripePaymentIntent');
+  const res = await call({ packageId });
+  return res.data;
+}
+
+/**
+ * Verifica um PaymentIntent Stripe e credita automaticamente (idempotente).
+ */
+export async function verifyStripePaymentCloud(
+  paymentIntentId: string,
+): Promise<{ status: 'approved' | 'pending' | 'rejected'; credits?: number }> {
+  const call = httpsCallable<
+    { paymentIntentId: string },
+    { status: 'approved' | 'pending' | 'rejected'; credits?: number }
+  >(functions, 'verifyStripePayment');
+  const res = await call({ paymentIntentId });
+  return res.data;
+}
+
+/**
  * Verifica status de pagamento e credita (idempotente) via Cloud Function.
  */
 export async function verifyMPPaymentCloud(
@@ -288,6 +394,24 @@ export async function verifyMPPaymentCloud(
   );
   const res = await call({ preferenceId });
   return res.data.status;
+}
+
+// ─── Crédito por anúncio recompensado ────────────────────────────────────────
+
+/**
+ * Concede 1 crédito ao usuário após assistir um rewarded ad.
+ * Delegado à Cloud Function `awardAdCredit` para garantir:
+ *   - cooldown server-side de 1 hora (não burlável pelo cliente)
+ *   - escrita em 'credit_purchases' via admin SDK (regras de Firestore bloqueiam
+ *     o cliente de escrever diretamente nessa coleção)
+ */
+export async function awardAdCredit(_userId: string): Promise<number> {
+  const fn = httpsCallable<Record<string, never>, { credits: number }>(
+    functions,
+    'awardAdCredit',
+  );
+  const result = await fn({});
+  return result.data.credits;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

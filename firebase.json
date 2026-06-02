@@ -20,5 +20,42 @@
         "npm --prefix \"$RESOURCE_DIR\" run build"
       ]
     }
-  ]
+  ],
+  "emulators": {
+    "functions": { "port": 5001 },
+    "firestore": { "port": 8080 },
+    "ui": { "enabled": true, "port": 4000 }
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          { "key": "Content-Type",  "value": "application/json" },
+          { "key": "Cache-Control", "value": "public, max-age=3600" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/evento/**",
+        "destination": "/evento/index.html"
+      },
+      {
+        "source": "/privacidade",
+        "destination": "/privacidade.html"
+      },
+      {
+        "source": "/deletar-conta",
+        "destination": "/deletar-conta.html"
+      }
+    ]
+  }
 }

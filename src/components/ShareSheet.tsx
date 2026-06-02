@@ -9,7 +9,9 @@ import {
   Share,
   Linking,
   Alert,
+  Clipboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildShareLinks } from '../utils/deepLinks';
 
 interface Props {
@@ -34,14 +36,19 @@ export function ShareSheet({
   eventType,
 }: Props) {
   const t = useT();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const links = buildShareLinks(eventType, eventId);
+
+  // #17 — sanitize user-generated strings: strip carriage returns / leading+trailing whitespace
+  const safeTitle = title.replace(/\r/g, '').trim();
+  const safeDescription = description?.replace(/\r/g, '').trim();
 
   // Mensagem otimizada — usa link WEB (universal) que abre o app se instalado
   // ou redireciona pra Play Store automaticamente.
   const buildMessage = (): string => {
     const lines: string[] = [];
-    lines.push(`🎉 ${title}`);
-    if (description) lines.push(description);
+    lines.push(`🎉 ${safeTitle}`);
+    if (safeDescription) lines.push(safeDescription);
     if (location) lines.push(`📍 ${location}`);
     lines.push('');
     lines.push(`👉 ${t('see_event') || 'Ver evento'}: ${links.webLink}`);
@@ -69,35 +76,46 @@ export function ShareSheet({
   };
 
   const handleFacebook = async () => {
-    const fbUrl = `fb://share?text=${encodeURIComponent(message)}`;
+    // Inclui o link do evento específico no parâmetro u (item #15)
+    const fbShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(links.webLink)}`;
+    const fbDeepLink = `fb://share?text=${encodeURIComponent(message)}`;
     try {
-      const supported = await Linking.canOpenURL(fbUrl);
+      const supported = await Linking.canOpenURL(fbDeepLink);
       if (supported) {
-        await Linking.openURL(fbUrl);
+        await Linking.openURL(fbDeepLink);
       } else {
-        await Linking.openURL('https://www.facebook.com/sharer/sharer.php?u=alertoo.app');
+        await Linking.openURL(fbShareUrl);
       }
     } catch {
-      await Linking.openURL('https://www.facebook.com/sharer/sharer.php?u=alertoo.app');
+      await Linking.openURL(fbShareUrl);
     }
     onClose();
   };
 
   const handleInstagram = async () => {
     try {
+      // #15 — actually copy to clipboard so the "paste" instruction makes sense
+      Clipboard.setString(message);
       await Share.share({ message });
+      Alert.alert('Cole no Instagram', 'Abra o Instagram e cole o texto na sua história ou mensagem.');
     } catch {
-      // ignore cancel
+      // usuário cancelou — não mostrar alert
     }
-    Alert.alert('Texto copiado! Cole no Instagram para compartilhar.');
     onClose();
   };
 
   const handleCopyLink = async () => {
+    // #16 — copia silenciosamente para o clipboard em vez de abrir share sheet
     try {
-      await Share.share({ message: copyableLink, title: 'Copiar link do evento' });
+      Clipboard.setString(copyableLink);
+      Alert.alert(
+        t('link_copied_title') || 'Link copiado!',
+        t('link_copied_msg') || 'O link do evento foi copiado para a área de transferência.',
+        [{ text: 'OK' }]
+      );
     } catch {
-      // ignore cancel
+      // fallback: abre share sheet nativa se Clipboard falhar
+      try { await Share.share({ message: copyableLink }); } catch {}
     }
     onClose();
   };
@@ -111,42 +129,38 @@ export function ShareSheet({
     onClose();
   };
 
+  const handleTelegram = async () => {
+    const url = `tg://msg?text=${encodeURIComponent(message)}`;
+    const webUrl = `https://t.me/share/url?url=${encodeURIComponent(links.webLink)}&text=${encodeURIComponent(`🎉 ${title}`)}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      await Linking.openURL(supported ? url : webUrl);
+    } catch {
+      await Linking.openURL(webUrl);
+    }
+    onClose();
+  };
+
+  const handleTwitter = async () => {
+    const tweetText = `🎉 ${safeTitle}${location ? ` · ${location}` : ''}\n\n${links.webLink}`;
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+    try { await Linking.openURL(url); } catch {}
+    onClose();
+  };
+
   const options: {
     label: string;
     icon: string;
     color: string;
     onPress: () => void;
   }[] = [
-    {
-      label: 'WhatsApp',
-      icon: '💬',
-      color: '#25D366',
-      onPress: handleWhatsApp,
-    },
-    {
-      label: 'Facebook',
-      icon: '📘',
-      color: '#1877F2',
-      onPress: handleFacebook,
-    },
-    {
-      label: 'Instagram',
-      icon: '📸',
-      color: '#E1306C',
-      onPress: handleInstagram,
-    },
-    {
-      label: t('copy_link'),
-      icon: '🔗',
-      color: '#64748B',
-      onPress: handleCopyLink,
-    },
-    {
-      label: t('share'),
-      icon: '↗',
-      color: '#FF5722',
-      onPress: handleNativeShare,
-    },
+    { label: 'WhatsApp',       icon: '💬', color: '#25D366', onPress: handleWhatsApp },
+    { label: 'Telegram',       icon: '✈️',  color: '#2AABEE', onPress: handleTelegram },
+    { label: 'Facebook',       icon: '📘', color: '#1877F2', onPress: handleFacebook },
+    { label: 'Instagram',      icon: '📸', color: '#E1306C', onPress: handleInstagram },
+    { label: 'X / Twitter',    icon: '🐦', color: '#000000', onPress: handleTwitter },
+    { label: t('copy_link'),   icon: '🔗', color: '#64748B', onPress: handleCopyLink },
+    { label: t('share'),       icon: '↗',  color: '#FF5722', onPress: handleNativeShare },
   ];
 
   return (
@@ -162,7 +176,7 @@ export function ShareSheet({
         onPress={onClose}
       />
 
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, { paddingBottom: Math.max(32, bottomInset + 16) }]}>
         <View style={styles.handleBar} />
 
         <Text style={styles.sheetTitle}>{t('share_event')}</Text>
@@ -208,7 +222,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 32,
+    // paddingBottom is set dynamically via safe area insets (#29)
     paddingHorizontal: 16,
     paddingTop: 12,
     shadowColor: '#000',

@@ -7,17 +7,24 @@ const HARDCODED_ADMINS = [
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
-let cachedIsAdmin: boolean | null = null;
+// Cache isolado por UID — evita vazamento de permissão entre sessões de usuários diferentes
+let _cachedUid: string | null = null;
+let _cachedIsAdmin: boolean | null = null;
 
-export async function checkIsAdmin(email: string | null | undefined): Promise<boolean> {
+export async function checkIsAdmin(email: string | null | undefined, uid?: string | null): Promise<boolean> {
   if (!email) return false;
-  if (cachedIsAdmin !== null) return cachedIsAdmin;
+  // Invalida o cache se o UID mudou (novo login após logout)
+  if (uid && uid !== _cachedUid) {
+    _cachedIsAdmin = null;
+    _cachedUid = uid;
+  }
+  if (_cachedIsAdmin !== null) return _cachedIsAdmin;
 
   const emailLower = email.toLowerCase();
 
   // 1. Verifica lista hardcoded primeiro (funciona sem Firestore)
   if (HARDCODED_ADMINS.map((e) => e.toLowerCase()).includes(emailLower)) {
-    cachedIsAdmin = true;
+    _cachedIsAdmin = true;
     // Garante que o documento existe no Firestore em background
     ensureAdminDoc(email).catch(() => {});
     return true;
@@ -28,19 +35,20 @@ export async function checkIsAdmin(email: string | null | undefined): Promise<bo
     const snap = await getDoc(doc(db, 'config', 'admins'));
     if (snap.exists()) {
       const emails: string[] = snap.data()?.emails ?? [];
-      cachedIsAdmin = emails.map((e) => e.toLowerCase()).includes(emailLower);
-      return cachedIsAdmin;
+      _cachedIsAdmin = emails.map((e) => e.toLowerCase()).includes(emailLower);
+      return _cachedIsAdmin;
     }
   } catch {
     // Firestore indisponível ou sem permissão — usa apenas hardcoded
   }
 
-  cachedIsAdmin = false;
+  _cachedIsAdmin = false;
   return false;
 }
 
 export function clearAdminCache() {
-  cachedIsAdmin = null;
+  _cachedIsAdmin = null;
+  _cachedUid = null;
 }
 
 // Cria/atualiza o documento config/admins com os admins hardcoded

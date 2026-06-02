@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alertoo — Abrindo evento...</title>
+  <meta name="description" content="Alertoo — eventos de trânsito e entretenimento em tempo real." />
+
+  <!-- Evita que o browser guarde cache deste redirect -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 40px 32px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .logo { font-size: 56px; margin-bottom: 16px; }
+    h1 { font-size: 22px; font-weight: 800; color: #1a1a1a; margin-bottom: 8px; }
+    .sub { font-size: 15px; color: #666; line-height: 1.5; margin-bottom: 32px; }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      margin-bottom: 12px;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary { background: #E53935; color: #fff; }
+    .btn-secondary {
+      background: transparent;
+      border: 2px solid #E53935;
+      color: #E53935;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #f0f0f0;
+      border-top-color: #E53935;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status { font-size: 13px; color: #aaa; margin-top: 8px; }
+    #open-section { display: none; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🚀</div>
+  <h1>Alertoo</h1>
+
+  <!-- Estado: tentando abrir -->
+  <div id="loading-section">
+    <div class="spinner"></div>
+    <p class="sub">Abrindo evento no Alertoo...</p>
+  </div>
+
+  <!-- Estado: app não instalado -->
+  <div id="open-section">
+    <p class="sub">Instale o Alertoo para ver este evento no mapa em tempo real.</p>
+    <a id="play-btn" href="#" class="btn btn-primary">📲 Baixar Alertoo</a>
+    <a id="deep-btn" href="#" class="btn btn-secondary">Tentar abrir o app</a>
+    <p class="status" id="status-msg"></p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    // Extrai /evento/{type}/{id} do pathname
+    var path = window.location.pathname; // ex: /evento/entertainment/abc123
+    var parts = path.split('/').filter(Boolean); // ["evento", "entertainment", "abc123"]
+
+    var type = parts[1] || '';
+    var id   = parts[2] || '';
+
+    var PACKAGE   = 'com.alertoo.app';
+    var deepLink  = 'alertoo://evento/' + type + '/' + id;
+    var storeLink = 'https://play.google.com/store/apps/details?id=' + PACKAGE
+                  + '&referrer=' + encodeURIComponent('evento_' + type + '_' + id);
+
+    document.getElementById('play-btn').href = storeLink;
+    document.getElementById('deep-btn').href = deepLink;
+
+    var opened = false;
+
+    // Tenta abrir o app imediatamente via intent://
+    // (funciona no Android Chrome mesmo sem App Links verificados)
+    function tryOpenApp() {
+      var intentUrl = 'intent://evento/' + type + '/' + id
+        + '#Intent;scheme=alertoo;package=' + PACKAGE
+        + ';S.browser_fallback_url=' + encodeURIComponent(storeLink)
+        + ';end';
+
+      var a = document.createElement('a');
+      a.href = intentUrl;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Se o usuário não saiu da página em 2s, provavelmente não tem o app
+      setTimeout(function () {
+        if (!document.hidden) {
+          showInstallFallback();
+        }
+      }, 2000);
+    }
+
+    function showInstallFallback() {
+      document.getElementById('loading-section').style.display = 'none';
+      document.getElementById('open-section').style.display = 'block';
+    }
+
+    // Executa assim que a página carregar
+    if (type && id) {
+      tryOpenApp();
+    } else {
+      // URL inválida — mostra fallback direto
+      showInstallFallback();
+      document.getElementById('status-msg').textContent = 'Link inválido.';
+    }
+
+    // Se o usuário voltar ao browser após ter o app aberto, sai da tela de loading
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) {
+        showInstallFallback();
+      }
+    });
+  })();
+</script>
+</body>
+</html>

@@ -8,19 +8,19 @@ import { getReactNativePersistence } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
-// As variáveis EXPO_PUBLIC_* são substituídas em build time pelo Expo.
-// Em desenvolvimento: crie um arquivo .env na raiz (veja .env.example).
-// Em produção (EAS Build): configure via "eas secret:create".
+// IMPORTANTE: process.env.VAR deve ser acesso LITERAL (não dinâmico) para que
+// o Metro substitua corretamente em bundle time. Acesso via process.env[key]
+// NÃO é substituído e retorna undefined em runtime no Hermes → tela preta.
 export const firebaseConfig = {
-  apiKey:            process.env.EXPO_PUBLIC_FIREBASE_API_KEY            ?? 'AIzaSyCoI9rNBK07vGZBuygprq4PkDKGT0iZkYU',
-  authDomain:        process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN        ?? 'lei-seca---eventos.firebaseapp.com',
-  projectId:         process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID         ?? 'lei-seca---eventos',
-  storageBucket:     process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET     ?? 'lei-seca---eventos.firebasestorage.app',
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '657066902706',
-  appId:             process.env.EXPO_PUBLIC_FIREBASE_APP_ID             ?? '1:657066902706:web:3e3d49f23a819c5ce1b5ab',
+  apiKey:            process.env.EXPO_PUBLIC_FIREBASE_API_KEY             ?? '',
+  authDomain:        process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN         ?? '',
+  projectId:         process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID          ?? '',
+  storageBucket:     process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET      ?? '',
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '',
+  appId:             process.env.EXPO_PUBLIC_FIREBASE_APP_ID              ?? '',
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 // Inicializa Auth com persistência via AsyncStorage (evita login a cada sessão)
 // try/catch evita erro "auth/already-initialized" em hot-reloads

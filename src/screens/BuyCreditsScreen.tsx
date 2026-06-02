@@ -1,21 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Modal, Alert, ActivityIndicator, Linking,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useT } from '../hooks/useT';
 import { CREDIT_PACKAGES, CreditPackage } from '../types/promotion';
-import { createMPPreferenceCloud, verifyMPPaymentCloud } from '../services/promotionService';
+import { createMPPreferenceCloud, verifyMPPaymentCloud, awardAdCredit } from '../services/promotionService';
+import { useRewardedAd } from '../hooks/useRewardedAd';
+import { getCurrentUserId } from '../services/authService';
+import { useAppStore } from '../store/appStore';
+import { PixPaymentModal } from '../components/PixPaymentModal';
+import { StripePaymentModal } from '../components/StripePaymentModal';
 
-// Fallback: links fixos por pacote (criar no painel MP com os valores corretos)
-// Usado se a Cloud Function falhar (sem rede, sem deploy ainda, etc).
-const MP_FALLBACK_LINKS: Record<string, string> = {
-  pkg_1:  'https://link.mercadopago.com.br/alertoo',
-  pkg_5:  'https://link.mercadopago.com.br/alertoo',
-  pkg_10: 'https://link.mercadopago.com.br/alertoo',
-  pkg_20: 'https://link.mercadopago.com.br/alertoo',
-};
+// Fallback: link genérico caso a Cloud Function falhe.
+// Nesse caso a verificação automática não é possível — o usuário é orientado
+// a entrar em contato para receber os créditos manualmente.
+const MP_FALLBACK_URL = 'https://link.mercadopago.com.br/alertoo';
+
+// Chave AsyncStorage para sobreviver ao remount do componente entre app ↔ checkout externo
+const PENDING_PREF_KEY = '@alertoo_pending_mp_preference';
 
 interface Props {
   visible: boolean;
@@ -27,11 +32,74 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
   const t = useT();
   const [selected, setSelected] = useState<CreditPackage | null>(null);
   const [loading, setLoading] = useState(false);
+  const [rewardLoading, setRewardLoading] = useState(false);
+  const [pixModalVisible, setPixModalVisible] = useState(false);
+  const [stripeModalVisible, setStripeModalVisible] = useState(false);
+  const { ready: adReady, cooldownActive, show: showRewardedAd } = useRewardedAd();
+  const { mpPaymentReturn, setMPPaymentReturn } = useAppStore();
+
+  async function handleWatchAd() {
+    if (!adReady) return; // Guard extra — ad ainda não carregou
+    setRewardLoading(true);
+    try {
+      await showRewardedAd(async () => {
+        // Chamado apenas se o usuário assistiu até o fim
+        const userId = getCurrentUserId();
+        await awardAdCredit(userId);
+        Alert.alert(
+          t('buy_credits_ad_reward_title'),
+          t('buy_credits_ad_reward_msg'),
+          [{ text: t('buy_credits_ad_reward_btn'), onPress: () => onPurchased?.(1) }],
+        );
+      });
+    } catch (err: any) {
+      Alert.alert(t('error'), err.message ?? t('buy_credits_ad_failed'));
+    } finally {
+      setRewardLoading(false);
+    }
+  }
+
   // Aguardando verificação de pagamento
   const [pendingVerification, setPendingVerification] = useState<{
     preferenceId: string;
     pkg: CreditPackage;
   } | null>(null);
+
+  // Restaura preferenceId pendente do AsyncStorage ao montar (sobrevive remount entre app ↔ checkout)
+  useEffect(() => {
+    if (!visible) return;
+    AsyncStorage.getItem(PENDING_PREF_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const saved: { preferenceId: string; pkgId: string } = JSON.parse(raw);
+        const pkg = CREDIT_PACKAGES.find((p) => p.id === saved.pkgId);
+        if (pkg && saved.preferenceId) {
+          setPendingVerification({ preferenceId: saved.preferenceId, pkg });
+        }
+      } catch {}
+    }).catch(() => {});
+  }, [visible]);
+
+  // Reage ao retorno do checkout do Mercado Pago via deep link alertoo://payment/*
+  useEffect(() => {
+    if (!mpPaymentReturn || !visible) return;
+    setMPPaymentReturn(null); // consome o evento
+
+    if (mpPaymentReturn === 'success') {
+      if (pendingVerification) {
+        // Dispara verificação automática quando o MP redireciona de volta com sucesso
+        handleVerifyPayment();
+      }
+    } else if (mpPaymentReturn === 'failure') {
+      Alert.alert(
+        t('buy_credits_payment_failed_title'),
+        t('buy_credits_payment_failed_msg'),
+        [{ text: 'OK', onPress: () => setPendingVerification(null) }],
+      );
+    }
+    // 'pending': mantém a tela de verificação — usuário pode checar manualmente
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mpPaymentReturn, visible]);
 
   async function handleBuyMercadoPago() {
     if (!selected) return;
@@ -39,22 +107,37 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
 
     let url = '';
     let preferenceId = '';
+    let usedFallback = false;
+
     try {
       const result = await createMPPreferenceCloud(selected.id);
       url = result.initPoint;
       preferenceId = result.preferenceId;
     } catch {
-      url = MP_FALLBACK_LINKS[selected.id];
+      // Cloud Function indisponível — usa link genérico mas sem verificação automática
+      url = MP_FALLBACK_URL;
+      usedFallback = true;
     } finally {
       setLoading(false);
     }
 
     try {
       await Linking.openURL(url);
-      // Entra no modo "aguardando verificação"
-      setPendingVerification({ preferenceId, pkg: selected });
+
+      if (!usedFallback && preferenceId) {
+        // Fluxo normal: persiste no AsyncStorage (sobrevive remount) e entra em verificação
+        AsyncStorage.setItem(PENDING_PREF_KEY, JSON.stringify({ preferenceId, pkgId: selected.id })).catch(() => {});
+        setPendingVerification({ preferenceId, pkg: selected });
+      } else {
+        // Fallback: sem preferenceId, verificação automática impossível
+        Alert.alert(
+          t('buy_credits_fallback_title'),
+          t('buy_credits_fallback_msg'),
+          [{ text: t('understood') }],
+        );
+      }
     } catch {
-      Alert.alert('Erro', 'Não foi possível abrir o Mercado Pago.');
+      Alert.alert(t('error'), t('buy_credits_open_mp_failed'));
     }
   }
 
@@ -66,26 +149,23 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
       const status = await verifyMPPaymentCloud(preferenceId);
 
       if (status === 'approved') {
+        AsyncStorage.removeItem(PENDING_PREF_KEY).catch(() => {});
         Alert.alert(
-          '✅ Pagamento confirmado!',
-          `${pkg.credits} crédito(s) adicionado(s) à sua conta.`,
+          t('buy_credits_confirmed_title'),
+          t('buy_credits_confirmed_msg').replace('{credits}', String(pkg.credits)),
           [{ text: 'OK', onPress: () => { onPurchased?.(pkg.credits); setPendingVerification(null); setSelected(null); onClose(); } }],
         );
       } else if (status === 'pending') {
-        Alert.alert(
-          '⏳ Pagamento em processamento',
-          'Seu pagamento ainda está sendo processado pelo Mercado Pago. Aguarde alguns minutos e tente novamente.',
-          [{ text: 'OK' }],
-        );
+        Alert.alert(t('buy_credits_pending_title'), t('buy_credits_pending_msg'), [{ text: 'OK' }]);
       } else {
         Alert.alert(
-          '❌ Pagamento não aprovado',
-          'O pagamento foi recusado ou cancelado. Tente novamente.',
-          [{ text: 'Tentar novamente', onPress: () => setPendingVerification(null) }, { text: 'Fechar', style: 'cancel' }],
+          t('buy_credits_rejected_title'),
+          t('buy_credits_rejected_msg'),
+          [{ text: t('try_again'), onPress: () => setPendingVerification(null) }, { text: t('close'), style: 'cancel' }],
         );
       }
     } catch (err: any) {
-      Alert.alert('Erro', err.message ?? 'Não foi possível verificar o pagamento.');
+      Alert.alert(t('error'), err.message ?? t('buy_credits_verify_failed'));
     } finally {
       setLoading(false);
     }
@@ -94,6 +174,7 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
   function handleClose() {
     setSelected(null);
     setPendingVerification(null);
+    AsyncStorage.removeItem(PENDING_PREF_KEY).catch(() => {});
     onClose();
   }
 
@@ -114,9 +195,45 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
           <View style={styles.hero}>
             <Text style={styles.heroEmoji}>🚀</Text>
             <Text style={styles.heroTitle}>{t('buy_credits_hero')}</Text>
-            <Text style={styles.heroDesc}>
-              Use créditos para promover seus restaurantes, bares e eventos no mapa com destaque especial.
-            </Text>
+            <Text style={styles.heroDesc}>{t('buy_credits_hero_desc')}</Text>
+          </View>
+
+          {/* ── Rewarded Ad — ganhar 1 crédito gratuito ── */}
+          <TouchableOpacity
+            style={[
+              styles.rewardedCard,
+              (cooldownActive || rewardLoading || !adReady) && styles.rewardedCardDisabled,
+            ]}
+            onPress={handleWatchAd}
+            disabled={cooldownActive || rewardLoading || !adReady}
+            activeOpacity={0.85}
+          >
+            <View style={styles.rewardedLeft}>
+              <Text style={styles.rewardedEmoji}>📺</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rewardedTitle}>{t('buy_credits_watch_ad_title')}</Text>
+                <Text style={styles.rewardedSub}>
+                  {cooldownActive
+                    ? t('buy_credits_ad_cooldown')
+                    : adReady
+                      ? t('buy_credits_ad_ready')
+                      : t('buy_credits_ad_loading')}
+                </Text>
+              </View>
+            </View>
+            {rewardLoading ? (
+              <ActivityIndicator color="#1565C0" />
+            ) : !adReady && !cooldownActive ? (
+              <ActivityIndicator color="#93C5FD" size="small" />
+            ) : (
+              <Text style={styles.rewardedArrow}>{cooldownActive ? '⏳' : '▶'}</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>{t('buy_credits_or_buy')}</Text>
+            <View style={styles.dividerLine} />
           </View>
 
           {/* Pacotes */}
@@ -171,6 +288,36 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
           {/* Pagamento */}
           <Text style={styles.sectionLabel}>{t('buy_credits_payment')}</Text>
 
+          {/* Modal PIX nativo */}
+          <PixPaymentModal
+            visible={pixModalVisible}
+            pkg={selected}
+            onClose={() => setPixModalVisible(false)}
+            onApproved={(credits) => {
+              setPixModalVisible(false);
+              Alert.alert(
+                t('buy_credits_confirmed_title'),
+                t('buy_credits_confirmed_msg').replace('{credits}', String(credits)),
+                [{ text: 'OK', onPress: () => { onPurchased?.(credits); setSelected(null); onClose(); } }],
+              );
+            }}
+          />
+
+          {/* Modal Stripe — cartão internacional */}
+          <StripePaymentModal
+            visible={stripeModalVisible}
+            pkg={selected}
+            onClose={() => setStripeModalVisible(false)}
+            onApproved={(credits) => {
+              setStripeModalVisible(false);
+              Alert.alert(
+                t('buy_credits_confirmed_title'),
+                t('buy_credits_confirmed_msg').replace('{credits}', String(credits)),
+                [{ text: 'OK', onPress: () => { onPurchased?.(credits); setSelected(null); onClose(); } }],
+              );
+            }}
+          />
+
           {pendingVerification ? (
             /* ── Estado: aguardando verificação ── */
             <View style={styles.pendingBox}>
@@ -196,27 +343,76 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity
-              style={[styles.payBtn, !selected && styles.payBtnDisabled]}
-              onPress={handleBuyMercadoPago}
-              disabled={!selected || loading}
-              activeOpacity={0.85}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.payBtnIcon}>💳</Text>
-                  <View>
-                    <Text style={styles.payBtnLabel}>PIX ou Cartão</Text>
-                    <Text style={styles.payBtnSub}>via Mercado Pago</Text>
-                  </View>
-                  {selected && (
-                    <Text style={styles.payBtnAmount}>R$ {selected.price.toFixed(2)}</Text>
-                  )}
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={styles.payOptions}>
+              {/* Botão PIX nativo */}
+              <TouchableOpacity
+                style={[styles.payBtn, styles.payBtnPix, !selected && styles.payBtnDisabled]}
+                onPress={() => { if (selected) setPixModalVisible(true); }}
+                disabled={!selected || loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.payBtnIcon}>💚</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.payBtnLabel}>PIX</Text>
+                      <Text style={styles.payBtnSub}>Instantâneo · QR Code no app</Text>
+                    </View>
+                    {selected && (
+                      <Text style={styles.payBtnAmount}>R$ {selected.price.toFixed(2)}</Text>
+                    )}
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Botão Cartão via Checkout Pro (Mercado Pago — Brasil) */}
+              <TouchableOpacity
+                style={[styles.payBtn, !selected && styles.payBtnDisabled]}
+                onPress={handleBuyMercadoPago}
+                disabled={!selected || loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.payBtnIcon}>💳</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.payBtnLabel}>Cartão de crédito</Text>
+                      <Text style={styles.payBtnSub}>via Mercado Pago · Brasil</Text>
+                    </View>
+                    {selected && (
+                      <Text style={styles.payBtnAmount}>R$ {selected.price.toFixed(2)}</Text>
+                    )}
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Botão Cartão Internacional via Stripe */}
+              <TouchableOpacity
+                style={[styles.payBtn, styles.payBtnStripe, !selected && styles.payBtnDisabled]}
+                onPress={() => { if (selected) setStripeModalVisible(true); }}
+                disabled={!selected || loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.payBtnIcon}>🌍</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.payBtnLabel}>Cartão Internacional</Text>
+                      <Text style={styles.payBtnSub}>Visa, Mastercard, Amex · Stripe</Text>
+                    </View>
+                    {selected && (
+                      <Text style={styles.payBtnAmount}>R$ {selected.price.toFixed(2)}</Text>
+                    )}
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           )}
 
           <View style={styles.secureRow}>
@@ -241,6 +437,24 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '800', color: '#1a1a1a' },
 
   content: { padding: 20, paddingBottom: 48 },
+
+  // ── Rewarded Ad card ──────────────────────────────────────────────────────
+  rewardedCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#EFF6FF', borderRadius: 16,
+    padding: 16, marginBottom: 8,
+    borderWidth: 1.5, borderColor: '#BFDBFE',
+  },
+  rewardedCardDisabled: { opacity: 0.5 },
+  rewardedLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  rewardedEmoji: { fontSize: 32 },
+  rewardedTitle: { fontSize: 14, fontWeight: '800', color: '#1E40AF', marginBottom: 2 },
+  rewardedSub: { fontSize: 12, color: '#3B82F6', lineHeight: 16 },
+  rewardedArrow: { fontSize: 20, color: '#1E40AF', fontWeight: '700', marginLeft: 8 },
+
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 16 },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: '#CBD5E1' },
+  dividerText: { fontSize: 11, color: '#94A3B8', fontWeight: '600', letterSpacing: 0.3 },
 
   hero: { alignItems: 'center', marginBottom: 28 },
   heroEmoji: { fontSize: 52, marginBottom: 10 },
@@ -290,11 +504,14 @@ const styles = StyleSheet.create({
   infoTitle: { fontSize: 13, fontWeight: '800', color: '#1565C0', marginBottom: 8 },
   infoText: { fontSize: 13, color: '#444', lineHeight: 22 },
 
+  payOptions: { gap: 10, marginBottom: 12 },
   payBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: '#009EE3', borderRadius: 14,
-    paddingVertical: 16, paddingHorizontal: 20, marginBottom: 12,
+    paddingVertical: 16, paddingHorizontal: 20,
   },
+  payBtnPix: { backgroundColor: '#00B16A' },
+  payBtnStripe: { backgroundColor: '#635BFF' },
   payBtnDisabled: { backgroundColor: '#ccc' },
   payBtnIcon: { fontSize: 24 },
   payBtnLabel: { fontSize: 15, fontWeight: '800', color: '#fff' },

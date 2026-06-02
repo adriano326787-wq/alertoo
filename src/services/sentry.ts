@@ -51,7 +51,7 @@ export function initSentry() {
       environment: __DEV__ ? 'development' : 'production',
     });
   } catch (e) {
-    console.warn('[Sentry] Falha ao inicializar:', e);
+    if (__DEV__) console.warn('[Sentry] Falha ao inicializar:', e);
   }
 }
 

@@ -42,6 +42,22 @@ export interface EntertainmentEvent {
   promotionEndDate?: number | null; // unix ms
   promotionPhotoUrl?: string | null;  // primeira foto (legacy + compatibilidade com pins/cards)
   promotionPhotoUrls?: string[] | null; // todas as fotos da promoção (bronze≤2, prata≤3, ouro≤5)
+  /** Pacote de dias da semana (null = promoção avulsa, ativa todos os dias) */
+  promotionPackage?: import('./promotion').PromotionPackageId | null;
+  /** Semanas contratadas no pacote */
+  promotionWeeks?: number | null;
+  /** Dias ativos (0=Dom … 6=Sáb). Null = todos os dias */
+  promotionActiveDays?: number[] | null;
+  /** Contador de visualizações únicas do evento (#8) */
+  viewCount?: number;
+  /** Evento recorrente — exibe badge especial e pode ser re-publicado (#12) */
+  isRecurring?: boolean;
+  /** IDs dos usuários que confirmaram presença ("Vou lá") */
+  attendees?: string[];
+  /** Média de avaliações 1–5 estrelas */
+  avgRating?: number;
+  /** Quantidade de avaliações */
+  ratingCount?: number;
 }
 
 export interface EventComment {

@@ -19,15 +19,9 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     };
   }
 
-  // ─── Fix: react-native-google-mobile-ads removido (incompatível New Arch) ──
-  // Qualquer import de 'react-native-google-mobile-ads' vai para o stub.
-  if (moduleName === 'react-native-google-mobile-ads' ||
-      moduleName.startsWith('react-native-google-mobile-ads/')) {
-    return {
-      filePath: require('path').join(__dirname, 'src/stubs/admob-stub.js'),
-      type: 'sourceFile',
-    };
-  }
+  // react-native-google-mobile-ads v16.3.3 instalado e compatível com New Architecture.
+  // O redirect para o stub foi removido — o SDK real é usado agora.
+
   if (originalResolver) {
     return originalResolver(context, moduleName, platform);
   }

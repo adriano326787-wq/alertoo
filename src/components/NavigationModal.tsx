@@ -205,7 +205,7 @@ export function NavigationModal({
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          if (!canceled) setError('Permissão de localização negada');
+          if (!canceled) setError(t('nav_location_denied'));
           return;
         }
 
@@ -250,7 +250,7 @@ export function NavigationModal({
           }
         );
       } catch (e: any) {
-        if (!canceled) setError(e?.message ?? 'Erro ao obter localização');
+        if (!canceled) setError(e?.message ?? t('nav_location_error'));
       }
     })();
 
@@ -291,7 +291,7 @@ export function NavigationModal({
         });
       }
     } catch (e: any) {
-      setError(e?.message ?? 'Não foi possível calcular a rota');
+      setError(e?.message ?? t('nav_route_error'));
       setLoading(false);
     }
   };
@@ -309,7 +309,7 @@ export function NavigationModal({
     if (distToDest < 30) {
       setArrived(true);
       track('navigation_completed');
-      if (voiceEnabled) speak('Você chegou ao destino.', true);
+      if (voiceEnabled) speak(t('nav_arrived_dest'), true);
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       return;
     }
@@ -319,7 +319,7 @@ export function NavigationModal({
     if (distToRoute > OFF_ROUTE_THRESHOLD_M && now - lastRerouteAtRef.current > REROUTE_DEBOUNCE_MS) {
       lastRerouteAtRef.current = now;
       track('route_recalculated', { distFromRouteM: Math.round(distToRoute) });
-      if (voiceEnabled) speak('Recalculando rota.', true);
+      if (voiceEnabled) speak(t('nav_recalculating'), true);
       fetchRoute(userPos);
     }
   }, [userPos, route, arrived, voiceEnabled, phase]);
@@ -382,7 +382,7 @@ export function NavigationModal({
       if (distToManeuver <= threshold && !announcedRef.current.has(k)) {
         announcedRef.current.add(k);
         let msg: string;
-        if (threshold <= 20)        msg = 'Agora.';
+        if (threshold <= 20)        msg = t('nav_now');
         else if (threshold < 1000)  msg = `Em ${Math.round(distToManeuver)} metros, ${currentStep.instruction.toLowerCase()}.`;
         else                         msg = `Em ${(distToManeuver / 1000).toFixed(1)} quilômetros, ${currentStep.instruction.toLowerCase()}.`;
         speak(msg);
@@ -427,7 +427,7 @@ export function NavigationModal({
     });
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
     if (voiceEnabled && route?.steps?.[0]) {
-      speak(`Iniciando navegação. ${route.steps[0].instruction}`, true);
+      speak(`${t('nav_starting')} ${route.steps[0].instruction}`, true);
     }
   };
 
@@ -609,7 +609,7 @@ export function NavigationModal({
               {/* Faixa "Depois" — próxima manobra */}
               {nextStep ? (
                 <View style={styles.gmNextStrip}>
-                  <Text style={styles.gmNextLabel}>Depois,</Text>
+                  <Text style={styles.gmNextLabel}>{t('nav_then')}</Text>
                   <Text style={styles.gmNextIcon}>{maneuverIcon(nextStep.maneuver)}</Text>
                   <Text style={styles.gmNextText} numberOfLines={1}>{nextStep.instruction || '—'}</Text>
                 </View>
@@ -641,7 +641,7 @@ export function NavigationModal({
               <Text style={styles.gmCloseCircleText}>✕</Text>
             </TouchableOpacity>
             <View style={styles.gmPreviewInfo}>
-              <Text style={styles.gmPreviewLabel}>DESTINO</Text>
+              <Text style={styles.gmPreviewLabel}>{t('nav_destination')}</Text>
               <Text style={styles.gmPreviewTitle} numberOfLines={1}>
                 {destinationEmoji} {destinationLabel}
               </Text>
@@ -657,13 +657,22 @@ export function NavigationModal({
         {/* ═══════════════════ FABs — LADO DIREITO ═══════════════════ */}
         {phase === 'navigating' && (
           <View style={[styles.gmFabCol, { bottom: insets.bottom + GM_BOTTOM_H + 16 }]}>
-            <TouchableOpacity style={styles.gmFab} onPress={toggleVoice} activeOpacity={0.75}>
+            {/* #9 — accessibilityLabel torna os FABs acessíveis para leitores de tela */}
+            <TouchableOpacity
+              style={styles.gmFab}
+              onPress={toggleVoice}
+              activeOpacity={0.75}
+              accessibilityLabel={t('nav_voice_toggle')}
+              accessibilityRole="button"
+            >
               <Text style={styles.gmFabText}>{voiceEnabled ? '🔊' : '🔇'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.gmFab, { marginTop: 10 }, showStepsList && styles.gmFabActive]}
               onPress={() => setShowStepsList((v) => !v)}
               activeOpacity={0.75}
+              accessibilityLabel={t('nav_steps_toggle')}
+              accessibilityRole="button"
             >
               <Text style={styles.gmFabText}>≡</Text>
             </TouchableOpacity>
@@ -685,7 +694,7 @@ export function NavigationModal({
             onPress={recenterOnUser}
             activeOpacity={0.8}
           >
-            <Text style={styles.gmRecenterPillText}>⟳  Recentralizar</Text>
+            <Text style={styles.gmRecenterPillText}>⟳  {t('nav_recenter')}</Text>
           </TouchableOpacity>
         )}
 
@@ -693,7 +702,7 @@ export function NavigationModal({
         {phase === 'navigating' && showStepsList && route?.steps && (
           <View style={[styles.stepsPanel, { bottom: insets.bottom + GM_BOTTOM_H + 12 }]}>
             <View style={styles.stepsPanelHeader}>
-              <Text style={styles.stepsTitle}>Próximos passos</Text>
+              <Text style={styles.stepsTitle}>{t('steps')}</Text>
               <TouchableOpacity
                 style={styles.stepsCloseBtn}
                 onPress={() => setShowStepsList(false)}
@@ -702,7 +711,8 @@ export function NavigationModal({
                 <Text style={styles.stepsCloseBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView style={{ flex: 1 }}>
+            {/* #10 — removeClippedSubviews reduz consumo de memória em listas longas */}
+            <ScrollView style={{ flex: 1 }} removeClippedSubviews>
               {route.steps.slice(Math.max(0, curStepIdx)).map((s, idx) => (
                 <View key={idx} style={[styles.stepRow, idx === 0 && styles.stepRowCurrent]}>
                   <Text style={styles.stepIcon}>{maneuverIcon(s.maneuver)}</Text>
@@ -727,7 +737,7 @@ export function NavigationModal({
           ) : loading && !route ? (
             <View style={styles.gmBottomLoading}>
               <ActivityIndicator size="small" color="#1A73E8" />
-              <Text style={styles.gmBottomLoadingText}>Calculando rota…</Text>
+              <Text style={styles.gmBottomLoadingText}>{t('calculating_route')}</Text>
             </View>
           ) : route ? (
             phase === 'preview' ? (
@@ -735,17 +745,17 @@ export function NavigationModal({
               <>
                 <View style={styles.gmPreviewCtaRow}>
                   <Pressable style={({ pressed }) => [styles.gmCancelBtn, pressed && { opacity: 0.7 }]} onPress={onClose}>
-                    <Text style={styles.gmCancelBtnText}>Cancelar</Text>
+                    <Text style={styles.gmCancelBtnText}>{t('cancel')}</Text>
                   </Pressable>
                   <Pressable style={({ pressed }) => [styles.gmStartBtn, pressed && { opacity: 0.88 }]} onPress={startNavigation}>
-                    <Text style={styles.gmStartBtnText}>▶  Iniciar</Text>
+                    <Text style={styles.gmStartBtnText}>{t('nav_start_btn')}</Text>
                   </Pressable>
                 </View>
               </>
             ) : arrived ? (
               /* ARRIVED BOTTOM */
               <Pressable style={({ pressed }) => [styles.gmStartBtn, pressed && { opacity: 0.88 }]} onPress={onClose}>
-                <Text style={styles.gmStartBtnText}>✓  Concluir</Text>
+                <Text style={styles.gmStartBtnText}>{t('nav_finish_btn')}</Text>
               </Pressable>
             ) : (
               /* NAVIGATING BOTTOM: X · tempo/dist · ⇅ */

@@ -81,7 +81,10 @@ export type AnalyticsEvent =
   | 'promote_tier_selected'
   | 'promote_purchased'
   | 'credits_purchased'
-  | 'error_shown';
+  | 'error_shown'
+  | 'rsvp_added'
+  | 'rsvp_removed'
+  | 'rating_submitted';
 
 export function track(event: AnalyticsEvent, props?: Record<string, any>) {
   if (!client) return;
