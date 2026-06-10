@@ -196,6 +196,15 @@ function AppRoot() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Failsafe extra — garante que versionStatus não trave a splash além de 8s,
+  // mesmo em ROMs (ex: Xiaomi/MIUI) onde o timeout interno do Firestore pode
+  // não disparar normalmente.
+  const [forceReady, setForceReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setForceReady(true), 8000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Zera contador de crashes — app carregou com sucesso
   useEffect(() => { clearCrashCounter(); }, []);
 
@@ -336,7 +345,7 @@ function AppRoot() {
     setUser(u);
   }
 
-  if (versionStatus === 'force_update' || versionStatus === 'maintenance') {
+  if (!forceReady && (versionStatus === 'force_update' || versionStatus === 'maintenance')) {
     return (
       <SafeAreaProvider>
         <SystemBars style="light" />
@@ -345,7 +354,7 @@ function AppRoot() {
     );
   }
 
-  if (!ready || showOnboarding === null || versionStatus === 'loading') {
+  if (!forceReady && (!ready || showOnboarding === null || versionStatus === 'loading')) {
     return (
       <View style={styles.splash}>
         <SystemBars style="light" />

@@ -2,5 +2,10 @@
   "react-native-google-mobile-ads": {
     "android_app_id": "ca-app-pub-4349309505537394~6456788249",
     "ios_app_id": "ca-app-pub-4349309505537394~6456788249"
+  },
+  "expo": {
+    "android": {
+      "versionCode": 31
+    }
   }
 }

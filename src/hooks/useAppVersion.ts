@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
+import Constants from 'expo-constants';
 import { db } from '../services/firebase';
 
-// versionCode atual do app — deve ser mantido igual ao versionCode em android/app/build.gradle
-// ⚠️  Atualizar a cada release junto com versionCode no build.gradle
-export const CURRENT_VERSION_CODE = 26; // 1.1.6
+// versionCode atual do app — lido dinamicamente do app.config.js (android.versionCode)
+// para nunca ficar desatualizado. Fallback de segurança caso Constants não exponha o valor.
+export const CURRENT_VERSION_CODE: number =
+  Constants.expoConfig?.android?.versionCode ?? 30;
 
 // Tempo máximo que o app aguarda resposta do Firestore antes de liberar o boot.
 // Se a rede estiver lenta ou Firebase indisponível, não bloqueia o usuário.
