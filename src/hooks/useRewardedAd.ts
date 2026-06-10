@@ -29,6 +29,8 @@ interface UseRewardedAdResult {
   ready: boolean;
   /** Cooldown de 60 min ainda ativo */
   cooldownActive: boolean;
+  /** Anúncio não disponível (timeout ou erro — sem inventário no momento) */
+  unavailable: boolean;
   /** Exibe o anúncio; chama onRewarded apenas se assistido até o fim */
   show: (onRewarded: () => void) => Promise<void>;
 }
@@ -37,6 +39,7 @@ export function useRewardedAd(): UseRewardedAdResult {
   const adRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
   const [cooldownActive, setCooldownActive] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
   const subsRef = useRef<(() => void)[]>([]);
 
   // Verifica cooldown ao montar
@@ -44,9 +47,13 @@ export function useRewardedAd(): UseRewardedAdResult {
     canShowRewarded().then((ok) => setCooldownActive(!ok));
   }, []);
 
+  // Timeout: se o anúncio não carregar em 20s, marca como indisponível
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const loadAd = useCallback(async () => {
     subsRef.current.forEach((unsub) => unsub());
     subsRef.current = [];
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setReady(false);
 
     // Garante que o SDK já foi inicializado antes de criar o ad request
@@ -63,17 +70,28 @@ export function useRewardedAd(): UseRewardedAdResult {
       adRef.current = ad;
 
       const unsubLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED ?? AdEventType.LOADED, () => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
         setReady(true);
+        setUnavailable(false);
       });
 
       const unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
         setReady(false);
-        // Tenta recarregar após 15s em caso de erro (reduzido de 30s)
-        setTimeout(loadAd, 15_000);
+        setUnavailable(true);
+        // Tenta recarregar após 60s em caso de erro
+        setTimeout(loadAd, 60_000);
       });
 
       subsRef.current = [unsubLoaded, unsubError];
       ad.load();
+
+      // Timeout de 20s — se não carregar, marca como indisponível
+      timeoutRef.current = setTimeout(() => {
+        setReady(false);
+        setUnavailable(true);
+      }, 20_000);
+
     } catch {
       // SDK não disponível
     }
@@ -136,5 +154,5 @@ export function useRewardedAd(): UseRewardedAdResult {
     });
   }, [loadAd]);
 
-  return { ready, cooldownActive, show };
+  return { ready, cooldownActive, unavailable, show };
 }

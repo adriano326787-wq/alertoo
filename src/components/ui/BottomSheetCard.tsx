@@ -20,6 +20,7 @@ import {
   Dimensions,
   Pressable,
   TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/useTheme';
@@ -54,6 +55,7 @@ interface Props {
   status?: { label: string; color: string };
   tag?: { label: string; color: string; icon?: string };
   description?: string;
+  link?: string;
   stats?: Array<{ icon: string; value: string | number; label?: string }>;
   primaryAction?: SheetAction;
   quickActions?: SheetAction[];
@@ -75,6 +77,7 @@ export function BottomSheetCard({
   status,
   tag,
   description,
+  link,
   stats,
   primaryAction,
   quickActions,
@@ -336,6 +339,16 @@ export function BottomSheetCard({
                 </Text>
               ) : null}
 
+              {link ? (
+                <TouchableOpacity
+                  style={styles.linkBtn}
+                  onPress={() => Linking.openURL(link).catch(() => {})}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.linkBtnText}>🔗 {link.replace(/^https?:\/\//, '')}</Text>
+                </TouchableOpacity>
+              ) : null}
+
               {stats && stats.length > 0 ? (
                 <View style={[styles.statsRow, { backgroundColor: theme.bg.base, borderColor: theme.border.subtle }]}>
                   {stats.map((s, i) => (
@@ -422,6 +435,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius['3xl'],
     borderTopRightRadius: radius['3xl'],
     overflow: 'hidden',
+    // Em tablets/telas largas, evita que o sheet fique esticado de ponta a ponta
+    width: '100%', maxWidth: 480, alignSelf: 'center',
   },
 
   // Top bar — row: [spacer | handle | closeBtn]
@@ -526,6 +541,23 @@ const styles = StyleSheet.create({
   },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },
   statIcon: { fontSize: 18 },
+
+  linkBtn: {
+    marginTop: spacing[3],
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: '#1565C0',
+    backgroundColor: '#E3F2FD',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  linkBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1565C0',
+  },
 
   primaryBtn: {
     marginTop: spacing[4],

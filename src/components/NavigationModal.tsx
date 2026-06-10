@@ -26,8 +26,11 @@ import {
   ActivityIndicator,
   ScrollView,
   Pressable,
+  Platform,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
+// iOS usa Apple Maps (sem API key extra); Android usa Google Maps.
+const NAV_MAP_PROVIDER = Platform.OS === 'ios' ? PROVIDER_DEFAULT : PROVIDER_GOOGLE;
 import * as Location from 'expo-location';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
@@ -456,7 +459,7 @@ export function NavigationModal({
       <View style={styles.container}>
         <MapView
           ref={mapRef}
-          provider={PROVIDER_GOOGLE}
+          provider={NAV_MAP_PROVIDER}
           style={StyleSheet.absoluteFill}
           initialRegion={{
             latitude: userPos ? userPos.latitude : destination.latitude,

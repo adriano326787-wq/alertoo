@@ -129,10 +129,11 @@ export async function createPromotion(params: {
   packageId?: PromotionPackageId | null;
   weeks?: number;                  // 1–8 semanas (ignorado se packageId=null)
   activeDays?: number[];           // dias ativos definitivos (0=Dom … 6=Sáb)
+  link?: string | null;            // URL opcional do evento (site, ingressos etc.)
 }): Promise<ActivePromotion> {
   const {
     userId, eventId, tier, photoUrl, photoUrls, skipCreditCheck = false,
-    packageId = null, weeks = 1, activeDays,
+    packageId = null, weeks = 1, activeDays, link = null,
   } = params;
   const allPhotoUrls = photoUrls && photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : []);
   const config = PROMOTION_TIERS[tier];
@@ -202,6 +203,7 @@ export async function createPromotion(params: {
     promotionPackage: packageId ?? null,
     promotionWeeks: packageId ? weeks : null,
     promotionActiveDays: finalActiveDays,
+    link: link ?? null,
     // Garante que o evento fique visível durante toda a promoção
     expiresAt: Timestamp.fromMillis(endDate),
   });
@@ -302,6 +304,7 @@ export async function cancelPromotion(promotionId: string, eventId: string): Pro
     promotionPackage: null,
     promotionWeeks: null,
     promotionActiveDays: null,
+    link: null,
     expiresAt: gracePeriod,
   });
 }

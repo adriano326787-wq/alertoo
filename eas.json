@@ -9,6 +9,9 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
       }
     },
     "preview": {
@@ -17,8 +20,17 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": false
+      },
       "env": {
         "APP_VARIANT": "preview"
+      }
+    },
+    "preview-ios-simulator": {
+      "extends": "preview",
+      "ios": {
+        "simulator": true
       }
     },
     "production": {
@@ -28,6 +40,9 @@
         "buildType": "app-bundle",
         "resourceClass": "medium"
       },
+      "ios": {
+        "enterpriseProvisioning": "adhoc"
+      },
       "env": {
         "APP_VARIANT": "production"
       }
@@ -36,11 +51,11 @@
   "submit": {
     "production": {
       "android": {
-        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "serviceAccountKeyPath": "./google-play-key.json",
         "track": "internal",
         "releaseStatus": "draft",
         "changesNotSentForReview": false
-      }
+      },
     }
   }
 }

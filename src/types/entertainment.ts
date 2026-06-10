@@ -25,6 +25,7 @@ export interface EntertainmentEvent {
   title: string;
   description?: string;
   address?: string;
+  link?: string;        // URL opcional fornecida pelo criador do evento
   latitude: number;
   longitude: number;
   createdAt: number;

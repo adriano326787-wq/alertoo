@@ -4,6 +4,7 @@ import {
   addDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   doc,
   onSnapshot,
   query,
@@ -51,6 +52,7 @@ interface EntertainmentState {
   hasMore: boolean;
   error: string | null;          // mensagem de erro para exibir retry na UI
   isFromCache: boolean;          // #34 — offline indicator
+  filterCategory: EntertainmentCategory | null;  // filtro por categoria
   // controle interno
   _lastDoc: QueryDocumentSnapshot<DocumentData> | null;
   _unsub: (() => void) | null;
@@ -90,6 +92,10 @@ interface EntertainmentState {
   toggleAttendance: (eventId: string) => Promise<void>;
   /** Envia avaliação 1–5 e recalcula média no Firestore */
   submitRating: (eventId: string, stars: number) => Promise<void>;
+  /** Exclui evento (somente admin) */
+  deleteEntertainmentEvent: (eventId: string) => Promise<void>;
+  /** Filtro por categoria (null = sem filtro) */
+  setFilterCategory: (category: EntertainmentCategory | null) => void;
 }
 
 function docToEvent(d: QueryDocumentSnapshot<DocumentData>): EntertainmentEvent | null {
@@ -126,6 +132,7 @@ function docToEvent(d: QueryDocumentSnapshot<DocumentData>): EntertainmentEvent 
     promotionWeeks: data.promotionWeeks ?? null,
     promotionActiveDays: data.promotionActiveDays ?? null,
     photoUrl: data.photoUrl ?? null,
+    link: data.link ?? undefined,
     viewCount: data.viewCount ?? 0,
     isRecurring: data.isRecurring ?? false,
     attendees: Array.isArray(data.attendees) ? data.attendees : [],
@@ -140,6 +147,7 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
   hasMore: false,
   error: null,
   isFromCache: false,
+  filterCategory: null,
   _lastDoc: null,
   _unsub: null,
   _expiryTimer: null,
@@ -510,16 +518,17 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
     const ratingRef = doc(db, COLLECTION, eventId, 'ratings', uid);
     await setDoc(ratingRef, { stars, userId: uid, createdAt: Timestamp.now() }, { merge: true });
 
-    // Recalcula média via transação
-    const { runTransaction } = await import('firebase/firestore');
-    await runTransaction(db, async (tx) => {
-      // Lê todas as avaliações
-      const ratingsSnap = await getDocs(collection(db, COLLECTION, eventId, 'ratings'));
-      const total = ratingsSnap.docs.reduce((sum, d) => sum + (d.data().stars ?? 0), 0);
-      const count = ratingsSnap.docs.length;
-      const avg = count > 0 ? Math.round((total / count) * 10) / 10 : 0;
-      tx.update(doc(db, COLLECTION, eventId), { avgRating: avg, ratingCount: count });
-    });
+    // Recalcula média de forma atômica usando increment — evita getDocs dentro de transação
+    // (getDocs em transação viola ACID pois não é versionado pelo tx)
+    const eventRef = doc(db, COLLECTION, eventId);
+    const prevSnap = await import('firebase/firestore').then(({ getDoc }) => getDoc(eventRef));
+    const prevData = prevSnap.data() ?? {};
+    const prevCount: number = prevData.ratingCount ?? 0;
+    const prevAvg: number = prevData.avgRating ?? 0;
+    const newCount = prevCount + 1;
+    const newAvg = Math.round(((prevAvg * prevCount + stars) / newCount) * 10) / 10;
+    const { updateDoc: _updateDoc } = await import('firebase/firestore');
+    await _updateDoc(eventRef, { avgRating: newAvg, ratingCount: newCount });
 
     // Atualiza cache local
     const event = get().events.find((e) => e.id === eventId);
@@ -560,5 +569,17 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
         e.id === eventId ? { ...e, ...patch } : e
       ),
     }));
+  },
+
+  // ─── Excluir evento de entretenimento (somente admin) ────────────────────
+  deleteEntertainmentEvent: async (eventId) => {
+    await deleteDoc(doc(db, COLLECTION, eventId));
+    // Remove do estado local imediatamente (otimista)
+    set((s) => ({ events: s.events.filter((e) => e.id !== eventId) }));
+  },
+
+  // ─── Filtro por categoria ─────────────────────────────────────────────────
+  setFilterCategory: (category) => {
+    set({ filterCategory: category });
   },
 }));

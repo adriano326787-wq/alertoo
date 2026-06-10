@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Excluir Conta — Alertoo</title>
+  <meta name="description" content="Saiba como excluir sua conta e seus dados do Alertoo de forma permanente, direto pelo app ou por solicitação." />
+  <link rel="canonical" href="https://alertoo.com.br/deletar-conta" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -99,18 +101,18 @@
 
 <header>
   <h1>🚦 Alertoo</h1>
-  <p>Exclusão de Conta e Dados</p>
+  <p data-i18n="delete.subtitle">Exclusão de Conta e Dados</p>
 </header>
 
 <main>
 
-  <div class="warning">
+  <div class="warning" data-i18n="delete.warning">
     ⚠️ A exclusão da conta é permanente e não pode ser desfeita. Todos os seus dados serão removidos.
   </div>
 
   <div class="card">
-    <h2>Excluir pelo app (recomendado)</h2>
-    <p>A forma mais rápida de excluir sua conta é diretamente pelo aplicativo:</p>
+    <h2 data-i18n="delete.app.h2">Excluir pelo app (recomendado)</h2>
+    <p data-i18n="delete.app.p">A forma mais rápida de excluir sua conta é diretamente pelo aplicativo:</p>
 
     <div class="step">
       <div class="step-num">1</div>
@@ -118,11 +120,11 @@
     </div>
     <div class="step">
       <div class="step-num">2</div>
-      <div class="step-text">Toque no ícone de <strong>Perfil</strong> (canto inferior direito)</div>
+      <div class="step-text">Toque no ícone de <strong data-i18n="delete.app.step1">Perfil</strong> (canto inferior direito)</div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
-      <div class="step-text">Role até o final e toque em <strong>"Excluir conta"</strong></div>
+      <div class="step-text">Role até o final e toque em <strong data-i18n="delete.app.step2">"Excluir conta"</strong></div>
     </div>
     <div class="step">
       <div class="step-num">4</div>
@@ -131,35 +133,34 @@
   </div>
 
   <div class="card">
-    <h2>Solicitar por e-mail</h2>
-    <p>Se preferir ou não tiver acesso ao app, envie um e-mail solicitando a exclusão:</p>
+    <h2 data-i18n="delete.email.h2">Solicitar por e-mail</h2>
+    <p data-i18n="delete.email.p">Se preferir ou não tiver acesso ao app, envie um e-mail solicitando a exclusão:</p>
     <ul>
       <li>Assunto: <strong>Exclusão de conta Alertoo</strong></li>
       <li>Inclua o e-mail cadastrado na sua conta</li>
       <li>Responderemos em até <strong>5 dias úteis</strong></li>
     </ul>
-    <a class="email-btn" href="mailto:privacidade@alertoo.app?subject=Exclusão%20de%20conta%20Alertoo">
+    <a class="email-btn" href="mailto:privacidade@alertoo.app?subject=Exclusão%20de%20conta%20Alertoo" data-i18n="delete.email.btn">
       📧 Enviar solicitação
     </a>
   </div>
 
   <div class="card">
-    <h2>O que é excluído</h2>
+    <h2 data-i18n="delete.what.h2">O que é excluído</h2>
     <ul>
-      <li>✅ Conta e dados de autenticação</li>
-      <li>✅ Perfil e foto de perfil</li>
-      <li>✅ Alertas e eventos criados</li>
-      <li>✅ Histórico de atividade</li>
-      <li>✅ Tokens de notificação</li>
+      <li data-i18n="delete.li1">✅ Conta e dados de autenticação</li>
+      <li data-i18n="delete.li2">✅ Perfil e foto de perfil</li>
+      <li data-i18n="delete.li3">✅ Alertas e eventos criados</li>
+      <li data-i18n="delete.li4">✅ Histórico de atividade</li>
+      <li data-i18n="delete.li5">✅ Tokens de notificação</li>
     </ul>
-    <p style="margin-top:12px; font-size:13px; color:#888;">
-      Logs de transações financeiras são mantidos por 5 anos conforme exigência fiscal (LGPD, art. 16).
-      Esses registros são anonimizados e não permitem identificar você.
+    <p style="margin-top:12px; font-size:13px; color:#888;" data-i18n="delete.legal">
+      Logs de transações financeiras são mantidos por 5 anos conforme exigência fiscal (Lei nº 9.430/96).
     </p>
   </div>
 
   <p style="text-align:center; font-size:13px; color:#888; margin-top:8px;">
-    Dúvidas? Consulte nossa <a href="/privacidade">Política de Privacidade</a>
+    Dúvidas? Consulte nossa <a href="/privacidade" data-i18n="delete.privacy">Política de Privacidade</a>
     ou entre em contato: <a href="mailto:privacidade@alertoo.app">privacidade@alertoo.app</a>
   </p>
 
@@ -168,6 +169,7 @@
 <footer>
   © 2025 Alertoo · Em conformidade com a LGPD (Lei nº 13.709/2018)
 </footer>
-
+<script src="/i18n.js"></script>
+<script src="/i18n-extra.js"></script>
 </body>
 </html>

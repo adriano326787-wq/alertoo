@@ -26,6 +26,11 @@ interface LeaderEntry {
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 const TOP_COUNT = 50;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+// Cache em memória — sobrevive à navegação entre telas sem novo Firestore read
+let _cachedLeaders: LeaderEntry[] = [];
+let _cacheTimestamp = 0;
 
 export function LeaderboardScreen() {
   const t = useT();
@@ -33,11 +38,20 @@ export function LeaderboardScreen() {
   const isDark = useColorScheme() === 'dark';
   const myUid = getCurrentUserId();
 
-  const [leaders, setLeaders] = useState<LeaderEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [leaders, setLeaders] = useState<LeaderEntry[]>(_cachedLeaders);
+  const [loading, setLoading] = useState(_cachedLeaders.length === 0);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && _cachedLeaders.length > 0 && now - _cacheTimestamp < CACHE_TTL_MS) {
+      setLeaders(_cachedLeaders);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+    setError(null);
     try {
       const snap = await getDocs(
         query(
@@ -52,18 +66,22 @@ export function LeaderboardScreen() {
         points: d.data().points ?? 0,
         photoURL: d.data().photoURL ?? null,
       }));
+      _cachedLeaders = list;
+      _cacheTimestamp = Date.now();
       setLeaders(list);
-    } catch (_) {} finally {
+    } catch (_) {
+      setError(t('error_loading') || 'Não foi possível carregar o ranking.');
+    } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { load(); }, [load]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    load();
+    load(true);
   }, [load]);
 
   const bg = isDark ? '#0F172A' : '#F1F5F9';
@@ -140,6 +158,17 @@ export function LeaderboardScreen() {
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#FF5722" />
         </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={{ fontSize: 40 }}>⚠️</Text>
+          <Text style={[styles.emptyText, { color: subColor }]}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => { setLoading(true); load(true); }}
+          >
+            <Text style={styles.retryText}>↺ {t('retry') || 'Tentar novamente'}</Text>
+          </TouchableOpacity>
+        </View>
       ) : leaders.length === 0 ? (
         <View style={styles.center}>
           <Text style={{ fontSize: 40 }}>🏆</Text>
@@ -211,4 +240,6 @@ const styles = StyleSheet.create({
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   emptyText: { fontSize: 14, textAlign: 'center' },
+  retryBtn: { backgroundColor: '#FF5722', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
+  retryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

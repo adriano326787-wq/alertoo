@@ -1,0 +1,19 @@
+{
+  "name": "Alertoo — Alertas e Eventos em Tempo Real",
+  "short_name": "Alertoo",
+  "description": "Alertas de trânsito colaborativos e descoberta de eventos perto de você.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#FF5722",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "categories": ["navigation", "utilities"],
+  "lang": "pt-BR",
+  "dir": "ltr"
+}

@@ -1,10 +1,14 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, Alert, ActivityIndicator, useColorScheme, Animated, Linking } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, Alert, ActivityIndicator, useColorScheme, Animated, Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Usando MapView nativo com clusteringEnabled (suporte oficial ao New Architecture)
 // react-native-map-clustering wrappeia o MapView nativo e quebra o bitmap capture no Fabric
-import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE, Region, Heatmap } from 'react-native-maps';
+import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE, PROVIDER_DEFAULT, Region, Heatmap } from 'react-native-maps';
+// iOS usa Apple Maps por padrão (sem API key extra).
+// Android usa Google Maps. Trocar MAP_PROVIDER para PROVIDER_GOOGLE no iOS
+// quando a Google Maps iOS API Key estiver configurada.
+const MAP_PROVIDER = Platform.OS === 'ios' ? PROVIDER_DEFAULT : PROVIDER_GOOGLE;
 // react-native-maps@1.20+ suporta clusteringEnabled / renderCluster nativamente mas
 // os tipos @types/react-native-maps ainda não declaram essas props → cast para any.
 // #32 — rastrear upstream: https://github.com/react-native-maps/react-native-maps/issues
@@ -29,7 +33,7 @@ import { EntertainmentEvent } from '../types/entertainment';
 import { haversineDistance } from '../utils/geo';
 import { resolveStateUF } from '../utils/brazilGeo';
 import { useAppStore, restorePersistedLocation } from '../store/appStore';
-import { t } from '../utils/i18n';
+import { t, tf } from '../utils/i18n';
 import { useT } from '../hooks/useT';
 import { getCurrentUser, getCurrentUserId } from '../services/authService';
 import { AdBanner } from '../components/AdBanner';
@@ -40,7 +44,7 @@ import {
   filterRoadEvents,
   filterEntEvents,
 } from '../utils/mapZoom';
-import { requestNotificationPermission } from '../services/notificationService';
+import { requestNotificationPermission, sendLocalNotification } from '../services/notificationService';
 import { mapStyleLight, mapStyleDark } from '../theme/mapStyle';
 import { MapSearchBar, SearchResult } from '../components/ui/MapSearchBar';
 import { ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
@@ -48,6 +52,10 @@ import { EVENT_CATEGORIES } from '../types';
 import { MapIntroModal, shouldShowMapIntro } from '../components/MapIntroModal';
 import { DriverModeOverlay } from '../components/DriverModeOverlay';
 import { SavedRouteModal } from '../components/SavedRouteModal';
+import { NavigationModal } from '../components/NavigationModal';
+import { NearbyEventPrompt } from '../components/NearbyEventPrompt';
+import { TrafficDetectionPrompt } from '../components/TrafficDetectionPrompt';
+import { useTrafficSpeedDetection, TrafficAlert } from '../hooks/useTrafficSpeedDetection';
 
 const MAX_REPORT_RADIUS_KM = 1;
 
@@ -247,6 +255,8 @@ export function MapScreen() {
   const [savedRouteVisible, setSavedRouteVisible] = useState(false);
   // Endereço selecionado na busca — exibe pin no mapa e card de navegação
   const [selectedPlace, setSelectedPlace] = useState<SearchResult | null>(null);
+  // Navegação GPS in-app para endereço buscado
+  const [navDestination, setNavDestination] = useState<{ latitude: number; longitude: number; label: string } | null>(null);
   // Banner "sem conexão" — delay de 3s para evitar falso-positivo no startup
   // (Firestore sempre dispara fromCache=true antes de sincronizar com o servidor)
   const [showOfflineBanner, setShowOfflineBanner] = useState(false);
@@ -257,6 +267,7 @@ export function MapScreen() {
   const [pendingCoord, setPendingCoord] = useState<PendingCoord | null>(null);
   const [selectedRoadEvent, setSelectedRoadEvent] = useState<RoadEvent | null>(null);
   const [selectedEntEvent, setSelectedEntEvent] = useState<EntertainmentEvent | null>(null);
+  const [trafficAlert, setTrafficAlert] = useState<TrafficAlert | null>(null);
   const { top: topInset } = useSafeAreaInsets();
 
   // #6 — região inicial: tenta posição persistida, cai para São Paulo
@@ -312,19 +323,51 @@ export function MapScreen() {
 
   // Stores
   const { loading: roadLoading, events: allRoadEvents, subscribeToEvents, confirmEvent, denyEvent, filterStateUF, isFromCache: roadFromCache } = useEventsStore();
-  const { events: entertainmentEvents, subscribe: subscribeEntertainment, toggleLike, isFromCache: entFromCache } = useEntertainmentStore();
+  const { events: allEntertainmentEvents, subscribe: subscribeEntertainment, toggleLike, isFromCache: entFromCache, filterCategory: entFilterCategory } = useEntertainmentStore();
   const isOffline = roadFromCache || entFromCache;
   const isAdmin = useUserStore((s) => s.isAdmin);
   const setUserCountryCode = useAppStore((s) => s.setUserCountryCode);
   const setUserStateUF = useAppStore((s) => s.setUserStateUF);
   const setUserLocation = useAppStore((s) => s.setUserLocation);
+  const userLat = useAppStore((s) => s.userLat);
+  const userLon = useAppStore((s) => s.userLon);
   const pendingMapFocus = useAppStore((s) => s.pendingMapFocus);
   const clearMapFocus = useAppStore((s) => s.clearMapFocus);
   const pendingDeepLink = useAppStore((s) => s.pendingDeepLink);
   const setPendingDeepLink = useAppStore((s) => s.setPendingDeepLink);
 
+  // Aplica filtro de categoria antes do filtro de zoom
+  const entertainmentEvents = useMemo(
+    () => entFilterCategory ? allEntertainmentEvents.filter((e) => e.category === entFilterCategory) : allEntertainmentEvents,
+    [allEntertainmentEvents, entFilterCategory],
+  );
   // Pins filtrados por tier — memoizados para não recalcular a cada re-render do mapa
   const roadEvents = useMemo(() => filterRoadEvents(allRoadEvents, zoomTier), [allRoadEvents, zoomTier]);
+
+  // ── Detecção de trânsito por velocidade GPS ───────────────────────────────
+  useTrafficSpeedDetection({
+    nearbyEvents: allRoadEvents,
+    paused:
+      pickerVisible || roadModalVisible || entertainmentModalVisible ||
+      filterVisible || !!selectedRoadEvent || !!selectedEntEvent ||
+      !!commentTarget || driverModeActive || showIntro || !!trafficAlert,
+    onAlert: (alert) => {
+      setTrafficAlert(alert);
+      // #43 — também envia notificação OS: se o app estiver minimizado (mas
+      // ainda em execução), o usuário recebe o alerta como pop-up do sistema
+      // mesmo fora do app. Em foreground o handler suprime o banner
+      // (notificationService.ensureHandler), evitando duplicar com o prompt in-app.
+      const title = alert.kind === 'stopped'
+        ? `🛑 ${t('traffic_alert_stopped_title')}`
+        : `🚦 ${t('traffic_alert_slow_title')}`;
+      sendLocalNotification(title, t('traffic_alert_notif_body'), {
+        trafficAlert: true,
+        kind: alert.kind,
+        latitude: alert.latitude,
+        longitude: alert.longitude,
+      }).catch(() => {});
+    },
+  });
   const visibleEntEvents = useMemo(() => filterEntEvents(entertainmentEvents, zoomTier), [entertainmentEvents, zoomTier]);
 
   // Lista para a SearchBar — usa allRoadEvents (não filtrado por zoom) para busca completa (#9)
@@ -397,8 +440,12 @@ export function MapScreen() {
     };
 
     if (!tryOpen()) {
-      // Evento não encontrado ainda — inicia timeout de fallback
+      // Evento não encontrado ainda — inicia timeout de fallback com toast de feedback
       if (!deepLinkTimeoutRef.current) {
+        // Toast imediato: informa o usuário que está procurando
+        if (!roadLoading && !entLoading) {
+          // Só mostra toast se os stores já carregaram (não é loading inicial)
+        }
         deepLinkTimeoutRef.current = setTimeout(() => {
           deepLinkTimeoutRef.current = null;
           setPendingDeepLink(null);
@@ -437,17 +484,17 @@ export function MapScreen() {
     }).catch(() => {});
 
     // #26 — First-time hint "Toque no mapa para reportar"
+    let hintTimer: ReturnType<typeof setTimeout> | null = null;
     AsyncStorage.getItem('map_hint_shown').then((val) => {
       if (!val) {
         setShowMapHint(true);
-        // Auto-dismiss after 5s with fade-out
-        setTimeout(() => {
+        // Auto-dismiss after 5s with fade-out — timer salvo para cleanup no desmonte
+        hintTimer = setTimeout(() => {
           Animated.timing(hintOpacity, { toValue: 0, duration: 600, useNativeDriver: true }).start(() => {
             setShowMapHint(false);
             AsyncStorage.setItem('map_hint_shown', '1').catch((e) => {
-          // #19 — loga falha de storage em dev (ex: dispositivo sem espaço)
-          if (__DEV__) console.warn('[MapScreen] hint storage failed:', e);
-        });
+              if (__DEV__) console.warn('[MapScreen] hint storage failed:', e);
+            });
           });
         }, 5000);
       }
@@ -456,6 +503,7 @@ export function MapScreen() {
     return () => {
       unsubRoad();
       unsubEnt();
+      if (hintTimer) clearTimeout(hintTimer);
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, []);
@@ -497,9 +545,13 @@ export function MapScreen() {
         return;
       }
 
-      // #20/#21 — verifica área de água ANTES da distância:
-      // evita confundir o usuário com "você está longe" quando o ponto é simplesmente inválido.
-      const isWater = await checkIsWaterArea(tapped.latitude, tapped.longitude);
+      // #20/#21 — verifica área de água EM PARALELO com a obtenção da localização do usuário
+      // para eliminar a latência sequencial (water check pode demorar até 4s).
+      const [isWater, userLoc] = await Promise.all([
+        checkIsWaterArea(tapped.latitude, tapped.longitude),
+        getUserLocation(),
+      ]);
+
       if (isWater) {
         // #38 — haptic error feedback before the alert for immediate physical cue
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -511,12 +563,11 @@ export function MapScreen() {
         return;
       }
 
-      const userLoc = await getUserLocation();
       const { latitude: uLat, longitude: uLon } = userLoc.coords;
       if (!isAdmin) {
         const distKm = haversineDistance(uLat, uLon, tapped.latitude, tapped.longitude);
         if (distKm > MAX_REPORT_RADIUS_KM) {
-          Alert.alert(t('too_far_title') || 'Muito longe', `${t('too_far_msg') || `Você só pode reportar eventos num raio de ${MAX_REPORT_RADIUS_KM} km.`}\n\nDistância: ${distKm.toFixed(1)} km.`);
+          Alert.alert(t('too_far_title') || 'Muito longe', tf('too_far_msg', { km: MAX_REPORT_RADIUS_KM, dist: distKm.toFixed(1) }) || `Você só pode reportar eventos num raio de ${MAX_REPORT_RADIUS_KM} km.\n\nDistância: ${distKm.toFixed(1)} km.`);
           return;
         }
       }
@@ -576,9 +627,9 @@ export function MapScreen() {
       <ClusteredMapView
         ref={mapRef}
         style={[styles.map, mapError && { opacity: 0 }]}
-        provider={PROVIDER_GOOGLE}
+        provider={MAP_PROVIDER}
         initialRegion={initialRegion}
-        customMapStyle={isDarkMode ? mapStyleDark : mapStyleLight}
+        customMapStyle={Platform.OS === 'android' ? (isDarkMode ? mapStyleDark : mapStyleLight) : undefined}
         onPress={handleMapPress}
         onMapReady={() => {
           setMapReady(true);
@@ -672,6 +723,7 @@ export function MapScreen() {
       {/* sobre o mapa sem capturar toques fora da barra */}
       {mapReady && <Animated.View style={[StyleSheet.absoluteFill, { opacity: searchBarOpacity }]} pointerEvents="box-none"><MapSearchBar
         localEvents={localSearchEvents}
+        userLocation={userLat != null && userLon != null ? { latitude: userLat, longitude: userLon } : null}
         onSelectResult={(r: SearchResult) => {
           mapRef.current?.animateToRegion({
             latitude: r.coords.latitude,
@@ -680,8 +732,13 @@ export function MapScreen() {
             longitudeDelta: 0.008,
           }, 600);
           if (r.kind === 'place') {
-            // Endereço: solta pin no mapa e exibe card de navegação
-            setSelectedPlace(r);
+            // Endereço: abre NavigationModal GPS direto (sem card intermediário)
+            setSelectedPlace(null);
+            setNavDestination({
+              latitude: r.coords.latitude,
+              longitude: r.coords.longitude,
+              label: r.title,
+            });
           } else if (r.kind === 'event' && r.eventId) {
             // Evento: abre modal correspondente
             setSelectedPlace(null);
@@ -783,14 +840,14 @@ export function MapScreen() {
       )}
 
       <RoadEventInfoModal
-        event={selectedRoadEvent}
+        event={selectedRoadEvent ? (allRoadEvents.find((e) => e.id === selectedRoadEvent.id) ?? selectedRoadEvent) : null}
         onConfirm={confirmEvent}
         onDeny={denyEvent}
         onClose={() => setSelectedRoadEvent(null)}
       />
 
       <EntertainmentInfoModal
-        event={selectedEntEvent}
+        event={selectedEntEvent ? (allEntertainmentEvents.find((e) => e.id === selectedEntEvent.id) ?? selectedEntEvent) : null}
         onLike={toggleLike}
         onComment={(ev) => { setSelectedEntEvent(null); setCommentTarget(ev); }}
         onGoToMap={(ev) => { setSelectedEntEvent(null); mapRef.current?.animateToRegion({ latitude: ev.latitude, longitude: ev.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 }, 800); }}
@@ -829,15 +886,32 @@ export function MapScreen() {
               <Text style={styles.navigateCardClose}>✕</Text>
             </TouchableOpacity>
           </View>
+          {/* Navegação in-app (GPS turn-by-turn) */}
           <TouchableOpacity
             style={styles.navigateBtn}
+            activeOpacity={0.8}
+            onPress={() => {
+              setNavDestination({
+                latitude: selectedPlace.coords.latitude,
+                longitude: selectedPlace.coords.longitude,
+                label: selectedPlace.title,
+              });
+              setSelectedPlace(null);
+            }}
+          >
+            <Text style={styles.navigateBtnText}>🧭  Navegar com GPS</Text>
+          </TouchableOpacity>
+
+          {/* Abrir em app externo */}
+          <TouchableOpacity
+            style={styles.navigateBtnExternal}
             activeOpacity={0.8}
             onPress={() => {
               const { latitude: lat, longitude: lon } = selectedPlace.coords;
               const label = selectedPlace.title;
               Alert.alert(
-                '🧭 Navegar',
-                `Abrir navegação para:\n${label}`,
+                'Abrir em app externo',
+                label,
                 [
                   {
                     text: '🚕 Waze',
@@ -849,16 +923,14 @@ export function MapScreen() {
                   {
                     text: '🗺️ Google Maps',
                     onPress: () =>
-                      Linking.openURL(
-                        `https://maps.google.com/?daddr=${lat},${lon}&travelmode=driving`
-                      ),
+                      Linking.openURL(`https://maps.google.com/?daddr=${lat},${lon}&travelmode=driving`),
                   },
                   { text: 'Cancelar', style: 'cancel' },
                 ]
               );
             }}
           >
-            <Text style={styles.navigateBtnText}>🧭  Navegar até aqui</Text>
+            <Text style={styles.navigateBtnExternalText}>↗  Abrir no Waze / Maps</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -878,7 +950,7 @@ export function MapScreen() {
 
       {/* #26 — First-time hint */}
       {showMapHint && (
-        <Animated.View style={[styles.mapHint, { opacity: hintOpacity }]} pointerEvents="none">
+        <Animated.View style={[styles.mapHint, { opacity: hintOpacity, bottom: 80 + (topInset > 40 ? 16 : 0) }]} pointerEvents="none">
           <Text style={styles.mapHintText}>
             👆 {t('map_hint') || 'Toque no mapa para reportar um evento'}
           </Text>
@@ -901,6 +973,46 @@ export function MapScreen() {
       <SavedRouteModal
         visible={savedRouteVisible}
         onClose={() => setSavedRouteVisible(false)}
+      />
+
+      {/* Navegação GPS para endereço buscado */}
+      {navDestination && (
+        <NavigationModal
+          visible={!!navDestination}
+          destination={{ latitude: navDestination.latitude, longitude: navDestination.longitude }}
+          destinationLabel={navDestination.label}
+          destinationEmoji="📍"
+          onClose={() => setNavDestination(null)}
+        />
+      )}
+
+      {/* Prompt de detecção de trânsito por velocidade GPS */}
+      <TrafficDetectionPrompt
+        alert={trafficAlert}
+        onReport={(category, coordinate) => {
+          setPendingCoord({ coordinate });
+          setRoadModalVisible(true);
+        }}
+        onDismiss={() => setTrafficAlert(null)}
+      />
+
+      {/* Prompt contextual — aparece quando o usuário está ≤300 m de um evento crítico */}
+      <NearbyEventPrompt
+        userLat={userLat}
+        userLon={userLon}
+        events={allRoadEvents}
+        blocked={
+          pickerVisible || roadModalVisible || entertainmentModalVisible ||
+          filterVisible || !!selectedRoadEvent || !!selectedEntEvent ||
+          !!commentTarget || driverModeActive || showIntro
+        }
+        onConfirm={(id) => {
+          confirmEvent(id);
+        }}
+        onQuickReport={(category, coordinate, stateUF, cityName, countryCode) => {
+          setPendingCoord({ coordinate, stateUF, cityName, countryCode });
+          setRoadModalVisible(true);
+        }}
       />
     </View>
   );
@@ -1029,5 +1141,18 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#fff',
     letterSpacing: 0.2,
+  },
+  navigateBtnExternal: {
+    marginTop: 8,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  navigateBtnExternalText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
   },
 });

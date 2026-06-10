@@ -13,12 +13,16 @@ import {
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventCategory, EVENT_CATEGORIES } from '../types';
 import { useEventsStore } from '../store/eventsStore';
 import { validateEventContent } from '../utils/contentFilter';
 import { useT } from '../hooks/useT';
 import { tRoadCat } from '../utils/i18n';
 import { useTick } from '../hooks/useTick';
+
+// Limites de velocidade comuns em vias brasileiras (km/h)
+const SPEED_LIMIT_OPTIONS = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
 interface Props {
   visible: boolean;
@@ -33,7 +37,9 @@ interface Props {
 
 export function AddEventModal({ visible, coordinate, stateUF, cityName, countryCode, onClose, onEventCreated }: Props) {
   const t = useT();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>('drunkcheck');
+  const [speedLimit, setSpeedLimit] = useState<number | null>(null);
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const addEvent = useEventsStore((s) => s.addEvent);
@@ -51,6 +57,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
   useEffect(() => {
     if (!visible) {
       setSelectedCategory('drunkcheck');
+      setSpeedLimit(null);
       setDescription('');
     }
   }, [visible]);
@@ -97,8 +104,10 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
         stateUF,
         cityName,
         countryCode,
+        speedLimit: selectedCategory === 'radar' ? (speedLimit ?? undefined) : undefined,
       });
       setDescription('');
+      setSpeedLimit(null);
       onEventCreated?.();
       onClose();
     } catch (err: any) {
@@ -114,7 +123,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(bottomInset, 16) + 20 }]}>
           <View style={styles.handle} />
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>{t('add_road_title')}</Text>
@@ -149,6 +158,28 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
               )}
             </View>
 
+            {selectedCategory === 'radar' && (
+              <>
+                <Text style={styles.label}>{t('add_road_speed_limit')}</Text>
+                <View style={styles.chips}>
+                  {SPEED_LIMIT_OPTIONS.map((kmh) => (
+                    <TouchableOpacity
+                      key={kmh}
+                      style={[
+                        styles.speedChip,
+                        speedLimit === kmh && styles.speedChipSelected,
+                      ]}
+                      onPress={() => setSpeedLimit(speedLimit === kmh ? null : kmh)}
+                    >
+                      <Text style={[styles.speedChipLabel, speedLimit === kmh && styles.chipLabelSelected]}>
+                        {kmh}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
             <Text style={styles.label}>{t('add_description')}</Text>
             <TextInput
               style={[styles.input, styles.multiline]}
@@ -159,6 +190,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
               multiline
               maxLength={200}
             />
+            <Text style={styles.charCounter}>{description.length}/200</Text>
 
             <View style={styles.footer}>
               <TouchableOpacity style={styles.cancelBtn} onPress={handleRequestClose} disabled={saving}>
@@ -189,7 +221,9 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
     backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 20, paddingBottom: 36, maxHeight: '90%',
+    padding: 20, maxHeight: '90%',
+    // Em tablets/telas largas, evita que o sheet fique esticado de ponta a ponta
+    width: '100%', maxWidth: 480, alignSelf: 'center',
   },
   handle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   title: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
@@ -211,11 +245,19 @@ const styles = StyleSheet.create({
   chipEmoji: { fontSize: 16 },
   chipLabel: { fontSize: 13, fontWeight: '600', color: '#333' },
   chipLabelSelected: { color: '#fff' },
+  speedChip: {
+    minWidth: 48, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 2, borderColor: '#00ACC1', backgroundColor: '#fff',
+  },
+  speedChipSelected: { backgroundColor: '#00ACC1' },
+  speedChipLabel: { fontSize: 13, fontWeight: '700', color: '#333' },
   input: {
     borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 12,
     fontSize: 14, color: '#1a1a1a', marginBottom: 16,
   },
   multiline: { minHeight: 80, textAlignVertical: 'top' },
+  charCounter: { fontSize: 11, color: '#aaa', textAlign: 'right', marginTop: 2, marginBottom: 4 },
   footer: { flexDirection: 'row', gap: 12, marginTop: 4 },
   cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
   cancelText: { fontSize: 15, fontWeight: '600', color: '#666' },

@@ -21,18 +21,31 @@ import { ShareSheet } from '../components/ShareSheet';
 function RoadEventCard({ event, currentUid, onConfirm, onDeny, onGoToMap, onShare }: {
   event: RoadEvent;
   currentUid: string;
-  onConfirm: (id: string) => void;
-  onDeny: (id: string) => void;
+  onConfirm: (id: string) => Promise<void>;
+  onDeny: (id: string) => Promise<void>;
   onGoToMap: (event: RoadEvent) => void;
   onShare: (event: RoadEvent) => void; // #24
 }) {
   const t = useT();
   useTick(); // #14 — re-renders every 60s so timeAgo/timeLeft stay fresh
+  const [voting, setVoting] = useState<'confirm' | 'deny' | null>(null);
   const meta = EVENT_CATEGORIES[event.category];
   const myUid = currentUid;
   const alreadyVoted = myUid !== 'anonymous' && event.voters.includes(myUid);
   const isOwner = event.userId === myUid;
-  const blocked = alreadyVoted || isOwner;
+  const blocked = alreadyVoted || isOwner || voting !== null;
+
+  const handleConfirm = useCallback(async () => {
+    if (blocked) return;
+    setVoting('confirm');
+    try { await onConfirm(event.id); } finally { setVoting(null); }
+  }, [blocked, onConfirm, event.id]);
+
+  const handleDeny = useCallback(async () => {
+    if (blocked) return;
+    setVoting('deny');
+    try { await onDeny(event.id); } finally { setVoting(null); }
+  }, [blocked, onDeny, event.id]);
 
   return (
     <View style={[styles.card, { borderLeftColor: meta.color }]}>
@@ -67,21 +80,27 @@ function RoadEventCard({ event, currentUid, onConfirm, onDeny, onGoToMap, onShar
       <View style={styles.actions}>
         <TouchableOpacity
           style={[styles.actionBtn, styles.confirmBtn, blocked && styles.disabledBtn]}
-          onPress={() => !blocked && onConfirm(event.id)}
+          onPress={handleConfirm}
           disabled={blocked}
+          accessibilityLabel={`${t('road_confirm') || 'Confirmar'} — ${event.confirmations} confirmações`}
+          accessibilityRole="button"
         >
-          <Text style={[styles.actionText, blocked && styles.disabledText]}>
-            {t('road_confirm')} ({event.confirmations})
-          </Text>
+          {voting === 'confirm'
+            ? <ActivityIndicator size="small" color="#43A047" />
+            : <Text style={[styles.actionText, blocked && styles.disabledText]}>{t('road_confirm')} ({event.confirmations})</Text>
+          }
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionBtn, styles.denyBtn, blocked && styles.disabledBtn]}
-          onPress={() => !blocked && onDeny(event.id)}
+          onPress={handleDeny}
           disabled={blocked}
+          accessibilityLabel={`${t('road_deny') || 'Negar'} — ${event.denials} negações`}
+          accessibilityRole="button"
         >
-          <Text style={[styles.actionText, blocked && styles.disabledText]}>
-            {t('road_deny')} ({event.denials})
-          </Text>
+          {voting === 'deny'
+            ? <ActivityIndicator size="small" color="#E53935" />
+            : <Text style={[styles.actionText, blocked && styles.disabledText]}>{t('road_deny')} ({event.denials})</Text>
+          }
         </TouchableOpacity>
       </View>
 

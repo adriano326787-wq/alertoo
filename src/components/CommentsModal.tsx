@@ -226,6 +226,8 @@ const styles = StyleSheet.create({
     paddingTop: 12, paddingHorizontal: 16,
     // paddingBottom é definido inline com o safe area inset para respeitar a barra de navegação do celular
     maxHeight: '85%',
+    // Em tablets/telas largas, evita que o sheet fique esticado de ponta a ponta
+    width: '100%', maxWidth: 480, alignSelf: 'center',
   },
   handle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },

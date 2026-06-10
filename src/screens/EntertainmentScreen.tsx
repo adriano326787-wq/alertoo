@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, Alert, ScrollView, Image,
+  ActivityIndicator, Alert, ScrollView, Image, Modal, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { useEntertainmentStore } from '../store/entertainmentStore';
-import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
+import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES, EntertainmentCategory } from '../types/entertainment';
 import { AddEntertainmentModal } from '../components/AddEntertainmentModal';
 import { CommentsModal } from '../components/CommentsModal';
 import { EntertainmentInfoModal } from '../components/EntertainmentInfoModal';
@@ -50,7 +50,7 @@ function EventCard({
   onShare: (event: EntertainmentEvent) => void;
 }) {
   const t = useT();
-  useTick(); // #14 — re-renders every 60s so timeAgo/timeLeft stay fresh
+  // useTick removido — o componente pai já chama useTick(60_000), evitando N timers desnecessários
   const meta = ENTERTAINMENT_CATEGORIES[event.category] ?? { emoji: '📍', color: '#607D8B', label: event.category };
   const myUid = currentUid;
   const likes = Array.isArray(event.likes) ? event.likes : [];
@@ -77,7 +77,7 @@ function EventCard({
       {/* Foto do evento — aparece no topo quando disponível */}
       {photoUri ? (
         <View style={styles.cardPhotoWrap}>
-          <Image source={{ uri: photoUri }} style={styles.cardPhoto} resizeMode="cover" />
+          <ImageWithFallback uri={photoUri} style={styles.cardPhoto} fallbackColor={meta.color + '33'} fallbackEmoji={meta.emoji} />
           {/* Overlay com badge de promoção sobre a foto */}
           {isPromoted && tierConfig && (
             <View style={[styles.cardPhotoTierBadge, { backgroundColor: tierConfig.pinColor }]}>
@@ -144,7 +144,7 @@ function EventCard({
 }
 
 // ─── Image com fallback em erro de rede ──────────────────────────────────────
-function ImageWithFallback({
+const ImageWithFallback = React.memo(function ImageWithFallback({
   uri, style, fallbackColor, fallbackEmoji,
 }: { uri: string; style: any; fallbackColor: string; fallbackEmoji: string }) {
   const [error, setError] = React.useState(false);
@@ -156,7 +156,7 @@ function ImageWithFallback({
     );
   }
   return <Image source={{ uri }} style={style} resizeMode="cover" onError={() => setError(true)} />;
-}
+});
 
 // ─── Carrossel de eventos patrocinados ───────────────────────────────────────
 function FeaturedStrip({
@@ -219,10 +219,10 @@ export function EntertainmentScreen() {
   const route = useRoute<RouteProp<{ Entretenimento: { eventId?: string } }, 'Entretenimento'>>();
   const focusOnMap = useAppStore((s) => s.focusOnMap);
 
-  function handleGoToMap(event: EntertainmentEvent) {
+  const handleGoToMap = useCallback((event: EntertainmentEvent) => {
     focusOnMap({ lat: event.latitude, lon: event.longitude, title: event.title });
     navigation.navigate('Mapa');
-  }
+  }, [focusOnMap, navigation]);
   const [addVisible, setAddVisible] = useState(false);
   const [pending, setPending] = useState<PendingAdd | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<EntertainmentEvent | null>(null);
@@ -230,6 +230,9 @@ export function EntertainmentScreen() {
   const [shareTarget, setShareTarget] = useState<EntertainmentEvent | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<EntertainmentCategory | null>(null);
+  const [sortBy, setSortBy] = useState<'recent' | 'popular' | 'expiring'>('recent');
+  const [sortModalVisible, setSortModalVisible] = useState(false);
   // #2 — isMounted guard previne setState em componente desmontado durante refresh
   const isMountedRef = useRef(true);
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
@@ -249,27 +252,40 @@ export function EntertainmentScreen() {
   // #24 — tick so featuredEvents re-filters when promotionEndDate passes (avoids stale promoted events)
   useTick(60_000);
 
-  // Filtro + sort memoizados (item 14/15) — recalcula só quando allEvents/userStateUF muda
+  // Filtro + sort memoizados — recalcula quando allEvents/userStateUF/activeCategory/sortBy muda
   const events = useMemo(() => {
     const now = Date.now();
     let filtered: typeof allEvents;
     if (locationDenied || !userStateUF) {
-      // #30 — skip events that slipped through the store expiry filter
       filtered = allEvents.filter((e) => e.expiresAt > now);
     } else {
       filtered = allEvents.filter((e) => e.stateUF === userStateUF && e.expiresAt > now);
     }
+    // Filtro por categoria
+    if (activeCategory) {
+      filtered = filtered.filter((e) => e.category === activeCategory);
+    }
     const tierWeight = (e: typeof allEvents[0]) => {
-      if (!e.promotionTier || !e.promotionEndDate || e.promotionEndDate <= now) return 0; // `now` from above
+      if (!e.promotionTier || !e.promotionEndDate || e.promotionEndDate <= now) return 0;
       return e.promotionTier === 'ouro' ? 3 : e.promotionTier === 'prata' ? 2 : 1;
     };
     return [...filtered].sort((a, b) => {
+      // Promovidos sempre primeiro (independente do sortBy)
       const wa = tierWeight(a);
       const wb = tierWeight(b);
       if (wa !== wb) return wb - wa;
-      return b.createdAt - a.createdAt;
+      // Ordenação secundária conforme seleção do usuário
+      if (sortBy === 'popular') {
+        const likesA = Array.isArray(a.likes) ? a.likes.length : 0;
+        const likesB = Array.isArray(b.likes) ? b.likes.length : 0;
+        return likesB - likesA;
+      }
+      if (sortBy === 'expiring') {
+        return a.expiresAt - b.expiresAt; // expira mais cedo primeiro
+      }
+      return b.createdAt - a.createdAt; // 'recent' (padrão)
     });
-  }, [allEvents, userStateUF, locationDenied]);
+  }, [allEvents, userStateUF, locationDenied, activeCategory, sortBy]);
 
   // Eventos em destaque Prata/Ouro para o carrossel (memoizado, item 15)
   const featuredEvents = useMemo(() => {
@@ -419,6 +435,68 @@ export function EntertainmentScreen() {
           <Text style={styles.addBtnText}>{t('ent_add')}</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ── Barra de filtros ── */}
+      <View style={styles.filterBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+          {/* Chip "Todos" */}
+          <TouchableOpacity
+            style={[styles.filterChip, !activeCategory && styles.filterChipActive]}
+            onPress={() => setActiveCategory(null)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.filterChipText, !activeCategory && styles.filterChipTextActive]}>
+              🎯 Todos
+            </Text>
+          </TouchableOpacity>
+
+          {/* Chips de categoria */}
+          {(Object.entries(ENTERTAINMENT_CATEGORIES) as [EntertainmentCategory, typeof ENTERTAINMENT_CATEGORIES[EntertainmentCategory]][]).map(([key, meta]) => (
+            <TouchableOpacity
+              key={key}
+              style={[styles.filterChip, activeCategory === key && styles.filterChipActive, activeCategory === key && { borderColor: meta.color, backgroundColor: meta.color + '18' }]}
+              onPress={() => setActiveCategory(activeCategory === key ? null : key)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.filterChipText, activeCategory === key && { color: meta.color, fontWeight: '700' }]}>
+                {meta.emoji} {meta.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Botão de ordenação */}
+        <TouchableOpacity style={styles.sortBtn} onPress={() => setSortModalVisible(true)} activeOpacity={0.8}>
+          <Text style={styles.sortBtnText}>
+            {sortBy === 'recent' ? '🕐' : sortBy === 'popular' ? '🔥' : '⏳'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Modal de ordenação */}
+      <Modal transparent animationType="fade" visible={sortModalVisible} onRequestClose={() => setSortModalVisible(false)}>
+        <Pressable style={styles.sortOverlay} onPress={() => setSortModalVisible(false)}>
+          <View style={styles.sortModal}>
+            <Text style={styles.sortModalTitle}>Ordenar por</Text>
+            {([
+              { key: 'recent',  label: '🕐 Mais recentes' },
+              { key: 'popular', label: '🔥 Mais curtidos' },
+              { key: 'expiring',label: '⏳ Expirando em breve' },
+            ] as { key: typeof sortBy; label: string }[]).map(({ key, label }) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.sortOption, sortBy === key && styles.sortOptionActive]}
+                onPress={() => { setSortBy(key); setSortModalVisible(false); }}
+              >
+                <Text style={[styles.sortOptionText, sortBy === key && styles.sortOptionTextActive]}>
+                  {label}
+                </Text>
+                {sortBy === key && <Text style={styles.sortCheck}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
 
       {storeError && (
         <TouchableOpacity
@@ -635,6 +713,47 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#C7D2FE',
   },
   goToMapText: { fontSize: rf(13), fontWeight: '700', color: '#4F46E5' },
+  // ─── Filter bar ─────────────────────────────────────────────────────────────
+  filterBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#1E293B',
+    paddingBottom: rh(12),
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  filterScroll: { paddingHorizontal: rw(12), gap: rw(8) },
+  filterChip: {
+    paddingHorizontal: rw(12), paddingVertical: rh(6),
+    borderRadius: rw(20), borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  filterChipActive: {
+    borderColor: '#FF5722', backgroundColor: 'rgba(255,87,34,0.15)',
+  },
+  filterChipText: { fontSize: rf(12), fontWeight: '600', color: 'rgba(255,255,255,0.75)' },
+  filterChipTextActive: { color: '#FF5722', fontWeight: '800' },
+  sortBtn: {
+    width: rw(40), height: rw(40), borderRadius: rw(20),
+    backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center',
+    marginRight: rw(12), marginLeft: rw(4), flexShrink: 0,
+  },
+  sortBtnText: { fontSize: rf(18) },
+  // ─── Sort modal ──────────────────────────────────────────────────────────────
+  sortOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sortModal: {
+    backgroundColor: '#fff', borderTopLeftRadius: rw(20), borderTopRightRadius: rw(20),
+    padding: rw(20), paddingBottom: rh(36), gap: rh(4),
+  },
+  sortModalTitle: { fontSize: rf(16), fontWeight: '800', color: '#1E293B', marginBottom: rh(8) },
+  sortOption: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: rh(14), paddingHorizontal: rw(12),
+    borderRadius: rw(12),
+  },
+  sortOptionActive: { backgroundColor: '#FFF3EE' },
+  sortOptionText: { fontSize: rf(15), color: '#475569', fontWeight: '600' },
+  sortOptionTextActive: { color: '#FF5722', fontWeight: '800' },
+  sortCheck: { fontSize: rf(16), color: '#FF5722', fontWeight: '800' },
+
   adCard: {
     backgroundColor: '#fff', borderRadius: rw(16), overflow: 'hidden',
     alignItems: 'center', paddingTop: rh(6),

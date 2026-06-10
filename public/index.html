@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Alertoo — Alertas de trânsito em tempo real e descoberta de eventos perto de você. Veja blitz, acidentes, alagamentos e o que está rolando na sua cidade. Gratuito para Android e iOS." />
+  <meta name="keywords" content="alertas de trânsito, blitz, lei seca, blitz lei seca, lei seca hoje, festas perto de mim, baladas hoje, eventos hoje, o que fazer hoje, acidente, alagamento, mapa colaborativo, alertoo" />
+  <meta name="theme-color" content="#FF5722" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://alertoo.com.br/" />
+  <link rel="manifest" href="/manifest.json" />
+
+  <!-- hreflang — multilingual SEO -->
+  <link rel="alternate" hreflang="pt-BR" href="https://alertoo.com.br/" />
+  <link rel="alternate" hreflang="en"    href="https://alertoo.com.br/en/" />
+  <link rel="alternate" hreflang="es"    href="https://alertoo.com.br/es/" />
+  <link rel="alternate" hreflang="fr"    href="https://alertoo.com.br/fr/" />
+  <link rel="alternate" hreflang="pt-PT" href="https://alertoo.com.br/pt-PT/" />
+  <link rel="alternate" hreflang="x-default" href="https://alertoo.com.br/" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Alertoo — Alertas e Eventos em Tempo Real" />
+  <meta property="og:description" content="Veja blitz, acidentes, alagamentos e eventos perto de você. Reporte em 1 toque. Gratuito para Android e iOS." />
+  <meta property="og:image" content="https://alertoo.com.br/feature-graphic-1024x500.png" />
+  <meta property="og:url" content="https://alertoo.com.br/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Alertoo" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Alertoo — Alertas e Eventos em Tempo Real" />
+  <meta name="twitter:description" content="Alertas de trânsito colaborativos e eventos perto de você. Gratuito." />
+  <meta name="twitter:image" content="https://alertoo.com.br/feature-graphic-1024x500.png" />
+
+  <!-- Structured Data: SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Alertoo",
+    "description": "Alertas de trânsito em tempo real e descoberta de eventos perto de você. Lei seca, acidentes, alagamentos e festas.",
+    "inLanguage": "pt-BR",
+    "operatingSystem": "Android",
+    "applicationCategory": "NavigationApplication",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
+    "url": "https://alertoo.com.br",
+    "downloadUrl": "https://play.google.com/store/apps/details?id=com.alertoo.app",
+    "installUrl": "https://play.google.com/store/apps/details?id=com.alertoo.app",
+    "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.5", "ratingCount": "120" }
+  }
+  </script>
+
+  <!-- Structured Data: WebSite + Organization -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Alertoo",
+    "url": "https://alertoo.com.br",
+    "inLanguage": "pt-BR",
+    "potentialAction": { "@type": "SearchAction", "target": "https://alertoo.com.br/eventos?q={search_term_string}", "query-input": "required name=search_term_string" }
+  }
+  </script>
+
+  <!-- Structured Data: FAQ -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "inLanguage": "pt-BR",
+    "mainEntity": [
+      { "@type": "Question", "name": "O Alertoo é gratuito?", "acceptedAnswer": { "@type": "Answer", "text": "Sim, 100% gratuito para baixar e usar. O app se mantém com anúncios não-invasivos e créditos opcionais para quem quer promover eventos." } },
+      { "@type": "Question", "name": "O app rastreia minha localização em segundo plano?", "acceptedAnswer": { "@type": "Answer", "text": "Não. O Alertoo só acessa sua localização enquanto o app está aberto e em uso. Nunca em segundo plano, nunca sem você saber." } },
+      { "@type": "Question", "name": "Como funciona o sistema de pontos?", "acceptedAnswer": { "@type": "Answer", "text": "Você ganha pontos ao criar eventos (+10 pts), receber confirmações da comunidade (+5 pts por confirmação) e ao fazer login diário. Os pontos definem seu rank no leaderboard." } },
+      { "@type": "Question", "name": "Quando o app chegará ao iOS?", "acceptedAnswer": { "@type": "Answer", "text": "Estamos finalizando a versão para iPhone. Deixe seu e-mail acima para ser notificado assim que estiver disponível na App Store." } },
+      { "@type": "Question", "name": "Como posso promover meu evento no app?", "acceptedAnswer": { "@type": "Answer", "text": "Dentro do app, ao criar um evento, você pode adicionar créditos de promoção para dar mais visibilidade no mapa — com destaque Bronze, Prata ou Ouro." } }
+    ]
+  }
+  </script>
+
+  <title>Alertoo — Alertas de Trânsito e Eventos em Tempo Real</title>
+
+  <link rel="icon" href="/icon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/lib/leaflet.css" />
+  <link rel="stylesheet" href="/main.css" />
+
+  <!-- Google AdSense — ca-pub-4349309505537394 -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4349309505537394" crossorigin="anonymous"></script>
+  <script>
+    function loadAdSense() { /* já carregado no head */ }
+  </script>
+
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a class="nav-logo" href="/" aria-label="Alertoo — Página inicial">
+      <img src="/icon.webp" alt="Alertoo" />
+      <span>Alert<em>oo</em></span>
+    </a>
+    <div class="nav-links">
+      <a href="/eventos" target="_blank" data-i18n="nav.live">🔴 Ao vivo</a>
+
+      <div class="nav-dropdown">
+        <button class="nav-dropdown-btn"><span data-i18n="nav.alerts">🚨 Alertas</span> <span class="chevron">▼</span></button>
+        <div class="nav-dropdown-menu">
+          <a href="/lei-seca" data-i18n="nav.dui">🚔 Lei Seca</a>
+          <a href="/acidentes" data-i18n="nav.accidents">🚨 Acidentes</a>
+          <a href="/alagamentos" data-i18n="nav.floods">🌧️ Alagamentos</a>
+          <a href="/radares" data-i18n="nav.radars">📷 Radares</a>
+        </div>
+      </div>
+
+      <div class="nav-dropdown">
+        <button class="nav-dropdown-btn"><span data-i18n="nav.events">🎉 Eventos</span> <span class="chevron">▼</span></button>
+        <div class="nav-dropdown-menu">
+          <a href="/festas-e-eventos" data-i18n="nav.parties">🎉 Festas e Baladas</a>
+          <a href="/fim-de-semana" data-i18n="nav.weekend">🗓️ Fim de Semana</a>
+        </div>
+      </div>
+
+      <div class="nav-dropdown">
+        <button class="nav-dropdown-btn"><span data-i18n="nav.more">Mais</span> <span class="chevron">▼</span></button>
+        <div class="nav-dropdown-menu">
+          <a href="/alternativa-waze" data-i18n="nav.vsWaze">🗺️ vs Waze</a>
+          <a href="/sobre" data-i18n="nav.about">ℹ️ Sobre o Alertoo</a>
+          <a href="#faq" data-i18n="nav.faq">❓ FAQ</a>
+        </div>
+      </div>
+    </div>
+    <a class="btn-download" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" data-i18n="nav.download">
+      ▶ Baixar agora
+    </a>
+    <button class="nav-hamburger" id="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
+
+  <!-- MOBILE MENU -->
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="/eventos" target="_blank" onclick="closeMobileMenu()" data-i18n="mobile.live">🔴 Ao vivo</a>
+    <a href="/lei-seca" onclick="closeMobileMenu()" data-i18n="mobile.dui">🚔 Lei Seca</a>
+    <a href="/acidentes" onclick="closeMobileMenu()" data-i18n="mobile.accidents">🚨 Acidentes</a>
+    <a href="/alagamentos" onclick="closeMobileMenu()" data-i18n="mobile.floods">🌧️ Alagamentos</a>
+    <a href="/radares" onclick="closeMobileMenu()" data-i18n="mobile.radars">📷 Radares</a>
+    <a href="/festas-e-eventos" onclick="closeMobileMenu()" data-i18n="mobile.parties">🎉 Festas e Baladas</a>
+    <a href="/fim-de-semana" onclick="closeMobileMenu()" data-i18n="mobile.weekend">🗓️ Fim de Semana</a>
+    <a href="/alternativa-waze" onclick="closeMobileMenu()" data-i18n="mobile.vsWaze">🗺️ vs Waze</a>
+    <a href="/sobre" onclick="closeMobileMenu()" data-i18n="mobile.about">ℹ️ Sobre o Alertoo</a>
+    <a href="#faq" onclick="closeMobileMenu()" data-i18n="mobile.faq">❓ FAQ</a>
+    <a href="#download" onclick="closeMobileMenu()" data-i18n="mobile.download">⬇ Baixar agora</a>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-badge" data-i18n="hero.badge">🚀 Android · iOS em breve</div>
+    <h1 data-i18n-html="hero.h1">Alertas em<br /><span>tempo real.</span><br />Sua cidade viva.</h1>
+    <p data-i18n="hero.p">Veja blitz, acidentes, alagamentos e eventos perto de você. Reporte em 1 toque e ajude quem está na estrada agora.</p>
+    <div class="hero-ctas">
+      <a class="btn-primary" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" data-i18n-html="hero.googlePlay">
+        ▶ &nbsp;Baixar no Google Play
+      </a>
+      <div class="btn-ios-soon">
+        🍎 &nbsp;App Store
+        <span class="ios-soon-badge" data-i18n="hero.iosSoon">Em breve</span>
+      </div>
+    </div>
+    <div class="hero-screenshots fade-in">
+      <img src="/screenshots/01-mapa.webp" alt="Mapa em tempo real" loading="lazy" data-i18n-alt="hero.alt.map" />
+      <img src="/screenshots/03-eventos.webp" alt="Eventos perto de você" loading="lazy" data-i18n-alt="hero.alt.events" />
+      <img src="/screenshots/04-comunidade.webp" alt="Comunidade e ranking" loading="lazy" data-i18n-alt="hero.alt.community" />
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stats-inner">
+      <div class="stat fade-in"><div class="stat-num">10+</div><div class="stat-label" data-i18n="stats.categories">Categorias de alertas</div></div>
+      <div class="stat fade-in"><div class="stat-num">5km</div><div class="stat-label" data-i18n="stats.radius">Raio de notificações</div></div>
+      <div class="stat fade-in"><div class="stat-num">4</div><div class="stat-label" data-i18n="stats.languages">Idiomas suportados</div></div>
+      <div class="stat fade-in"><div class="stat-num">100%</div><div class="stat-label" data-i18n="stats.free">Gratuito para usar</div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       EVENTOS AO VIVO — Seção dedicada
+       ══════════════════════════════════════════════════════════════════ -->
+  <section class="eventos-section" id="eventos">
+
+    <!-- Cabeçalho da seção -->
+    <div class="eventos-header">
+      <div class="eventos-header-left">
+        <div class="section-label" style="justify-content:flex-start;display:flex;align-items:center;gap:8px;">
+          <span class="live-dot"></span> <span data-i18n="events.liveNow">Ao vivo agora</span>
+        </div>
+        <h2 class="section-title" style="text-align:left;margin-top:8px;" data-i18n="events.community">Eventos da comunidade</h2>
+        <p class="section-sub" style="text-align:left;" data-i18n="events.subtitle">Alertas de trânsito e entretenimento reportados em tempo real.</p>
+      </div>
+      <div class="eventos-count-wrap">
+        <div class="eventos-count" id="eventosCount">—</div>
+        <div class="eventos-count-label" data-i18n="events.activeLabel">eventos ativos</div>
+      </div>
+    </div>
+
+    <!-- Filtros por categoria -->
+    <div class="eventos-filters" id="eventosFilters">
+      <button class="ev-filter active" data-type="all" data-i18n="events.all">Todos</button>
+      <button class="ev-filter" data-type="traffic" data-i18n="events.traffic">🚦 Trânsito</button>
+      <button class="ev-filter" data-type="accident" data-i18n="events.accident">🚗 Acidente</button>
+      <button class="ev-filter" data-type="drunkcheck" data-i18n="events.dui">🍺 Lei Seca</button>
+      <button class="ev-filter" data-type="policeblitz" data-i18n="events.police">👮 Blitz</button>
+      <button class="ev-filter" data-type="flood" data-i18n="events.flood">🌊 Alagamento</button>
+      <button class="ev-filter" data-type="entertainment" data-i18n="events.entertainment">🎉 Entretenimento</button>
+    </div>
+
+    <!-- Layout split: mapa + lista -->
+    <div class="eventos-body">
+
+      <!-- Mapa -->
+      <div class="eventos-map-col">
+        <div class="eventos-map-wrap">
+          <div id="liveMap"></div>
+          <div id="liveMapLoading" class="live-map-loading">
+            <div class="live-spinner"></div>
+            <p data-i18n="events.loading">Carregando eventos...</p>
+          </div>
+          <div id="liveMapEmpty" class="live-map-empty" style="display:none">
+            <span>📍</span>
+            <p data-i18n="events.empty">Nenhum evento ativo.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista -->
+      <div class="eventos-list-col">
+        <div class="eventos-list-header">
+          <span id="eventosListCount">0 eventos</span>
+          <button class="eventos-refresh" id="eventosRefresh" data-i18n-title="events.refresh" title="Atualizar">↺</button>
+        </div>
+        <div id="liveEventsList" class="eventos-list-scroll"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- AD UNIT 1 — Responsivo abaixo do hero -->
+  <div class="ad-unit" style="background:var(--dark); padding: 12px 5%;">
+    <div class="ad-unit-label" data-i18n="ad.label">Publicidade</div>
+    <ins class="adsbygoogle"
+         style="display:block"
+         data-ad-client="ca-pub-4349309505537394"
+         data-ad-format="auto"
+         data-full-width-responsive="true"></ins>
+    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="section-header center fade-in">
+      <div class="section-label" data-i18n="features.label">Recursos</div>
+      <h2 class="section-title" data-i18n-html="features.title">Tudo que você precisa<br />na palma da mão</h2>
+      <p class="section-sub" data-i18n="features.sub">Do mapa colaborativo ao modo motorista com GPS — o Alertoo tem o que importa para quem está na estrada.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card fade-in">
+        <div class="feature-icon">🗺️</div>
+        <h3 data-i18n="feature1.title">Mapa em Tempo Real</h3>
+        <p data-i18n="feature1.p">Pins coloridos por categoria — blitz, acidente, alagamento, obra. Entenda a situação do trânsito em 1 segundo.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">🚦</div>
+        <h3 data-i18n="feature2.title">Reporte em 1 Toque</h3>
+        <p data-i18n="feature2.p">Reporte uma blitz ou um acidente em segundos. Sua localização só é usada com o app aberto — nunca em segundo plano.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">🎉</div>
+        <h3 data-i18n="feature3.title">Eventos perto de você</h3>
+        <p data-i18n="feature3.p">Festas, shows, bares, restaurantes e festivais aparecem no mapa. Descubra o que está rolando na sua cidade hoje.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">🧭</div>
+        <h3 data-i18n="feature4.title">Navegação GPS</h3>
+        <p data-i18n="feature4.p">Modo motorista com TTS (voz), alertas ao longo da rota e navegação turn-by-turn integrada ao Google Maps e Waze.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">🔔</div>
+        <h3 data-i18n="feature5.title">Notificações Inteligentes</h3>
+        <p data-i18n="feature5.p">Receba alertas quando um evento aparecer no seu raio de 5 km. Salve rotas e seja notificado de eventos no seu corredor.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon">🏆</div>
+        <h3 data-i18n="feature6.title">Ranking e Conquistas</h3>
+        <p data-i18n="feature6.p">Acumule pontos reportando eventos e ganhe badges. Veja seu rank no leaderboard da sua cidade.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how" id="como-funciona">
+    <div style="max-width:900px; margin:0 auto;">
+      <div class="section-header fade-in">
+        <div class="section-label" data-i18n="how.label">Como funciona</div>
+        <h2 class="section-title" data-i18n="how.title">Simples assim.</h2>
+        <p class="section-sub" data-i18n="how.sub">Sem cadastro complicado, sem rastreamento em segundo plano. Só você e a estrada.</p>
+      </div>
+      <div class="steps">
+        <div class="step fade-in">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3 data-i18n="step1.title">Abra o mapa</h3>
+            <p data-i18n="step1.p">Ao abrir o app, o mapa carrega automaticamente os eventos próximos à sua localização. Nenhuma configuração necessária.</p>
+          </div>
+        </div>
+        <div class="step fade-in">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3 data-i18n="step2.title">Toque para reportar</h3>
+            <p data-i18n="step2.p">Tocou no mapa → escolhe o tipo do evento → confirmou. Em menos de 10 segundos o alerta aparece para todos os usuários perto.</p>
+          </div>
+        </div>
+        <div class="step fade-in">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3 data-i18n="step3.title">Ganhe pontos e ajude a comunidade</h3>
+            <p data-i18n="step3.p">Cada reporte confirmado pela comunidade vale pontos. Suba no ranking, desbloqueie badges e vire referência da sua cidade.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AD UNIT 2 — Responsivo entre seções -->
+  <div class="ad-unit" style="background:var(--dark2); padding: 12px 5%;">
+    <div class="ad-unit-label" data-i18n="ad.label">Publicidade</div>
+    <ins class="adsbygoogle"
+         style="display:block"
+         data-ad-client="ca-pub-4349309505537394"
+         data-ad-format="auto"
+         data-full-width-responsive="true"></ins>
+    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  </div>
+
+  <!-- SCREENSHOTS -->
+  <section class="screenshots-section" id="screenshots" style="padding-bottom:0;">
+    <div class="section-header center fade-in" style="padding:0 5%;">
+      <div class="section-label" data-i18n="screenshots.label">Screenshots</div>
+      <h2 class="section-title" data-i18n="screenshots.title">Veja como é</h2>
+      <p class="section-sub" style="margin:0 auto;" data-i18n="screenshots.sub">Interface limpa, rápida e pensada para uso no volante.</p>
+    </div>
+    <div class="screenshots-scroll">
+      <img src="/screenshots/01-mapa.webp" alt="Mapa" loading="lazy" />
+      <img src="/screenshots/02-reportar.webp" alt="Reportar evento" loading="lazy" />
+      <img src="/screenshots/03-eventos.webp" alt="Eventos" loading="lazy" />
+      <img src="/screenshots/04-comunidade.webp" alt="Comunidade" loading="lazy" />
+      <img src="/screenshots/05-promover.webp" alt="Promover evento" loading="lazy" />
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section class="testimonials" id="depoimentos">
+    <div class="section-header center fade-in">
+      <div class="section-label" data-i18n="testimonials.label">Depoimentos</div>
+      <h2 class="section-title" data-i18n="testimonials.title">O que os usuários dizem</h2>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial-card fade-in">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text" data-i18n="test1.text">"Evitei três blitz na semana passada. O app avisa com antecedência suficiente para desviar. Indispensável!"</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">R</div>
+          <div>
+            <div class="testimonial-name" data-i18n="test1.name">Rafael M.</div>
+            <div class="testimonial-city" data-i18n="test1.city">São Paulo, SP</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card fade-in">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text" data-i18n="test2.text">"Uso todo dia no caminho pro trabalho. Os alertas de alagamento me salvaram várias vezes no inverno."</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">C</div>
+          <div>
+            <div class="testimonial-name" data-i18n="test2.name">Carla S.</div>
+            <div class="testimonial-city" data-i18n="test2.city">Rio de Janeiro, RJ</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card fade-in">
+        <div class="testimonial-stars">★★★★★</div>
+        <p class="testimonial-text" data-i18n="test3.text">"Descobri um show incrível pelo Alertoo. A parte de eventos é fantástica — fica sabendo de tudo que rola na cidade."</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">L</div>
+          <div>
+            <div class="testimonial-name" data-i18n="test3.name">Lucas P.</div>
+            <div class="testimonial-city" data-i18n="test3.city">Belo Horizonte, MG</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RANKING -->
+  <section class="ranking-section">
+    <div class="section-header center fade-in">
+      <div class="section-label" data-i18n="ranking.label">Gamificação</div>
+      <h2 class="section-title" data-i18n-html="ranking.title">Suba de rank.<br />Seja reconhecido.</h2>
+      <p class="section-sub" data-i18n="ranking.sub">Quanto mais você contribui, mais pontos acumula e mais alto você sobe no ranking.</p>
+    </div>
+    <div class="ranks-grid">
+      <div class="rank-card fade-in"><span class="rank-emoji">🌱</span><div class="rank-name" data-i18n="rank1">Iniciante</div><div class="rank-pts">0 pts</div></div>
+      <div class="rank-card fade-in"><span class="rank-emoji">🔵</span><div class="rank-name" data-i18n="rank2">Explorador</div><div class="rank-pts">100 pts</div></div>
+      <div class="rank-card fade-in"><span class="rank-emoji">🟢</span><div class="rank-name" data-i18n="rank3">Colaborador</div><div class="rank-pts">500 pts</div></div>
+      <div class="rank-card fade-in"><span class="rank-emoji">🟡</span><div class="rank-name" data-i18n="rank4">Guardião</div><div class="rank-pts">1.000 pts</div></div>
+      <div class="rank-card fade-in"><span class="rank-emoji">🟠</span><div class="rank-name" data-i18n="rank5">Especialista</div><div class="rank-pts">2.500 pts</div></div>
+      <div class="rank-card fade-in"><span class="rank-emoji">🔴</span><div class="rank-name" data-i18n="rank6">Mestre</div><div class="rank-pts">5.000 pts</div></div>
+      <div class="rank-card fade-in" style="border-color:rgba(255,87,34,0.3);">
+        <span class="rank-emoji">💎</span><div class="rank-name" data-i18n="rank7">Lenda</div><div class="rank-pts" style="color:var(--brand);">10.000 pts</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- iOS EM BREVE -->
+  <div class="ios-section">
+    <div class="ios-badge-big">🍎 iOS</div>
+    <h2 data-i18n="ios.h2">Chegando no iPhone em breve.</h2>
+    <p data-i18n="ios.p">Deixe seu e-mail e seja o primeiro a saber quando o Alertoo chegar na App Store.</p>
+    <form class="notify-form" onsubmit="handleNotify(event)">
+      <input class="notify-input" type="email" placeholder="seu@email.com" required id="notifyEmail" data-i18n-placeholder="ios.placeholder" />
+      <button class="notify-btn" type="submit" data-i18n="ios.btn">Me avise! 🔔</button>
+    </form>
+    <p id="notifyMsg" data-i18n="ios.success" style="margin-top:16px; font-size:14px; color:#FFAB91; display:none;">✅ Ótimo! Você será notificado assim que chegar.</p>
+  </div>
+
+  <!-- FAQ -->
+  <section class="faq-section" id="faq">
+    <div class="section-header center fade-in">
+      <div class="section-label" data-i18n="faq.label">FAQ</div>
+      <h2 class="section-title" data-i18n="faq.title">Perguntas frequentes</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span data-i18n="faq1.q">O Alertoo é gratuito?</span>
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer"><p data-i18n="faq1.a">Sim, 100% gratuito para baixar e usar. O app se mantém com anúncios não-invasivos e créditos opcionais para quem quer promover eventos.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span data-i18n="faq2.q">O app rastreia minha localização em segundo plano?</span>
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer"><p data-i18n="faq2.a">Não. O Alertoo só acessa sua localização enquanto o app está aberto e em uso. Nunca em segundo plano, nunca sem você saber.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span data-i18n="faq3.q">Como funciona o sistema de pontos?</span>
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer"><p data-i18n="faq3.a">Você ganha pontos ao criar eventos (+10 pts), receber confirmações da comunidade (+5 pts por confirmação) e ao fazer login diário. Os pontos definem seu rank no leaderboard.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span data-i18n="faq4.q">Quando o app chegará ao iOS?</span>
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer"><p data-i18n="faq4.a">Estamos finalizando a versão para iPhone. Deixe seu e-mail acima para ser notificado assim que estiver disponível na App Store.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span data-i18n="faq5.q">Como posso promover meu evento no app?</span>
+          <span class="faq-chevron">▼</span>
+        </button>
+        <div class="faq-answer"><p data-i18n="faq5.a">Dentro do app, ao criar um evento, você pode adicionar créditos de promoção para dar mais visibilidade no mapa — com destaque Bronze, Prata ou Ouro.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AD UNIT 3 — Responsivo antes do CTA final -->
+  <div class="ad-unit" style="background:var(--dark); padding: 12px 5%;">
+    <div class="ad-unit-label" data-i18n="ad.label">Publicidade</div>
+    <ins class="adsbygoogle"
+         style="display:block"
+         data-ad-client="ca-pub-4349309505537394"
+         data-ad-format="auto"
+         data-full-width-responsive="true"></ins>
+    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  </div>
+
+  <!-- DOWNLOAD CTA -->
+  <section class="cta-section" id="download">
+    <h2 data-i18n="cta.title">Baixe grátis agora.</h2>
+    <p data-i18n="cta.sub">Disponível para Android. iOS chegando em breve.</p>
+    <div class="cta-badges">
+      <a class="badge-store" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" aria-label="Baixar Alertoo no Google Play">
+        <span class="badge-store-icon">▶</span>
+        <div class="badge-store-text">
+          <small data-i18n="cta.available">Disponível no</small>
+          <strong>Google Play</strong>
+        </div>
+      </a>
+      <a class="badge-store disabled" href="#" onclick="return false;" aria-label="Alertoo para iOS — em breve" aria-disabled="true">
+        <span class="badge-store-icon">🍎</span>
+        <div class="badge-store-text">
+          <small data-i18n="cta.iosSoon">Em breve na</small>
+          <strong>App Store</strong>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a class="footer-logo" href="/" aria-label="Alertoo — Voltar ao início">
+          <img src="/icon.webp" alt="Alertoo" />
+          <span>Alertoo</span>
+        </a>
+        <p data-i18n="footer.tagline">Alertas de trânsito colaborativos e descoberta de eventos em tempo real. Feito com ❤️ no Brasil.</p>
+      </div>
+      <div class="footer-links">
+        <h4 data-i18n="footer.app">App</h4>
+        <a href="#features" data-i18n="footer.features">Recursos</a>
+        <a href="#como-funciona" data-i18n="footer.how">Como funciona</a>
+        <a href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank">▶ Google Play</a>
+        <a href="#" style="opacity:0.4;pointer-events:none;" data-i18n="footer.iosSoon">🍎 App Store (em breve)</a>
+        <a href="/sobre" data-i18n="footer.about">Sobre o Alertoo</a>
+      </div>
+      <div class="footer-links">
+        <h4 data-i18n="footer.guides">Guias</h4>
+        <a href="/lei-seca">🚔 Lei Seca</a>
+        <a href="/acidentes">🚨 Acidentes agora</a>
+        <a href="/alagamentos">🌧️ Alagamentos</a>
+        <a href="/radares">📷 Radares</a>
+        <a href="/festas-e-eventos">🎉 Festas e Baladas</a>
+        <a href="/fim-de-semana">🗓️ Fim de Semana</a>
+        <a href="/alternativa-waze">🗺️ Alternativa ao Waze</a>
+      </div>
+      <div class="footer-links">
+        <h4 data-i18n="footer.legal">Legal</h4>
+        <a href="/privacidade.html" data-i18n="footer.privacy">Política de Privacidade</a>
+        <a href="/deletar-conta.html" data-i18n="footer.delete">Deletar Conta</a>
+        <a href="mailto:suporte@alertoo.app">suporte@alertoo.app</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p data-i18n="footer.rights">© 2025 Alertoo. Todos os direitos reservados.</p>
+      <p data-i18n="footer.made">Feito com 🧡 no Brasil</p>
+    </div>
+  </footer>
+
+  <!-- COOKIE BANNER (LGPD) -->
+  <div class="cookie-banner" id="cookieBanner">
+    <p>
+      <span data-i18n="cookie.text">Usamos cookies para melhorar sua experiência e exibir anúncios relevantes. Ao continuar, você concorda com nossa</span>
+      <a href="/privacidade.html" data-i18n="cookie.privacy">Política de Privacidade</a>.
+    </p>
+    <div class="cookie-btns">
+      <button class="cookie-decline" onclick="handleCookie(false)" data-i18n="cookie.decline">Recusar</button>
+      <button class="cookie-accept" onclick="handleCookie(true)" data-i18n="cookie.accept">Aceitar</button>
+    </div>
+  </div>
+
+  <script>
+    // ── Fade-in on scroll ──────────────────────────────────────────
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((e, i) => {
+        if (e.isIntersecting) {
+          setTimeout(() => e.target.classList.add('visible'), i * 80);
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+    // ── Mobile menu ────────────────────────────────────────────────
+    const hamburger = document.getElementById('hamburger');
+    const mobileMenu = document.getElementById('mobileMenu');
+    hamburger.addEventListener('click', () => {
+      mobileMenu.classList.toggle('open');
+    });
+    function closeMobileMenu() { mobileMenu.classList.remove('open'); }
+
+    // ── FAQ accordion ──────────────────────────────────────────────
+    function toggleFaq(btn) {
+      const item = btn.parentElement;
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+      if (!isOpen) item.classList.add('open');
+    }
+
+    // ── iOS notify form ────────────────────────────────────────────
+    function handleNotify(e) {
+      e.preventDefault();
+      document.getElementById('notifyEmail').value = '';
+      document.getElementById('notifyMsg').style.display = 'block';
+    }
+
+    // ── Cookie banner (LGPD) ───────────────────────────────────────
+    function handleCookie(accepted) {
+      localStorage.setItem('cookie_consent', accepted ? 'accepted' : 'declined');
+      document.getElementById('cookieBanner').classList.remove('show');
+      if (accepted) {
+        loadAdSense(); // carrega o script do AdSense após consentimento
+      }
+    }
+    // Mostrar banner se ainda não decidiu
+    if (!localStorage.getItem('cookie_consent')) {
+      setTimeout(() => document.getElementById('cookieBanner').classList.add('show'), 1500);
+    }
+  </script>
+
+  <!-- Leaflet JS + Firebase SDK + Eventos ao Vivo -->
+  <script src="/lib/leaflet.js" defer></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getFirestore, collection, query, where, getDocs, Timestamp }
+      from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+    const app = initializeApp({
+      apiKey:            'AIzaSyCoI9rNBK07vGZBuygprq4PkDKGT0iZkYU',
+      authDomain:        'lei-seca---eventos.firebaseapp.com',
+      projectId:         'lei-seca---eventos',
+      storageBucket:     'lei-seca---eventos.firebasestorage.app',
+      messagingSenderId: '657066902706',
+      appId:             '1:657066902706:web:3e3d49f23a819c5ce1b5ab',
+    });
+    const db = getFirestore(app);
+
+    const TRAFFIC_CATS = {
+      traffic:     { label: 'Congestionamento', emoji: '🐢', color: '#F4511E' },
+      hazard:      { label: 'Perigo na via',    emoji: '⚠️', color: '#FFB300' },
+      accident:    { label: 'Acidente',         emoji: '🚗', color: '#E53935' },
+      policeblitz: { label: 'Blitz Policial',   emoji: '👮', color: '#3949AB' },
+      drunkcheck:  { label: 'Lei Seca',         emoji: '🍺', color: '#00897B' },
+      flood:       { label: 'Alagamento',       emoji: '🌊', color: '#1E88E5' },
+      closure:     { label: 'Interdição',       emoji: '🚫', color: '#8E24AA' },
+      roadwork:    { label: 'Obras',            emoji: '🚧', color: '#FB8C00' },
+    };
+    const ENT_CATS = {
+      show:     { label: 'Show',          emoji: '🎤', color: '#E91E63' },
+      festival: { label: 'Festival',      emoji: '🎪', color: '#9C27B0' },
+      sports:   { label: 'Esporte',       emoji: '⚽', color: '#2196F3' },
+      fair:     { label: 'Feira',         emoji: '🛍️', color: '#FF9800' },
+      food:     { label: 'Gastronomia',   emoji: '🍔', color: '#F44336' },
+      art:      { label: 'Arte/Cultura',  emoji: '🎨', color: '#00BCD4' },
+      party:    { label: 'Festa',         emoji: '🎉', color: '#FF4081' },
+      other:    { label: 'Outro',         emoji: '📍', color: '#607D8B' },
+    };
+
+    let allEvents = [], activeFilter = 'all', map = null, markers = [], selectedIdx = -1;
+
+    function getMeta(ev) {
+      return ev._type === 'traffic'
+        ? (TRAFFIC_CATS[ev.category] ?? { label: ev.category, emoji: '📍', color: '#607D8B' })
+        : (ENT_CATS[ev.category]     ?? { label: ev.category, emoji: '📍', color: '#607D8B' });
+    }
+
+    function timeAgo(ms) {
+      const d = Date.now() - ms, m = Math.floor(d / 60000);
+      if (m < 1) return 'agora';
+      if (m < 60) return `há ${m} min`;
+      const h = Math.floor(m / 60);
+      return h < 24 ? `há ${h}h` : `há ${Math.floor(h/24)}d`;
+    }
+
+    function makeLeiSecaIcon() {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="72" height="82" viewBox="0 0 72 82">
+        <rect x="1" y="1" width="70" height="70" rx="18" fill="none" stroke="#00C853" stroke-width="2" opacity="0.35"/>
+        <rect x="7" y="7" width="58" height="58" rx="15" fill="none" stroke="#00C853" stroke-width="2" opacity="0.6"/>
+        <rect x="14" y="14" width="44" height="44" rx="12" fill="#00C853" stroke="#fff" stroke-width="2.5"/>
+        <text x="36" y="35" text-anchor="middle" font-size="20" dominant-baseline="middle">🍺</text>
+        <text x="36" y="50" text-anchor="middle" font-size="8" font-weight="900" fill="#fff" letter-spacing="1">LEI SECA</text>
+        <polygon points="36,80 27,68 45,68" fill="#00C853"/>
+        <polygon points="36,78 27,68 45,68" fill="#00C853" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>`;
+      return L.divIcon({ html: svg, className: '', iconSize: [72, 82], iconAnchor: [36, 82], popupAnchor: [0, -84] });
+    }
+
+    function makeIcon(emoji, color, urgent) {
+      const ring = urgent ? `<circle cx="22" cy="22" r="20" fill="none" stroke="${color}" stroke-width="2" opacity="0.4"/>` : '';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="58" viewBox="0 0 48 58">
+        ${ring}
+        <rect x="4" y="4" width="40" height="40" rx="13" fill="${color}" stroke="#fff" stroke-width="2.5"/>
+        <text x="24" y="29" text-anchor="middle" font-size="22" dominant-baseline="middle">${emoji}</text>
+        <polygon points="24,56 16,44 32,44" fill="${color}"/>
+        <polygon points="24,54 16,44 32,44" fill="${color}" stroke="#fff" stroke-width="1" stroke-linejoin="round"/>
+      </svg>`;
+      return L.divIcon({ html: svg, className: '', iconSize: [48, 58], iconAnchor: [24, 58], popupAnchor: [0, -60] });
+    }
+
+    function popupHtml(ev) {
+      const meta = getMeta(ev);
+      const city = [ev.cityName, ev.stateUF].filter(Boolean).join(', ');
+      const confirms = ev.confirmations > 0 ? `${ev.confirmations} confirmações · ` : '';
+      return `<div class="map-popup">
+        <div class="map-popup-icon" style="background:${meta.color}25">${meta.emoji}</div>
+        <div>
+          <div class="map-popup-title">${meta.label}</div>
+          ${ev.title ? `<div class="map-popup-sub">${ev.title}</div>` : ''}
+          <div class="map-popup-meta">${confirms}${city ? city + ' · ' : ''}${timeAgo(ev.createdAt)}</div>
+        </div>
+      </div>`;
+    }
+
+    function filtered() {
+      if (activeFilter === 'all') return allEvents;
+      if (activeFilter === 'traffic') return allEvents.filter(e => e._type === 'traffic');
+      if (activeFilter === 'entertainment') return allEvents.filter(e => e._type === 'entertainment');
+      return allEvents.filter(e => e.category === activeFilter);
+    }
+
+    function renderMarkers() {
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
+      selectedIdx = -1;
+      const evs = filtered();
+      document.getElementById('liveMapEmpty').style.display = evs.length === 0 ? 'flex' : 'none';
+      document.getElementById('eventosCount').textContent = allEvents.length;
+      document.getElementById('eventosListCount').textContent = `${evs.length} evento${evs.length !== 1 ? 's' : ''}`;
+
+      evs.forEach((ev, i) => {
+        const meta = getMeta(ev);
+        const urgent = (ev.confirmations ?? 0) >= 3;
+        const icon = ev.category === 'drunkcheck' ? makeLeiSecaIcon() : makeIcon(meta.emoji, meta.color, urgent);
+        const m = L.marker([ev.latitude, ev.longitude], { icon })
+          .bindPopup(popupHtml(ev), { maxWidth: 280 })
+          .addTo(map);
+        m.on('click', () => highlightCard(i));
+        markers.push(m);
+      });
+
+      if (markers.length > 0) {
+        map.fitBounds(L.featureGroup(markers).getBounds().pad(0.25), { maxZoom: 12 });
+      }
+      renderList(evs);
+    }
+
+    function highlightCard(i) {
+      selectedIdx = i;
+      document.querySelectorAll('.ev-card').forEach((c, idx) => {
+        c.classList.toggle('selected', idx === i);
+      });
+      // scroll o card para visível
+      const card = document.querySelectorAll('.ev-card')[i];
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function renderList(evs) {
+      const el = document.getElementById('liveEventsList');
+      if (evs.length === 0) {
+        el.innerHTML = `<div class="ev-list-empty"><span>📍</span><p>Nenhum evento nessa categoria.</p></div>`;
+        return;
+      }
+      el.innerHTML = evs.map((ev, i) => {
+        const meta = getMeta(ev);
+        const city = [ev.cityName, ev.stateUF].filter(Boolean).join(', ');
+        const confirms = ev.confirmations ?? 0;
+        const urgent = confirms >= 3;
+        return `<div class="ev-card" data-i="${i}" onclick="window.__evClick(${i})">
+          <div class="ev-card-icon" style="background:${meta.color}28">${meta.emoji}</div>
+          <div class="ev-card-body">
+            <div class="ev-card-title">${meta.label}${ev.title ? ' — ' + ev.title : ''}</div>
+            <div class="ev-card-sub">${city || ''} ${city ? '·' : ''} ${timeAgo(ev.createdAt)}</div>
+          </div>
+          ${confirms > 0 ? `<div class="ev-card-badge${urgent ? ' urgent' : ''}">${confirms}</div>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    window.__evClick = function(i) {
+      const evs = filtered();
+      const ev = evs[i];
+      if (!ev || !markers[i]) return;
+      map.setView([ev.latitude, ev.longitude], 14, { animate: true });
+      setTimeout(() => markers[i].openPopup(), 300);
+      highlightCard(i);
+    };
+
+    async function loadEvents() {
+      try {
+        const now = Timestamp.now();
+        const [tSnap, eSnap] = await Promise.all([
+          getDocs(query(collection(db, 'events'),               where('expiresAt', '>', now))),
+          getDocs(query(collection(db, 'entertainment_events'), where('expiresAt', '>', now))),
+        ]);
+        const toEv = (d, type) => ({
+          ...d.data(), id: d.id, _type: type,
+          createdAt: d.data().createdAt?.toMillis?.() ?? Date.now(),
+          confirmations: d.data().confirmations ?? 0,
+        });
+        allEvents = [
+          ...tSnap.docs.map(d => toEv(d, 'traffic')),
+          ...eSnap.docs.map(d => toEv(d, 'entertainment')),
+        ].sort((a, b) => b.createdAt - a.createdAt);
+      } catch(e) {
+        console.error('Firestore error:', e);
+      }
+      document.getElementById('liveMapLoading').style.display = 'none';
+      renderMarkers();
+    }
+
+    let userMarker = null;
+
+    function initMap() {
+      map = L.map('liveMap', { zoomControl: true, attributionControl: false }).setView([-15.77, -47.92], 4);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd', maxZoom: 19,
+      }).addTo(map);
+    }
+
+    function locateUser() {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        map.setView([lat, lng], 13, { animate: true });
+        const userIcon = L.divIcon({
+          html: `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+            <circle cx="11" cy="11" r="9" fill="#2196F3" stroke="#fff" stroke-width="2.5"/>
+            <circle cx="11" cy="11" r="3.5" fill="#fff"/>
+          </svg>`,
+          className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+        });
+        if (userMarker) map.removeLayer(userMarker);
+        userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 })
+          .bindPopup('<div style="color:#fff;background:#1C1C1E;padding:8px 12px;border-radius:10px;font-size:13px;font-weight:600">📍 Você está aqui</div>')
+          .addTo(map);
+      }, () => {}, { timeout: 6000 });
+    }
+
+    document.querySelectorAll('.ev-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.ev-filter').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeFilter = btn.dataset.type;
+        renderMarkers();
+      });
+    });
+
+    document.getElementById('eventosRefresh').addEventListener('click', async () => {
+      document.getElementById('liveMapLoading').style.display = 'flex';
+      await loadEvents();
+    });
+
+    initMap();
+    locateUser();
+    loadEvents();
+  </script>
+
+  <!-- i18n — deve vir após o DOM estar definido -->
+  <script>
+    // Suporte ao parâmetro ?lang= na URL (para links de hreflang)
+    (function() {
+      const urlLang = new URLSearchParams(location.search).get('lang');
+      if (urlLang) {
+        const supported = ['pt-BR','en','es','fr','pt-PT'];
+        if (supported.includes(urlLang)) {
+          localStorage.setItem('alertoo_lang', urlLang);
+          // Remove o parâmetro da URL sem recarregar a página
+          const url = new URL(location.href);
+          url.searchParams.delete('lang');
+          history.replaceState({}, '', url.pathname + (url.search || ''));
+        }
+      }
+    })();
+  </script>
+  <script src="/i18n.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

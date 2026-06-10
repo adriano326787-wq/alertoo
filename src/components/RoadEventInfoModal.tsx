@@ -18,6 +18,8 @@ import { useT } from '../hooks/useT';
 import { tRoadCat } from '../utils/i18n';
 import { palette } from '../theme/tokens';
 import { useFavoritesStore } from '../store/favoritesStore';
+import { useUserStore } from '../store/userStore';
+import { useEventsStore } from '../store/eventsStore';
 
 interface Props {
   event: RoadEvent | null;
@@ -32,6 +34,8 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
   const [navVisible, setNavVisible] = useState(false);
   const isFavorite = useFavoritesStore((s) => event ? s.favoriteIds.has(event.id) : false);
   const toggleFav = useFavoritesStore((s) => s.toggle);
+  const isAdmin = useUserStore((s) => s.isAdmin);
+  const deleteEvent = useEventsStore((s) => s.deleteEvent);
 
   const meta = event ? EVENT_CATEGORIES[event.category] : null;
   const myUid = getCurrentUserId();
@@ -71,8 +75,11 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
         ? { label: `✓ ${t('road_voted').toUpperCase()}`, color: palette.live }
         : undefined;
 
-  // Stats: confirmações + negações + tempo restante
+  // Stats: limite de velocidade (radar) + confirmações + negações + tempo restante
   const stats = event ? [
+    ...(event.category === 'radar' && event.speedLimit
+      ? [{ icon: '📷', value: `${event.speedLimit} km/h`, label: t('speed_limit_stat') }]
+      : []),
     { icon: '✓', value: event.confirmations, label: t('confirm') ?? 'Confirma' },
     { icon: '✗', value: event.denials, label: t('deny') ?? 'Nega' },
     { icon: '⏱', value: timeLeftShort(event.expiresAt), label: t('time_left_label') },
@@ -122,6 +129,33 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
       label: 'Ver no Maps',
       onPress: handleOpenInMaps,
     },
+    // Exclusão — somente admin
+    ...(isAdmin && event ? [{
+      icon: '🗑️',
+      label: 'Excluir evento',
+      variant: 'danger' as const,
+      onPress: () => {
+        Alert.alert(
+          '🗑️ Excluir evento',
+          `Tem certeza que deseja excluir "${event.title}"? Esta ação não pode ser desfeita.`,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Excluir',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await deleteEvent(event.id);
+                  onClose();
+                } catch {
+                  Alert.alert('Erro', 'Não foi possível excluir o evento. Tente novamente.');
+                }
+              },
+            },
+          ]
+        );
+      },
+    }] : []),
   ] : [];
 
   return (

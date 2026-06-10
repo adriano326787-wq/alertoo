@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Sobre o Alertoo — app brasileiro de alertas de trânsito colaborativos e descoberta de eventos em tempo real. Conheça nossa missão, história e equipe." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://alertoo.com.br/sobre" />
+
+  <!-- hreflang -->
+  <link rel="alternate" hreflang="pt-BR" href="https://alertoo.com.br/sobre" />
+  <link rel="alternate" hreflang="en"    href="https://alertoo.com.br/sobre?lang=en" />
+  <link rel="alternate" hreflang="es"    href="https://alertoo.com.br/sobre?lang=es" />
+  <link rel="alternate" hreflang="fr"    href="https://alertoo.com.br/sobre?lang=fr" />
+  <link rel="alternate" hreflang="pt-PT" href="https://alertoo.com.br/sobre?lang=pt-PT" />
+  <link rel="alternate" hreflang="x-default" href="https://alertoo.com.br/sobre" />
+  <meta property="og:title" content="Sobre o Alertoo — Alertas e Eventos em Tempo Real" />
+  <meta property="og:description" content="Conheça o Alertoo, app brasileiro de alertas de trânsito e eventos em tempo real." />
+  <meta property="og:url" content="https://alertoo.com.br/sobre" />
+  <meta property="og:type" content="website" />
+  <title>Sobre o Alertoo — App de Alertas e Eventos</title>
+  <link rel="icon" href="/icon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --brand: #FF5722; --brand-dark: #E64A19;
+      --dark: #0F172A; --dark2: #1E293B; --dark3: #334155;
+      --gray: #64748B; --white: #FFFFFF; --radius: 16px;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--dark); color: var(--white); line-height: 1.6; }
+    a { color: var(--brand); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,23,42,0.95); backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      padding: 0 5%; display: flex; align-items: center; justify-content: space-between; height: 60px;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 900; color: var(--white); text-decoration: none; }
+    .nav-logo img { width: 30px; height: 30px; border-radius: 8px; }
+
+    .page-hero {
+      background: linear-gradient(135deg, var(--dark2) 0%, var(--dark) 100%);
+      padding: 64px 5% 48px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .page-hero-inner { max-width: 720px; margin: 0 auto; }
+    .breadcrumb { font-size: 13px; color: var(--gray); margin-bottom: 16px; }
+    .breadcrumb a { color: var(--gray); }
+    .breadcrumb a:hover { color: var(--white); }
+    .page-hero h1 { font-size: clamp(28px, 5vw, 44px); font-weight: 900; line-height: 1.15; margin-bottom: 16px; }
+    .page-hero p { font-size: 17px; color: rgba(255,255,255,0.65); max-width: 560px; }
+
+    .content { max-width: 720px; margin: 0 auto; padding: 48px 5% 80px; }
+    .content h2 { font-size: 22px; font-weight: 800; margin: 40px 0 12px; color: var(--white); }
+    .content h2:first-child { margin-top: 0; }
+    .content p { font-size: 16px; color: rgba(255,255,255,0.7); margin-bottom: 16px; }
+    .content ul { padding-left: 20px; color: rgba(255,255,255,0.7); font-size: 16px; margin-bottom: 16px; }
+    .content ul li { margin-bottom: 8px; }
+
+    .mission-card {
+      background: linear-gradient(135deg, #FF5722 0%, #E64A19 100%);
+      border-radius: 20px; padding: 32px; margin: 40px 0;
+      text-align: center;
+    }
+    .mission-card p { color: rgba(255,255,255,0.9); font-size: 18px; font-weight: 600; line-height: 1.6; margin: 0; }
+
+    .store-btns { display: flex; gap: 12px; flex-wrap: wrap; margin: 24px 0; }
+    .btn-store {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 12px 22px; border-radius: 12px; font-size: 14px; font-weight: 700;
+      text-decoration: none; transition: opacity 0.2s;
+    }
+    .btn-store:hover { opacity: 0.85; text-decoration: none; }
+    .btn-android { background: #FF5722; color: #fff; }
+    .btn-ios { background: #1C1C1E; color: #fff; border: 1px solid rgba(255,255,255,0.15); }
+
+    footer {
+      background: #080E1A; border-top: 1px solid rgba(255,255,255,0.07);
+      padding: 32px 5%; text-align: center;
+    }
+    footer p { font-size: 13px; color: rgba(255,255,255,0.3); }
+    footer a { color: rgba(255,255,255,0.4); }
+  </style>
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-TSS9J9VDTC"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date()); gtag('config', 'G-TSS9J9VDTC');
+  </script>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="/" aria-label="Alertoo">
+      <img src="/icon.webp" alt="Alertoo" />
+      Alertoo
+    </a>
+    <a href="/" style="font-size:13px;color:rgba(255,255,255,0.5);font-weight:500;" data-i18n="sobre.back">← Voltar ao site</a>
+  </nav>
+
+  <div class="page-hero">
+    <div class="page-hero-inner">
+      <div class="breadcrumb"><a href="/">Alertoo</a> › <span data-i18n="sobre.breadcrumb">Sobre</span></div>
+      <h1 data-i18n="sobre.h1">Sobre o Alertoo</h1>
+      <p data-i18n="sobre.intro">Somos um app brasileiro de alertas de trânsito colaborativos e descoberta de eventos em tempo real.</p>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <div class="mission-card">
+      <p data-i18n="sobre.mission">🎯 Nossa missão: tornar cada viagem mais segura e cada fim de semana mais animado — conectando motoristas e pessoas em tempo real.</p>
+    </div>
+
+    <h2 data-i18n="sobre.what.h2">O que é o Alertoo?</h2>
+    <p data-i18n="sobre.what.p1">O Alertoo é um aplicativo gratuito que combina alertas de trânsito colaborativos com descoberta de eventos e festas perto de você. Funciona como um mapa social onde qualquer pessoa pode reportar o que está acontecendo agora — blitz de lei seca, acidentes, alagamentos, eventos e muito mais.</p>
+    <p data-i18n="sobre.what.p2">Disponível gratuitamente para Android. A versão para iPhone está em desenvolvimento e chegará em breve na App Store. O app se sustenta com anúncios não-invasivos.</p>
+
+    <h2 data-i18n="sobre.why.h2">Por que criamos o Alertoo?</h2>
+    <p data-i18n="sobre.why.p1">Vimos uma lacuna: os apps de navegação existentes focam em rotas, mas não ajudam você a saber o que está acontecendo na sua cidade agora — seja uma blitz na saída do trabalho ou uma festa no bairro no sábado à noite.</p>
+    <p data-i18n="sobre.why.p2">O Alertoo foi criado para preencher esse espaço: informação local, em tempo real, colaborativa e gratuita.</p>
+
+    <h2 data-i18n="sobre.features.h2">O que você pode fazer no app</h2>
+    <ul>
+      <li data-i18n="sobre.li1">🚔 Ver alertas de blitz de lei seca em tempo real</li>
+      <li data-i18n="sobre.li2">🚨 Reportar e receber avisos de acidentes na sua rota</li>
+      <li data-i18n="sobre.li3">🌧️ Acompanhar alagamentos e pontos de risco</li>
+      <li data-i18n="sobre.li4">📷 Localizar radares e câmeras de velocidade</li>
+      <li data-i18n="sobre.li5">🎉 Descobrir festas, baladas e eventos perto de você</li>
+      <li data-i18n="sobre.li6">🗓️ Planejar o fim de semana com sugestões da comunidade</li>
+      <li data-i18n="sobre.li7">🏆 Ganhar pontos e subir no ranking ao reportar eventos</li>
+    </ul>
+
+    <h2 data-i18n="sobre.android.h2">Disponível para Android</h2>
+    <p data-i18n="sobre.android.p">O Alertoo está disponível gratuitamente na Google Play. A versão para iPhone está em desenvolvimento e chegará em breve na App Store.</p>
+    <div class="store-btns">
+      <a class="btn-store btn-android" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" aria-label="Google Play">▶ Google Play</a>
+      <span class="btn-store btn-ios" style="opacity:0.45;cursor:default;">🍎 App Store — em breve</span>
+    </div>
+
+    <h2 data-i18n="sobre.privacy.h2">Privacidade e segurança</h2>
+    <p data-i18n="sobre.privacy.p">A privacidade dos nossos usuários é prioridade. O Alertoo só acessa sua localização enquanto o app está em uso — nunca em segundo plano. Não vendemos dados pessoais para terceiros.</p>
+    <p>Leia nossa <a href="/privacidade.html" data-i18n="sobre.privacy.link">Política de Privacidade completa</a>.</p>
+
+    <h2 data-i18n="sobre.contact.h2">Contato</h2>
+    <p>Dúvidas, sugestões ou problemas? Fale com a gente: <a href="mailto:suporte@alertoo.app">suporte@alertoo.app</a></p>
+
+  </div>
+
+  <footer>
+    <p><span data-i18n="footer.rights">© 2025 Alertoo. Todos os direitos reservados.</span> <a href="/privacidade.html" data-i18n="footer.privacy">Privacidade</a> · <a href="/">Alertoo</a></p>
+  </footer>
+
+  <script>
+    (function() {
+      const urlLang = new URLSearchParams(location.search).get('lang');
+      if (urlLang) {
+        const supported = ['pt-BR','en','es','fr','pt-PT'];
+        if (supported.includes(urlLang)) {
+          localStorage.setItem('alertoo_lang', urlLang);
+          const url = new URL(location.href);
+          url.searchParams.delete('lang');
+          history.replaceState({}, '', url.pathname + (url.search || ''));
+        }
+      }
+    })();
+  </script>
+  <script src="/i18n.js"></script>
+  <script src="/i18n-extra.js"></script>
+</body>
+</html>

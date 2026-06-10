@@ -7,7 +7,7 @@
  * - Interface mínima: não distrai o motorista
  */
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView,
 } from 'react-native';
@@ -19,6 +19,7 @@ import { useAppStore } from '../store/appStore';
 import { haversineDistance } from '../utils/geo';
 import { EVENT_CATEGORIES, RoadEvent } from '../types';
 import { rw, rh, rf } from '../utils/responsive';
+import { useT } from '../hooks/useT';
 
 /** Formata distância em metros ou km de forma consistente. */
 function formatDistance(km: number): string {
@@ -36,9 +37,9 @@ interface Props {
 }
 
 const NEARBY_KM = 2; // alertas dentro de 2 km
-const SPOKEN_KEY = '@driver_spoken_ids';
 
 export function DriverModeOverlay({ visible, onClose }: Props) {
+  const t = useT();
   const { bottom } = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(400)).current;
   const spokenIds = useRef(new Set<string>());
@@ -62,15 +63,17 @@ export function DriverModeOverlay({ visible, onClose }: Props) {
     }
   }, [visible]);
 
-  // Filtra alertas próximos
-  const nearby: RoadEvent[] = userLat != null && userLon != null
-    ? events.filter((e) => haversineDistance(userLat, userLon, e.latitude, e.longitude) <= NEARBY_KM)
-        .sort((a, b) => {
-          const dA = haversineDistance(userLat, userLon, a.latitude, a.longitude);
-          const dB = haversineDistance(userLat, userLon, b.latitude, b.longitude);
-          return dA - dB;
-        })
-    : [];
+  // Filtra e ordena alertas próximos — memoizado para evitar recálculo em cada render
+  const nearby: RoadEvent[] = useMemo(() => {
+    if (userLat == null || userLon == null) return [];
+    return events
+      .filter((e) => haversineDistance(userLat, userLon, e.latitude, e.longitude) <= NEARBY_KM)
+      .sort((a, b) => {
+        const dA = haversineDistance(userLat, userLon, a.latitude, a.longitude);
+        const dB = haversineDistance(userLat, userLon, b.latitude, b.longitude);
+        return dA - dB;
+      });
+  }, [events, userLat, userLon]);
 
   // Fala novos alertas e vibra quando chegam
   useEffect(() => {
@@ -114,11 +117,11 @@ export function DriverModeOverlay({ visible, onClose }: Props) {
       <View style={styles.header}>
         <Text style={styles.headerEmoji}>🚘</Text>
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>Modo Motorista</Text>
+          <Text style={styles.headerTitle}>{t('driver_mode_title') || 'Modo Motorista'}</Text>
           <Text style={styles.headerSub}>
             {nearby.length > 0
               ? `${nearby.length} alerta${nearby.length > 1 ? 's' : ''} próximo${nearby.length > 1 ? 's' : ''}`
-              : 'Nenhum alerta próximo'}
+              : t('driver_no_alerts') || 'Nenhum alerta próximo'}
           </Text>
         </View>
         <TouchableOpacity style={styles.closeBtn} onPress={handleClose} hitSlop={12}>
@@ -130,7 +133,7 @@ export function DriverModeOverlay({ visible, onClose }: Props) {
       {nearby.length === 0 ? (
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyEmoji}>✅</Text>
-          <Text style={styles.emptyText}>Via livre — nenhum alerta nos próximos {NEARBY_KM} km</Text>
+          <Text style={styles.emptyText}>{t('driver_clear_road') || `Via livre — nenhum alerta nos próximos ${NEARBY_KM} km`}</Text>
         </View>
       ) : (
         <ScrollView
@@ -170,7 +173,7 @@ export function DriverModeOverlay({ visible, onClose }: Props) {
         onPress={handleClose}
         activeOpacity={0.85}
       >
-        <Text style={styles.exitBtnText}>Sair do modo motorista</Text>
+        <Text style={styles.exitBtnText}>{t('driver_exit') || 'Sair do modo motorista'}</Text>
       </TouchableOpacity>
     </Animated.View>
   );

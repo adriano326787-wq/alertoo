@@ -85,7 +85,7 @@ export function ReportModal({ visible, eventId, eventType, onClose }: Props) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
-        behavior="padding"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
       >
         <View style={[styles.sheet, { paddingBottom: Math.max(bottomInset, 16) }]}>
@@ -150,6 +150,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     paddingTop: 12,
     paddingHorizontal: 20,
+    // Em tablets/telas largas, evita que o sheet fique esticado de ponta a ponta
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   handle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

@@ -12,11 +12,17 @@ interface Props {
   onNavigate: (event: RoadEvent) => void;
 }
 
-function FeedCard({ event, onNavigate }: { event: RoadEvent; onNavigate: (e: RoadEvent) => void }) {
+// Props explícitas evitam que cada card acesse o store individualmente
+interface FeedCardProps {
+  event: RoadEvent;
+  onNavigate: (e: RoadEvent) => void;
+  onConfirm: (id: string) => void;
+  onDeny: (id: string) => void;
+}
+
+function FeedCard({ event, onNavigate, onConfirm, onDeny }: FeedCardProps) {
   const t = useT();
   const meta = EVENT_CATEGORIES[event.category];
-  const confirmEvent = useEventsStore((s) => s.confirmEvent);
-  const denyEvent = useEventsStore((s) => s.denyEvent);
 
   return (
     <TouchableOpacity style={[styles.card, { borderLeftColor: meta.color }]} onPress={() => onNavigate(event)} activeOpacity={0.85}>
@@ -44,13 +50,13 @@ function FeedCard({ event, onNavigate }: { event: RoadEvent; onNavigate: (e: Roa
       <View style={styles.voteRow}>
         <TouchableOpacity
           style={styles.voteBtn}
-          onPress={(e) => { e.stopPropagation?.(); confirmEvent(event.id); }}
+          onPress={(e) => { e.stopPropagation?.(); onConfirm(event.id); }}
         >
           <Text style={styles.voteBtnText}>✓ {t('road_confirm')} ({event.confirmations})</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.voteBtn, styles.denyVoteBtn]}
-          onPress={(e) => { e.stopPropagation?.(); denyEvent(event.id); }}
+          onPress={(e) => { e.stopPropagation?.(); onDeny(event.id); }}
         >
           <Text style={[styles.voteBtnText, styles.denyVoteBtnText]}>✗ {t('road_deny')} ({event.denials})</Text>
         </TouchableOpacity>
@@ -62,6 +68,9 @@ function FeedCard({ event, onNavigate }: { event: RoadEvent; onNavigate: (e: Roa
 export function LiveFeed({ events, onClose, onNavigate }: Props) {
   const t = useT();
   const sorted = [...events].sort((a, b) => b.createdAt - a.createdAt);
+  // Store acessado uma única vez no componente pai — não em cada card
+  const confirmEvent = useEventsStore((s) => s.confirmEvent);
+  const denyEvent = useEventsStore((s) => s.denyEvent);
   const { filterStateUF, filterCityName } = useEventsStore();
 
   const filterLabel = filterCityName
@@ -97,7 +106,7 @@ export function LiveFeed({ events, onClose, onNavigate }: Props) {
         <FlatList
           data={sorted}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <FeedCard event={item} onNavigate={onNavigate} />}
+          renderItem={({ item }) => <FeedCard event={item} onNavigate={onNavigate} onConfirm={confirmEvent} onDeny={denyEvent} />}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
         />

@@ -1,13 +1,14 @@
 /**
  * MapIntroModal — apresentação interativa do mapa para novos usuários.
  *
- * 4 slides:
+ * 5 slides:
  *   1. Boas-vindas + como criar eventos (toque no mapa)
- *   2. Alertas de trânsito (todas as categorias)
- *   3. Eventos & Entretenimento (todas as categorias)
- *   4. Dicas rápidas + CTA "Explorar"
+ *   2. Mapa ao vivo — 3 eventos de demonstração animados no mapa
+ *   3. Alertas de trânsito (todas as categorias)
+ *   4. Eventos & Entretenimento (todas as categorias)
+ *   5. Dicas rápidas + CTA "Explorar"
  *
- * Aparece apenas uma vez (flag @alertoo:map_intro_v1 no AsyncStorage).
+ * Aparece apenas uma vez (flag @alertoo:map_intro_v2 no AsyncStorage).
  * Skipável a qualquer momento.
  */
 
@@ -31,21 +32,19 @@ import { ENTERTAINMENT_CATEGORIES, EntertainmentCategory } from '../types/entert
 import { rw, rh, rf } from '../utils/responsive';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-export const MAP_INTRO_KEY = '@alertoo:map_intro_v1';
+export const MAP_INTRO_KEY = '@alertoo:map_intro_v2';
 
 export async function shouldShowMapIntro(): Promise<boolean> {
   try {
     const v = await AsyncStorage.getItem(MAP_INTRO_KEY);
     return v !== '1';
   } catch {
-    // Em caso de falha no AsyncStorage (ex: dispositivo sem espaço),
-    // retorna true para garantir que novos usuários vejam a introdução.
     return true;
   }
 }
 
 // ─── Cores de fundo por slide ─────────────────────────────────────────────────
-const BG_COLORS = ['#FF5722', '#B71C1C', '#4A148C', '#0F172A'];
+const BG_COLORS = ['#FF5722', '#1A237E', '#B71C1C', '#4A148C', '#0F172A'];
 
 interface Props {
   visible: boolean;
@@ -106,7 +105,6 @@ function SlideWelcome() {
 
   return (
     <View style={slide.root}>
-      {/* Círculo animado com emoji do mapa */}
       <Animated.View style={[slide.circle, { transform: [{ scale: pulseAnim }] }]}>
         <Text style={slide.bigEmoji}>🗺️</Text>
       </Animated.View>
@@ -116,7 +114,6 @@ function SlideWelcome() {
         Fique por dentro do trânsito e descubra os melhores eventos perto de você — em tempo real.
       </Text>
 
-      {/* Steps */}
       <View style={slide.stepsCard}>
         <Text style={slide.stepsTitle}>Como criar um evento</Text>
         {[
@@ -135,7 +132,281 @@ function SlideWelcome() {
   );
 }
 
-// ─── Slide 2 — Alertas de trânsito ───────────────────────────────────────────
+// ─── Slide 2 — Mapa ao vivo com eventos de demonstração ──────────────────────
+const DEMO_EVENTS: Array<{
+  emoji: string;
+  label: string;
+  location: string;
+  detail: string;
+  color: string;
+  bg: string;
+  border: string;
+  top: `${number}%`;
+  left: `${number}%`;
+}> = [
+  {
+    emoji: '🚗',
+    label: 'Acidente',
+    location: 'Av. Paulista, 1578',
+    detail: '3 confirmações · há 5 min',
+    color: '#EF4444',
+    bg: 'rgba(239,68,68,0.18)',
+    border: 'rgba(239,68,68,0.6)',
+    top: '18%',
+    left: '8%',
+  },
+  {
+    emoji: '📷',
+    label: 'Radar',
+    location: 'BR-116, km 45',
+    detail: 'Velocidade: 60 km/h',
+    color: '#F59E0B',
+    bg: 'rgba(245,158,11,0.18)',
+    border: 'rgba(245,158,11,0.6)',
+    top: '44%',
+    left: '55%',
+  },
+  {
+    emoji: '🎉',
+    label: 'Show ao vivo',
+    location: 'Bar da Lapa · Centro',
+    detail: '❤️ 28 curtidas · Hoje',
+    color: '#A855F7',
+    bg: 'rgba(168,85,247,0.18)',
+    border: 'rgba(168,85,247,0.6)',
+    top: '66%',
+    left: '12%',
+  },
+];
+
+function SlideMapDemo() {
+  const anims = useRef(DEMO_EVENTS.map(() => new Animated.Value(0))).current;
+  const pulseAnims = useRef(DEMO_EVENTS.map(() => new Animated.Value(1))).current;
+
+  useEffect(() => {
+    // Staggered fade-in
+    const fadeIns = anims.map((anim, i) =>
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 400,
+        delay: i * 350,
+        useNativeDriver: true,
+      })
+    );
+
+    // Pulse loop for each pin
+    const pulses = pulseAnims.map((anim) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, { toValue: 1.18, duration: 700, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 1,    duration: 700, useNativeDriver: true }),
+        ])
+      )
+    );
+
+    Animated.stagger(350, fadeIns).start(() => {
+      pulses.forEach((p) => p.start());
+    });
+
+    return () => {
+      pulses.forEach((p) => p.stop());
+    };
+  }, []);
+
+  return (
+    <View style={slide.root}>
+      <Text style={slide.title}>Veja como{'\n'}funciona</Text>
+      <Text style={slide.subtitle}>
+        Esses são exemplos de eventos que aparecem no mapa em tempo real.
+      </Text>
+
+      {/* Mapa simulado */}
+      <View style={mapDemo.mapContainer}>
+        {/* Grade de ruas estilizadas */}
+        <View style={mapDemo.road1} />
+        <View style={mapDemo.road2} />
+        <View style={mapDemo.road3} />
+        <View style={mapDemo.road4} />
+        <View style={mapDemo.road5} />
+
+        {/* Cursor de localização do usuário */}
+        <View style={mapDemo.userPin}>
+          <View style={mapDemo.userDot} />
+          <View style={mapDemo.userRing} />
+        </View>
+
+        {/* Eventos de demonstração */}
+        {DEMO_EVENTS.map((event, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              mapDemo.eventCard,
+              {
+                top: event.top,
+                left: event.left,
+                opacity: anims[i],
+                transform: [
+                  { scale: anims[i] },
+                ],
+                backgroundColor: event.bg,
+                borderColor: event.border,
+              },
+            ]}
+          >
+            {/* Pin pulsante */}
+            <Animated.View style={[
+              mapDemo.pin,
+              { backgroundColor: event.color, transform: [{ scale: pulseAnims[i] }] },
+            ]}>
+              <Text style={mapDemo.pinEmoji}>{event.emoji}</Text>
+            </Animated.View>
+
+            {/* Info do evento */}
+            <View style={mapDemo.cardInfo}>
+              <Text style={[mapDemo.cardLabel, { color: event.color }]}>{event.label}</Text>
+              <Text style={mapDemo.cardLocation} numberOfLines={1}>{event.location}</Text>
+              <Text style={mapDemo.cardDetail} numberOfLines={1}>{event.detail}</Text>
+            </View>
+          </Animated.View>
+        ))}
+
+        {/* Label do mapa */}
+        <View style={mapDemo.mapLabel}>
+          <Text style={mapDemo.mapLabelText}>🗺️ Mapa ao vivo</Text>
+        </View>
+      </View>
+
+      <Text style={slide.footnote}>
+        👆 Toque em qualquer ponto do mapa para criar um novo evento
+      </Text>
+    </View>
+  );
+}
+
+const mapDemo = StyleSheet.create({
+  mapContainer: {
+    width: SCREEN_W - rw(40),
+    height: rh(240),
+    backgroundColor: '#1B2A3B',
+    borderRadius: rw(20),
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    marginBottom: rh(14),
+  },
+  // Ruas simuladas (linhas)
+  road1: {
+    position: 'absolute',
+    top: '35%',
+    left: 0,
+    right: 0,
+    height: 6,
+    backgroundColor: '#2D4A63',
+  },
+  road2: {
+    position: 'absolute',
+    top: '65%',
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: '#243B52',
+  },
+  road3: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '38%',
+    width: 6,
+    backgroundColor: '#2D4A63',
+  },
+  road4: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '70%',
+    width: 4,
+    backgroundColor: '#243B52',
+  },
+  road5: {
+    position: 'absolute',
+    top: '15%',
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#1E3347',
+  },
+  // Pin do usuário
+  userPin: {
+    position: 'absolute',
+    top: '52%',
+    left: '42%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userDot: {
+    width: rw(12),
+    height: rw(12),
+    borderRadius: rw(6),
+    backgroundColor: '#3B82F6',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  userRing: {
+    position: 'absolute',
+    width: rw(28),
+    height: rw(28),
+    borderRadius: rw(14),
+    backgroundColor: 'rgba(59,130,246,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.5)',
+  },
+  // Evento card
+  eventCard: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: rw(12),
+    borderWidth: 1.5,
+    padding: rw(7),
+    gap: rw(7),
+    maxWidth: rw(155),
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  pin: {
+    width: rw(32),
+    height: rw(32),
+    borderRadius: rw(16),
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  pinEmoji: { fontSize: rf(16) },
+  cardInfo: { flex: 1 },
+  cardLabel: { fontSize: rf(10), fontWeight: '800', letterSpacing: 0.3 },
+  cardLocation: { fontSize: rf(9), color: 'rgba(255,255,255,0.85)', fontWeight: '600', marginTop: 1 },
+  cardDetail: { fontSize: rf(9), color: 'rgba(255,255,255,0.55)', marginTop: 1 },
+  // Label
+  mapLabel: {
+    position: 'absolute',
+    bottom: 8,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  mapLabelText: { fontSize: rf(10), color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
+});
+
+// ─── Slide 3 — Alertas de trânsito ───────────────────────────────────────────
 function SlideRoadEvents() {
   const roadCats = Object.entries(EVENT_CATEGORIES) as [EventCategory, typeof EVENT_CATEGORIES[EventCategory]][];
 
@@ -162,7 +433,7 @@ function SlideRoadEvents() {
   );
 }
 
-// ─── Slide 3 — Entretenimento ─────────────────────────────────────────────────
+// ─── Slide 4 — Entretenimento ─────────────────────────────────────────────────
 function SlideEntertainment() {
   const entCats = Object.entries(ENTERTAINMENT_CATEGORIES) as [EntertainmentCategory, typeof ENTERTAINMENT_CATEGORIES[EntertainmentCategory]][];
 
@@ -189,7 +460,7 @@ function SlideEntertainment() {
   );
 }
 
-// ─── Slide 4 — Pronto! ────────────────────────────────────────────────────────
+// ─── Slide 5 — Pronto! ────────────────────────────────────────────────────────
 function SlideReady() {
   return (
     <View style={slide.root}>
@@ -320,15 +591,14 @@ const slide = StyleSheet.create({
 });
 
 // ─── Modal principal ──────────────────────────────────────────────────────────
-const SLIDES = [SlideWelcome, SlideRoadEvents, SlideEntertainment, SlideReady];
-const SLIDE_LABELS = ['Bem-vindo', 'Trânsito', 'Eventos', 'Pronto!'];
+const SLIDES = [SlideWelcome, SlideMapDemo, SlideRoadEvents, SlideEntertainment, SlideReady];
+const SLIDE_LABELS = ['Bem-vindo', 'No Mapa', 'Trânsito', 'Eventos', 'Pronto!'];
 
 export function MapIntroModal({ visible, onDone }: Props) {
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
   const listRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
-  // Fade-in do modal ao aparecer
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -382,14 +652,14 @@ export function MapIntroModal({ visible, onDone }: Props) {
           </Pressable>
         )}
 
-        {/* Indicador de slide (label) */}
+        {/* Indicador de slide */}
         <View style={[styles.slideLabel, { top: insets.top + 14 }]}>
           <Text style={styles.slideLabelText}>
             {SLIDE_LABELS[index]}
           </Text>
         </View>
 
-        {/* Conteúdo das slides */}
+        {/* Conteúdo */}
         <FlatList
           ref={listRef}
           data={SLIDES}
@@ -416,7 +686,6 @@ export function MapIntroModal({ visible, onDone }: Props) {
 
         {/* Painel inferior: dots + botão */}
         <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 20 }]}>
-          {/* Dots animados */}
           <View style={styles.dotsRow}>
             {SLIDES.map((_, i) => {
               const inputRange = [(i - 1) * SCREEN_W, i * SCREEN_W, (i + 1) * SCREEN_W];
@@ -445,7 +714,6 @@ export function MapIntroModal({ visible, onDone }: Props) {
             })}
           </View>
 
-          {/* CTA */}
           <Pressable
             style={({ pressed }) => [
               styles.cta,

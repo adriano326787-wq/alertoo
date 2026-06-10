@@ -156,6 +156,108 @@ export function PremiumPin({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  LeiSecaPin — marcador de destaque máximo para Lei Seca
+//
+//  Design: escudo verde vibrante com "LEI SECA" em negrito, duplo anel pulsante,
+//  maior que todos os outros pins — identificável à primeira vista.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const LSC = '#00C853'; // verde Lei Seca
+
+// Dimensões equilibradas — visível em qualquer zoom, sem ocupar demais o mapa
+const LS_PIN  = 40;              // corpo do pin (quadrado verde)
+const LS_RING = LS_PIN + 10;    // anel pulsante ao redor
+const LS_W    = LS_RING + 4;    // largura total (margem para anel)
+const LS_H    = LS_RING + 4;    // altura total
+const LS_TAIL = 8;               // cauda triangular
+const LS_LBL  = 16;             // altura da label
+
+export function LeiSecaPin({ onLayout }: { size?: number; onLayout?: () => void }) {
+  const ring = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(Animated.sequence([
+      Animated.timing(ring, { toValue: 1.0,  duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      Animated.timing(ring, { toValue: 0.4,  duration: 900, easing: Easing.in(Easing.quad),  useNativeDriver: false }),
+    ]));
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  const totalH = LS_H + LS_TAIL + LS_LBL + 2;
+  const bodyOffset = (LS_W - LS_PIN) / 2;
+
+  return (
+    <View
+      collapsable={false}
+      onLayout={onLayout}
+      style={{ width: LS_W, height: totalH, alignItems: 'center' }}
+    >
+      {/* Anel pulsante */}
+      <Animated.View style={{
+        position: 'absolute',
+        top: (LS_H - LS_RING) / 2,
+        left: (LS_W - LS_RING) / 2,
+        width: LS_RING,
+        height: LS_RING,
+        borderRadius: 11,
+        borderWidth: 2,
+        borderColor: LSC,
+        opacity: ring,
+      }} />
+
+      {/* Corpo do pin */}
+      <View style={{
+        position: 'absolute',
+        top: bodyOffset,
+        left: bodyOffset,
+        width: LS_PIN,
+        height: LS_PIN,
+        borderRadius: 10,
+        backgroundColor: LSC,
+        borderWidth: 2.5,
+        borderColor: '#fff',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <Text style={{ fontSize: 17, includeFontPadding: false, lineHeight: 20 }}>🍺</Text>
+        <Text style={{
+          fontSize: 8, fontWeight: '900', color: '#fff',
+          letterSpacing: 0.8, includeFontPadding: false, marginTop: 1,
+        }}>LEI SECA</Text>
+      </View>
+
+      {/* Cauda triangular */}
+      <View style={{
+        position: 'absolute',
+        top: LS_H,
+        width: 0, height: 0,
+        borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: LS_TAIL,
+        borderLeftColor: 'transparent', borderRightColor: 'transparent',
+        borderTopColor: LSC,
+      }} />
+
+      {/* Label abaixo — sempre visível em qualquer zoom */}
+      <View style={{
+        position: 'absolute',
+        top: LS_H + LS_TAIL + 2,
+        backgroundColor: LSC,
+        borderRadius: 4,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderWidth: 1,
+        borderColor: '#fff',
+      }}>
+        <Text style={{
+          fontSize: 8, fontWeight: '900', color: '#fff',
+          letterSpacing: 0.8, includeFontPadding: false,
+        }}>LEI SECA</Text>
+      </View>
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  AlertPin — círculo com pulse de urgência
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -526,6 +628,151 @@ export function PromotedMarkerCard({
         borderLeftColor: 'transparent',
         borderRightColor: 'transparent',
         borderTopColor: borderColor,
+        alignSelf: 'center',
+      }} />
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NotifPin — card estilo notificação (ícone circular + nome + info)
+//
+//  Layout:
+//    ┌─────────────────────────────────────────┐
+//    │  ●  │  Acidente          (negrito)       │
+//    │ icon│  Av. Paulista, 1578 (cinza)        │
+//    │     │  3 confirmações · há 5 min (micro)  │
+//    └─────────────────────────────────────────┘
+//               ▼  cauda apontando para o evento
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface NotifPinProps {
+  color: string;
+  icon: string;
+  label: string;       // nome da categoria ex: "Acidente"
+  subtitle?: string;   // cidade ou endereço resumido
+  confirms?: number;   // número de confirmações
+  timeAgo?: string;    // ex: "há 5 min"
+  urgent?: boolean;    // borda vermelha pulsante quando urgente
+  onLayout?: () => void;
+}
+
+const CARD_W = 170;
+const CARD_H = 56;
+const ICON_SIZE = 38;
+const TAIL_H = 8;
+
+export function NotifPin({ color, icon, label, subtitle, confirms = 0, timeAgo, urgent = false, onLayout }: NotifPinProps) {
+  const pulse = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    if (!urgent) return;
+    const anim = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 0.85, duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      Animated.timing(pulse, { toValue: 0.35, duration: 900, easing: Easing.in(Easing.quad),  useNativeDriver: false }),
+    ]));
+    anim.start();
+    return () => anim.stop();
+  }, [urgent]);
+
+  const confirmText = confirms > 0
+    ? `${confirms} confirmação${confirms > 1 ? 'ões' : ''}`
+    : null;
+  const meta = [confirmText, timeAgo].filter(Boolean).join(' · ');
+
+  return (
+    <View
+      collapsable={false}
+      onLayout={onLayout}
+      style={{ width: CARD_W, height: CARD_H + TAIL_H }}
+    >
+      {/* Halo pulsante urgente */}
+      {urgent && (
+        <Animated.View style={{
+          position: 'absolute',
+          top: -3, left: -3,
+          width: CARD_W + 6,
+          height: CARD_H + 6,
+          borderRadius: 15,
+          borderWidth: 2,
+          borderColor: color,
+          opacity: pulse,
+        }} />
+      )}
+
+      {/* Card principal */}
+      <View style={{
+        width: CARD_W,
+        height: CARD_H,
+        borderRadius: 12,
+        backgroundColor: '#1C1C1E',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderWidth: urgent ? 1.5 : 0,
+        borderColor: urgent ? color : 'transparent',
+      }}>
+        {/* Ícone circular */}
+        <View style={{
+          width: ICON_SIZE,
+          height: ICON_SIZE,
+          borderRadius: ICON_SIZE / 2,
+          backgroundColor: color,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginRight: 8,
+          flexShrink: 0,
+        }}>
+          <Text style={{ fontSize: 20, includeFontPadding: false, textAlignVertical: 'center' }}>
+            {icon}
+          </Text>
+        </View>
+
+        {/* Textos */}
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text numberOfLines={1} style={{
+            fontSize: 13,
+            fontWeight: '700',
+            color: '#FFFFFF',
+            includeFontPadding: false,
+          }}>
+            {label}
+          </Text>
+          {subtitle ? (
+            <Text numberOfLines={1} style={{
+              fontSize: 11,
+              fontWeight: '400',
+              color: '#AEAEB2',
+              includeFontPadding: false,
+              marginTop: 1,
+            }}>
+              {subtitle}
+            </Text>
+          ) : null}
+          {meta ? (
+            <Text numberOfLines={1} style={{
+              fontSize: 10,
+              color: '#636366',
+              includeFontPadding: false,
+              marginTop: 1,
+            }}>
+              {meta}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Cauda triangular */}
+      <View style={{
+        width: 0,
+        height: 0,
+        borderLeftWidth: 7,
+        borderRightWidth: 7,
+        borderTopWidth: TAIL_H,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderTopColor: '#1C1C1E',
         alignSelf: 'center',
       }} />
     </View>

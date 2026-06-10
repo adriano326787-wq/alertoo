@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://alertoo.com.br/sitemap.xml
+
+# IndexNow key — https://alertoo.com.br/d5a6299b4b544f828ecc54b9d0e505d4.txt

@@ -22,6 +22,7 @@ import { tEntCat, tTier } from '../utils/i18n';
 import { palette } from '../theme/tokens';
 import { useFavoritesStore } from '../store/favoritesStore';
 import { useEntertainmentStore } from '../store/entertainmentStore';
+import { useUserStore } from '../store/userStore';
 import { rw, rh, rf } from '../utils/responsive';
 
 interface Props {
@@ -45,12 +46,17 @@ export function EntertainmentInfoModal({
   const incrementViewCount = useEntertainmentStore((s) => s.incrementViewCount);
   const toggleAttendance = useEntertainmentStore((s) => s.toggleAttendance);
   const submitRating = useEntertainmentStore((s) => s.submitRating);
+  const deleteEntertainmentEvent = useEntertainmentStore((s) => s.deleteEntertainmentEvent);
+  const isAdmin = useUserStore((s) => s.isAdmin);
 
   // Incrementa visualização ao abrir o modal (#8)
+  // Também reseta estados de UI ao trocar de evento
   useEffect(() => {
     if (event) {
       incrementViewCount(event.id);
     }
+    setRatingVisible(false);
+    setReportVisible(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event?.id]);
   // #20 — Zustand não re-renderiza componentes desmontados, então o toggle async
@@ -197,6 +203,33 @@ export function EntertainmentInfoModal({
       label: t('report_event'),
       onPress: () => setReportVisible(true),
     }] : []),
+    // Exclusão — somente admin
+    ...(isAdmin ? [{
+      icon: '🗑️',
+      label: 'Excluir evento',
+      variant: 'danger' as const,
+      onPress: () => {
+        Alert.alert(
+          '🗑️ Excluir evento',
+          `Tem certeza que deseja excluir "${event.title}"? Esta ação não pode ser desfeita.`,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Excluir',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await deleteEntertainmentEvent(event.id);
+                  onClose();
+                } catch {
+                  Alert.alert('Erro', 'Não foi possível excluir o evento. Tente novamente.');
+                }
+              },
+            },
+          ]
+        );
+      },
+    }] : []),
   ] : [];
 
   return (
@@ -215,6 +248,11 @@ export function EntertainmentInfoModal({
         subtitle={location}
         meta={event ? timeAgo(event.createdAt) : ''}
         description={event?.description}
+        link={
+          event?.link && event.promotionTier && event.promotionEndDate && event.promotionEndDate > Date.now()
+            ? event.link
+            : undefined
+        }
         primaryAction={event ? {
           icon: '🧭',
           label: t('navigate_gps') || 'Como chegar',

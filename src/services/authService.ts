@@ -17,12 +17,15 @@ import { auth } from './firebase';
 // Get them from: https://console.cloud.google.com → APIs & Services → Credentials
 // For Expo Go testing, use the Web Client ID as expoClientId.
 export const GOOGLE_CLIENT_IDS = {
-  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '',
+  // iOS Client ID — obtido do GoogleService-Info.plist (CLIENT_ID)
+  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+    ?? '657066902706-scqovndbjocqnjfsd0c9a012or7gd2dk.apps.googleusercontent.com',
   // webClientId = Web Client do Firebase (projeto 657066902706 / lei-seca---eventos)
   // O cliente Android (type=1) com SHA-1 já está no google-services.json
   // #7 — o fallback hardcoded abaixo existe só para dev/CI sem .env configurado.
   //       Em produção, EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID deve estar definido em eas.json.
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '657066902706-t8tsomtaqqjctmpme5fei1c904mtscp6.apps.googleusercontent.com',
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
+    ?? '657066902706-t8tsomtaqqjctmpme5fei1c904mtscp6.apps.googleusercontent.com',
 };
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -97,7 +100,8 @@ export async function resendVerificationEmail(): Promise<void> {
 export async function reloadUser(): Promise<boolean> {
   if (!currentUser) return false;
   await reload(currentUser);
-  return currentUser.emailVerified;
+  // Lê auth.currentUser após reload — currentUser (ref de módulo) pode estar stale
+  return auth.currentUser?.emailVerified ?? false;
 }
 
 /**

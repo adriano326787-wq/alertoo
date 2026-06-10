@@ -17,7 +17,7 @@ import { Marker } from 'react-native-maps';
 import { RoadEvent, EVENT_CATEGORIES } from '../types';
 import { ZoomTier } from '../utils/mapZoom';
 import { palette, shadow, platformShadow } from '../theme/tokens';
-import { DropPin, AlertPin } from './ui/Pin';
+import { DropPin, AlertPin, NotifPin, LeiSecaPin } from './ui/Pin';
 
 interface Props {
   event: RoadEvent;
@@ -29,6 +29,16 @@ const FALLBACK_META = { color: '#607D8B', emoji: '📍' };
 
 function pinSize(zoom: ZoomTier): number {
   return zoom === 'distant' ? 30 : zoom === 'medium' ? 38 : 46;
+}
+
+function timeAgo(ms: number): string {
+  const diff = Date.now() - ms;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h}h`;
+  return `há ${Math.floor(h / 24)}d`;
 }
 
 export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
@@ -73,7 +83,47 @@ export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
   // #18 — mostra badge de confirmações quando há pelo menos 1 (estilo Waze)
   const showBadge = confirmations > 0 && zoomTier !== 'distant';
 
-  // ─── ALERTA → AlertPin com pulse de urgência ──────────────────────────────────
+  // ─── LEI SECA → tamanho fixo, destaque máximo em qualquer zoom ──────────────
+  if (event.category === 'drunkcheck') {
+    return (
+      <Marker
+        coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+        anchor={{ x: 0.5, y: 0.82 }}
+        onPress={() => onPress(event)}
+        tracksViewChanges={tracks}
+        zIndex={999}
+      >
+        <LeiSecaPin onLayout={handleLayout} />
+      </Marker>
+    );
+  }
+
+  // ─── CLOSE ZOOM → NotifPin (card estilo notificação) ────────────────────────
+  if (zoomTier === 'close') {
+    const subtitle = [event.cityName, event.stateUF].filter(Boolean).join(', ');
+    return (
+      <Marker
+        coordinate={{ latitude: event.latitude, longitude: event.longitude }}
+        anchor={{ x: 0.5, y: 1.0 }}
+        onPress={() => onPress(event)}
+        tracksViewChanges={tracks}
+        zIndex={isAlert ? 40 : 10}
+      >
+        <NotifPin
+          color={meta.color}
+          icon={meta.emoji}
+          label={meta.label}
+          subtitle={subtitle || undefined}
+          confirms={confirmations}
+          timeAgo={timeAgo(event.createdAt)}
+          urgent={isAlert}
+          onLayout={handleLayout}
+        />
+      </Marker>
+    );
+  }
+
+  // ─── ALERTA (medium/distant) → AlertPin com pulse de urgência ────────────────
   if (isAlert) {
     return (
       <Marker
@@ -96,7 +146,7 @@ export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
     );
   }
 
-  // ─── PADRÃO → DropPin simples ─────────────────────────────────────────────────
+  // ─── PADRÃO (medium/distant) → DropPin simples ───────────────────────────────
   return (
     <Marker
       coordinate={{ latitude: event.latitude, longitude: event.longitude }}

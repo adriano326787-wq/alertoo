@@ -6,7 +6,8 @@ export type EventCategory =
   | 'flood'
   | 'closure'
   | 'traffic'
-  | 'hazard';
+  | 'hazard'
+  | 'radar';
 
 export interface RoadEvent {
   id: string;
@@ -24,6 +25,7 @@ export interface RoadEvent {
   stateUF?: string;     // ex: 'SP' (Brasil) ou nome da região em outros países
   cityName?: string;    // ex: 'São Paulo'
   countryCode?: string; // ex: 'BR', 'US', 'PT'
+  speedLimit?: number;  // km/h — usado em eventos da categoria 'radar'
 }
 
 export interface EventCategoryMeta {
@@ -45,4 +47,6 @@ export const EVENT_CATEGORIES: Record<EventCategory, EventCategoryMeta> = {
   flood:       { label: 'Alagamento',         emoji: '🌊', color: '#1E88E5', defaultTtlMinutes: 300 },
   closure:     { label: 'Interdição',         emoji: '🚫', color: '#8E24AA', defaultTtlMinutes: 720 },
   roadwork:    { label: 'Obras',              emoji: '🚧', color: '#FB8C00', defaultTtlMinutes: 4320 }, // 72 h
+  // Radar / fiscalização eletrônica de velocidade
+  radar:       { label: 'Radar',              emoji: '📷', color: '#00ACC1', defaultTtlMinutes: 180 },
 };

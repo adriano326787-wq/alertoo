@@ -48,6 +48,41 @@ function readSecret(secret: { value(): string }): string {
   return secret.value().replace(/﻿/g, '').replace(/^\s+|\s+$/g, '');
 }
 
+// ─── Sanitização de string — remove caracteres de controle e limita tamanho ──
+function sanitizeString(value: unknown, maxLength: number): string {
+  if (typeof value !== 'string') throw new HttpsError('invalid-argument', 'Campo de texto invalido.');
+  // Remove caracteres de controle (exceto \n e \t) e espaços redundantes
+  // eslint-disable-next-line no-control-regex
+  const clean = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
+  if (clean.length === 0) throw new HttpsError('invalid-argument', 'Campo vazio apos sanitizacao.');
+  if (clean.length > maxLength) throw new HttpsError('invalid-argument', `Campo excede ${maxLength} caracteres.`);
+  return clean;
+}
+
+// ─── Validação de UID Firebase ─────────────────────────────────────────────
+function assertAuth(uid: string | undefined): asserts uid is string {
+  if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+}
+
+// ─── Limites de negócio ────────────────────────────────────────────────────
+const MAX_DONATION_BRL = 500;   // Doação máxima R$500 — evita abuso de estorno
+const MAX_FCM_TOKEN_LEN = 300;  // Tokens FCM têm ~163 chars; 300 é margem segura
+
+// ─── App Check — verificação de origem ────────────────────────────────────
+// Modo AUDIT: loga chamadas sem token mas não rejeita (enquanto o SDK não for
+// adicionado ao app). Quando o SDK estiver integrado no Android/iOS, trocar
+// enforceAppCheck: true nas funções abaixo para ativar rejeição real.
+function checkAppToken(request: { app?: unknown; auth?: { uid?: string } }, fnName: string): void {
+  if (!request.app) {
+    // Chamada sem App Check token — pode ser bot, scraper ou cliente legado.
+    // Loga para monitoramento; quando o app tiver o SDK, mude para ENFORCED.
+    console.warn(`[AppCheck][AUDIT] ${fnName} chamado sem token de app válido`, {
+      uid: request.auth?.uid ?? 'anonymous',
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
 // ─── Pacotes válidos (manter em sincronia com src/types/promotion.ts) ─────────
 const CREDIT_PACKAGES: Record<string, { credits: number; price: number; label: string }> = {
   pkg_1:  { credits: 1,  price: 4.99,  label: '1 credito' },
@@ -60,10 +95,11 @@ const CREDIT_PACKAGES: Record<string, { credits: number; price: number; label: s
 export const createMPPreference = onCall(
   { secrets: [MP_ACCESS_TOKEN], region: 'us-central1' },
   async (request) => {
+    checkAppToken(request, 'createMPPreference');
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+    assertAuth(uid);
 
-    const packageId = request.data?.packageId as string;
+    const packageId = sanitizeString(request.data?.packageId, 20);
     const pkg = CREDIT_PACKAGES[packageId];
     if (!pkg) throw new HttpsError('invalid-argument', 'Pacote invalido.');
 
@@ -133,10 +169,11 @@ export const createMPPreference = onCall(
 export const verifyMPPayment = onCall(
   { secrets: [MP_ACCESS_TOKEN], region: 'us-central1' },
   async (request) => {
+    checkAppToken(request, 'verifyMPPayment');
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+    assertAuth(uid);
 
-    const preferenceId = request.data?.preferenceId as string;
+    const preferenceId = sanitizeString(request.data?.preferenceId, 100);
     if (!preferenceId) throw new HttpsError('invalid-argument', 'preferenceId obrigatorio.');
 
     const pendingSnap = await db.collection('pending_payments')
@@ -224,10 +261,11 @@ const PIX_EXPIRY_MINUTES = 30;
 export const createPixPayment = onCall(
   { secrets: [MP_ACCESS_TOKEN, ALERTOO_PIX_KEY_SECRET], region: 'us-central1' },
   async (request) => {
+    checkAppToken(request, 'createPixPayment');
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+    assertAuth(uid);
 
-    const packageId = request.data?.packageId as string;
+    const packageId = sanitizeString(request.data?.packageId, 20);
     const pkg = CREDIT_PACKAGES[packageId];
     if (!pkg) throw new HttpsError('invalid-argument', 'Pacote invalido.');
 
@@ -306,11 +344,14 @@ export const createPixPayment = onCall(
 export const verifyPixPayment = onCall(
   { secrets: [MP_ACCESS_TOKEN], region: 'us-central1' },
   async (request) => {
+    checkAppToken(request, 'verifyPixPayment');
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+    assertAuth(uid);
 
-    const paymentId = request.data?.paymentId as string;
+    const paymentId = sanitizeString(request.data?.paymentId, 50);
     if (!paymentId) throw new HttpsError('invalid-argument', 'paymentId obrigatorio.');
+    // Valida formato: só dígitos (ID numérico do MP)
+    if (!/^\d+$/.test(paymentId)) throw new HttpsError('invalid-argument', 'paymentId com formato invalido.');
 
     const resp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: { Authorization: `Bearer ${readSecret(MP_ACCESS_TOKEN)}` },
@@ -380,8 +421,9 @@ const AD_CREDIT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hora
 export const awardAdCredit = onCall(
   { region: 'us-central1' },
   async (request) => {
+    checkAppToken(request, 'awardAdCredit');
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+    assertAuth(uid);
 
     const recentSnap = await db.collection('credit_purchases')
       .where('userId', '==', uid)
@@ -422,10 +464,11 @@ export const awardAdCredit = onCall(
 export const createStripePaymentIntent = onCall(
   { secrets: [STRIPE_SECRET_KEY], region: 'us-central1' },
   async (request) => {
+    checkAppToken(request, 'createStripePaymentIntent');
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+    assertAuth(uid);
 
-    const packageId = request.data?.packageId as string;
+    const packageId = sanitizeString(request.data?.packageId, 20);
     const pkg = CREDIT_PACKAGES[packageId];
     if (!pkg) throw new HttpsError('invalid-argument', 'Pacote invalido.');
 
@@ -496,11 +539,14 @@ export const createStripePaymentIntent = onCall(
 export const verifyStripePayment = onCall(
   { secrets: [STRIPE_SECRET_KEY], region: 'us-central1' },
   async (request) => {
+    checkAppToken(request, 'verifyStripePayment');
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+    assertAuth(uid);
 
-    const paymentIntentId = request.data?.paymentIntentId as string;
+    const paymentIntentId = sanitizeString(request.data?.paymentIntentId, 66);
     if (!paymentIntentId) throw new HttpsError('invalid-argument', 'paymentIntentId obrigatorio.');
+    // Formato Stripe: pi_XXXXX
+    if (!/^pi_[a-zA-Z0-9_]+$/.test(paymentIntentId)) throw new HttpsError('invalid-argument', 'paymentIntentId com formato invalido.');
 
     const stripe = new Stripe(readSecret(STRIPE_SECRET_KEY), { apiVersion: '2026-04-22.dahlia' as any });
 
@@ -618,11 +664,19 @@ export const moderatePhoto = onObjectFinalized(
 export const createDonationPreference = onCall(
   { secrets: [MP_ACCESS_TOKEN], region: 'us-central1' },
   async (request) => {
+    checkAppToken(request, 'createDonationPreference');
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+    assertAuth(uid);
 
     const amount = request.data?.amount as number;
-    if (!amount || amount <= 0) throw new HttpsError('invalid-argument', 'Valor invalido.');
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      throw new HttpsError('invalid-argument', 'Valor invalido.');
+    }
+    if (amount > MAX_DONATION_BRL) {
+      throw new HttpsError('invalid-argument', `Doacao maxima permitida: R$${MAX_DONATION_BRL}.`);
+    }
+    // Arredonda para 2 casas decimais — evita manipulação de centavos fracionários
+    const safeAmount = Math.round(amount * 100) / 100;
 
     const externalReference = `donation|${uid}|${Date.now()}`;
 
@@ -639,7 +693,7 @@ export const createDonationPreference = onCall(
           description: 'Apoie o desenvolvimento do Alertoo',
           quantity: 1,
           currency_id: 'BRL',
-          unit_price: amount,
+          unit_price: safeAmount,
         }],
         back_urls: {
           success: 'alertoo://donation/success',
@@ -741,12 +795,20 @@ export const onEntertainmentEventCreated = onDocumentCreated(
 export const registerFcmToken = onCall(
   { region: 'us-central1' },
   async (request) => {
+    checkAppToken(request, 'registerFcmToken');
     const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Login obrigatorio.');
+    assertAuth(uid);
 
     const token = request.data?.token as string | undefined;
     if (!token || typeof token !== 'string') {
       throw new HttpsError('invalid-argument', 'Token invalido.');
+    }
+    if (token.length > MAX_FCM_TOKEN_LEN) {
+      throw new HttpsError('invalid-argument', 'Token FCM com tamanho invalido.');
+    }
+    // FCM tokens contêm apenas alfanuméricos, hífens, underscores e dois-pontos
+    if (!/^[a-zA-Z0-9\-_:]+$/.test(token)) {
+      throw new HttpsError('invalid-argument', 'Token FCM com caracteres invalidos.');
     }
 
     await db.collection('users').doc(uid).update({
@@ -824,5 +886,147 @@ export const notifyOnRoadEvent = onDocumentCreated(
       data: { eventId: event.params.eventId, eventType: 'road' },
       excludeUid: data.userId,
     });
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MONITORAMENTO DE SEGURANÇA
+// Detecta anomalias e registra alertas no Firestore + loga erros críticos
+// para o Cloud Monitoring do GCP (que envia e-mail via canal configurado).
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Limites de anomalia ──────────────────────────────────────────────────
+const ALERT_EVENTS_PER_HOUR   = 20;  // Mais de 20 eventos/hora por usuário = suspeito
+const ALERT_PAYMENTS_PER_DAY  = 10;  // Mais de 10 tentativas de pagamento/dia = suspeito
+const ALERT_APPCHECK_WARNINGS = 5;   // Mais de 5 warnings App Check em 1h = suspeito
+
+// ─── Grava alerta no Firestore e loga como erro (aciona Cloud Monitoring) ─
+async function raiseSecurityAlert(params: {
+  type: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  uid?: string;
+  details: Record<string, unknown>;
+}): Promise<void> {
+  const alert = {
+    ...params,
+    createdAt: FieldValue.serverTimestamp(),
+    resolved: false,
+  };
+  // Salva no Firestore para histórico e visualização no painel admin
+  await db.collection('security_alerts').add(alert).catch(() => {});
+
+  // Log estruturado — Cloud Monitoring captura console.error() das Functions
+  // e pode disparar alertas de e-mail automaticamente (ver configuração abaixo)
+  const logFn = params.severity === 'LOW' ? console.warn : console.error;
+  logFn(`[SECURITY][${params.severity}] ${params.type}`, JSON.stringify(params.details));
+}
+
+// ─── Monitor de volume de eventos por usuário ─────────────────────────────
+// Dispara quando um usuário cria muitos eventos em pouco tempo (possível bot/spam)
+export const monitorEventVolume = onDocumentCreated(
+  { document: 'events/{eventId}', region: 'us-central1' },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+    const userId = data.userId as string | undefined;
+    if (!userId || userId === 'anonymous') return;
+
+    const oneHourAgo = Timestamp.fromMillis(Date.now() - 60 * 60 * 1000);
+    const recentSnap = await db.collection('events')
+      .where('userId', '==', userId)
+      .where('createdAt', '>', oneHourAgo)
+      .count()
+      .get();
+
+    const count = recentSnap.data().count;
+    if (count > ALERT_EVENTS_PER_HOUR) {
+      await raiseSecurityAlert({
+        type: 'HIGH_EVENT_VOLUME',
+        severity: 'HIGH',
+        uid: userId,
+        details: { eventsInLastHour: count, threshold: ALERT_EVENTS_PER_HOUR, eventId: event.params.eventId },
+      });
+    }
+  },
+);
+
+// ─── Monitor de tentativas de pagamento ──────────────────────────────────
+// Detecta usuário com muitas tentativas de pagamento falhas (possível fraude)
+export const monitorPaymentAttempts = onDocumentCreated(
+  { document: 'pending_payments/{paymentId}', region: 'us-central1' },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+    const userId = data.userId as string | undefined;
+    if (!userId) return;
+
+    const oneDayAgo = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
+    const attemptsSnap = await db.collection('pending_payments')
+      .where('userId', '==', userId)
+      .where('createdAt', '>', oneDayAgo.toMillis())
+      .count()
+      .get();
+
+    const count = attemptsSnap.data().count;
+    if (count > ALERT_PAYMENTS_PER_DAY) {
+      await raiseSecurityAlert({
+        type: 'HIGH_PAYMENT_ATTEMPTS',
+        severity: 'CRITICAL',
+        uid: userId,
+        details: { attemptsIn24h: count, threshold: ALERT_PAYMENTS_PER_DAY, method: data.paymentMethod },
+      });
+    }
+  },
+);
+
+// ─── Relatório diário de segurança ────────────────────────────────────────
+// Executa toda manhã às 8h (horário de Brasília) e loga resumo de alertas
+// não resolvidos — o log é capturado pelo Cloud Monitoring e pode gerar e-mail.
+export const dailySecurityReport = onSchedule(
+  { schedule: '0 8 * * *', region: 'us-central1', timeZone: 'America/Sao_Paulo' },
+  async () => {
+    const yesterday = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Alertas não resolvidos nas últimas 24h
+    const alertsSnap = await db.collection('security_alerts')
+      .where('resolved', '==', false)
+      .where('createdAt', '>', yesterday)
+      .get();
+
+    const byType: Record<string, number> = {};
+    const bySeverity: Record<string, number> = {};
+    alertsSnap.docs.forEach((doc) => {
+      const d = doc.data();
+      byType[d.type] = (byType[d.type] ?? 0) + 1;
+      bySeverity[d.severity] = (bySeverity[d.severity] ?? 0) + 1;
+    });
+
+    const total = alertsSnap.size;
+    const hasCritical = (bySeverity['CRITICAL'] ?? 0) > 0;
+
+    // Log estruturado capturado pelo Cloud Monitoring
+    if (hasCritical || total > 0) {
+      console.error('[SECURITY][DAILY_REPORT] Alertas não resolvidos nas últimas 24h', JSON.stringify({
+        total,
+        byType,
+        bySeverity,
+        timestamp: new Date().toISOString(),
+      }));
+    } else {
+      console.log('[SECURITY][DAILY_REPORT] Nenhum alerta de segurança nas últimas 24h — OK');
+    }
+
+    // Verifica App Check warnings acumulados
+    const appCheckSnap = await db.collection('security_alerts')
+      .where('type', '==', 'HIGH_APPCHECK_WARNINGS')
+      .where('resolved', '==', false)
+      .count()
+      .get();
+
+    if (appCheckSnap.data().count >= ALERT_APPCHECK_WARNINGS) {
+      console.error('[SECURITY][APP_CHECK] Muitos warnings de App Check — considere ativar enforcement', {
+        count: appCheckSnap.data().count,
+      });
+    }
   },
 );

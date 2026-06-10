@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, Image, Modal, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, useColorScheme,
+  Alert, Image, Modal, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, useColorScheme, Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateProfile, deleteUser } from 'firebase/auth';
@@ -38,6 +38,11 @@ import { useEntertainmentStore } from '../store/entertainmentStore';
 import { useEventsStore } from '../store/eventsStore';
 import { useTick } from '../hooks/useTick';
 import { computeBadges } from '../services/badgesService';
+import {
+  enableBackgroundTrafficAlerts,
+  disableBackgroundTrafficAlerts,
+  getBackgroundTrafficAlertsPreference,
+} from '../services/backgroundLocationTask';
 
 export function ProfileScreen() {
   const { top } = useSafeAreaInsets();
@@ -57,6 +62,37 @@ export function ProfileScreen() {
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(false);
   const [donateVisible, setDonateVisible] = useState(false);
+
+  // ─── Alertas de trânsito em segundo plano (#43-b) ─────────────────────────────
+  const [bgTrafficEnabled, setBgTrafficEnabled] = useState(false);
+  const [bgTrafficLoading, setBgTrafficLoading] = useState(false);
+
+  useEffect(() => {
+    getBackgroundTrafficAlertsPreference().then(setBgTrafficEnabled).catch(() => {});
+  }, []);
+
+  const handleToggleBgTraffic = useCallback(async (value: boolean) => {
+    setBgTrafficLoading(true);
+    try {
+      if (value) {
+        const result = await enableBackgroundTrafficAlerts();
+        if (result === 'granted') {
+          setBgTrafficEnabled(true);
+        } else if (result === 'foreground_only') {
+          setBgTrafficEnabled(false);
+          Alert.alert(t('bg_traffic_setting_title'), t('bg_traffic_foreground_only'));
+        } else {
+          setBgTrafficEnabled(false);
+          Alert.alert(t('bg_traffic_setting_title'), t('bg_traffic_permission_denied'));
+        }
+      } else {
+        await disableBackgroundTrafficAlerts();
+        setBgTrafficEnabled(false);
+      }
+    } finally {
+      setBgTrafficLoading(false);
+    }
+  }, [t]);
 
   // ─── Promoção ────────────────────────────────────────────────────────────────
   // #8 — credits come from the real-time profile snapshot; no separate fetch needed
@@ -78,9 +114,13 @@ export function ProfileScreen() {
   const [historyEnt, setHistoryEnt] = useState<Array<{id:string;title:string;emoji:string;likes:number;createdAt:number}>>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const historyLoadedRef = React.useRef(false);
 
   useEffect(() => {
     if (!currentUser || currentUser.isAnonymous || !historyExpanded) return;
+    // Evita re-fetch ao fechar e reabrir a seção de histórico
+    if (historyLoadedRef.current) return;
+    historyLoadedRef.current = true;
     setHistoryLoading(true);
     const loadHistory = async () => {
       try {
@@ -122,7 +162,11 @@ export function ProfileScreen() {
             createdAt: (data.createdAt as FBTimestamp)?.toMillis?.() ?? 0,
           };
         }));
-      } catch {}
+      } catch {
+        // Mostra feedback ao usuário em vez de falhar silenciosamente
+        if (__DEV__) console.warn('[ProfileScreen] loadHistory failed');
+        Alert.alert(t('error') || 'Erro', 'Não foi possível carregar seu histórico. Tente novamente.');
+      }
       setHistoryLoading(false);
     };
     loadHistory();
@@ -162,21 +206,12 @@ export function ProfileScreen() {
   // were created before the promotionCredits field existed — use a ref so we
   // don't re-trigger the fetch on every snapshot where the field is still absent.
   const creditsFallbackDone = useRef(false);
-  const [creditsFetchFailed, setCreditsFetchFailed] = useState(false); // #4 — permite retry
-  // #9 — maxRetries prevents infinite retry loop if the server is consistently failing
-  const [creditsRetryCount, setCreditsRetryCount] = useState(0);
-  const MAX_CREDIT_RETRIES = 3;
   useEffect(() => {
     if (profile?.promotionCredits !== undefined) {
       setUserCredits(profile.promotionCredits);
-      setCreditsFetchFailed(false);
     } else if (!creditsFallbackDone.current) {
       creditsFallbackDone.current = true;
-      loadCredits().catch(() => {
-        // #4 — marca falha para exibir botão de retry na UI
-        setCreditsFetchFailed(true);
-        creditsFallbackDone.current = false; // permite nova tentativa
-      });
+      loadCredits().catch(() => {});
     }
   }, [profile?.promotionCredits, loadCredits]);
 
@@ -329,7 +364,16 @@ export function ProfileScreen() {
                   ]
                 );
               } else {
-                Alert.alert(t('error'), err?.message ?? t('delete_account_msg'));
+                // Mapeia erros técnicos do Firebase para mensagens amigáveis
+              const firebaseMsg = err?.code ?? err?.message ?? '';
+              const friendlyMsg = firebaseMsg.includes('requires-recent-login')
+                ? 'Faça login novamente para excluir sua conta.'
+                : firebaseMsg.includes('too-many-requests') || firebaseMsg.includes('TOO_MANY_REQUESTS')
+                  ? 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
+                  : firebaseMsg.includes('network')
+                    ? 'Sem conexão. Verifique sua internet e tente novamente.'
+                    : t('delete_account_msg') || 'Não foi possível excluir a conta.';
+              Alert.alert(t('error'), friendlyMsg);
               }
             }
           },
@@ -469,18 +513,25 @@ export function ProfileScreen() {
 
   const rank = getRank(profile.points);
 
-  // Defensive: valida data antes de formatar para evitar RangeError
-  const memberSince = (() => {
+  // computeBadges memoizado — recalcula só quando estatísticas relevantes mudam
+  const badges = useMemo(() => computeBadges({
+    eventsReported: profile.eventsReported ?? 0,
+    commentsPosted: profile.commentsPosted ?? 0,
+    points: profile.points ?? 0,
+    favoritesCount: favorites.length,
+  }), [profile.eventsReported, profile.commentsPosted, profile.points, favorites.length]);
+
+  // Memoizado — recalcula apenas quando createdAt muda
+  const memberSince = useMemo(() => {
     if (!profile.createdAt) return null;
     const d = new Date(profile.createdAt);
     if (isNaN(d.getTime())) return null;
     try { return format(d, "MMMM 'de' yyyy", { locale: ptBR }); }
     catch (e) {
-      // #23 — loga em dev para detectar corrupção de dados em produção
       if (__DEV__) console.warn('[ProfileScreen] date format error, createdAt =', profile.createdAt, e);
       return null;
     }
-  })();
+  }, [profile.createdAt]);
 
   return (
     <ScrollView
@@ -537,12 +588,6 @@ export function ProfileScreen() {
 
       {/* ── Conquistas / Badges ─────────────────────────────────────────────── */}
       {(() => {
-        const badges = computeBadges({
-          eventsReported: profile.eventsReported ?? 0,
-          commentsPosted: profile.commentsPosted ?? 0,
-          points: profile.points ?? 0,
-          favoritesCount: favorites.length,
-        });
         const unlocked = badges.filter((b) => b.unlocked);
         const locked = badges.filter((b) => !b.unlocked);
         return (
@@ -690,19 +735,6 @@ export function ProfileScreen() {
         {!isAdmin && (
           <TouchableOpacity style={styles.buyCreditsBtn} onPress={() => setBuyCreditsVisible(true)}>
             <Text style={styles.buyCreditsText}>+ {t('buy_credits')}</Text>
-          </TouchableOpacity>
-        )}
-        {/* #4/#9 — botão de retry quando a busca de créditos falha; limitado a MAX_CREDIT_RETRIES */}
-        {creditsFetchFailed && !isAdmin && creditsRetryCount < MAX_CREDIT_RETRIES && (
-          <TouchableOpacity
-            style={styles.creditsRetryBtn}
-            onPress={() => {
-              setCreditsRetryCount((n) => n + 1);
-              setCreditsFetchFailed(false);
-              loadCredits().catch(() => setCreditsFetchFailed(true));
-            }}
-          >
-            <Text style={styles.creditsRetryText}>↺ {t('retry') || 'Tentar novamente'}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -914,6 +946,25 @@ export function ProfileScreen() {
         </View>
         <Text style={styles.donateBtnArrow}>›</Text>
       </TouchableOpacity>
+
+      {/* Alertas de trânsito em segundo plano (#43-b) */}
+      <View style={[styles.bgTrafficCard, { backgroundColor: cardBg }]}>
+        <Text style={styles.bgTrafficEmoji}>🛰️</Text>
+        <View style={styles.bgTrafficTexts}>
+          <Text style={[styles.bgTrafficTitle, { color: textColor }]}>{t('bg_traffic_setting_title')}</Text>
+          <Text style={[styles.bgTrafficSub, { color: subColor }]}>{t('bg_traffic_setting_desc')}</Text>
+        </View>
+        {bgTrafficLoading ? (
+          <ActivityIndicator size="small" color="#FF5722" />
+        ) : (
+          <Switch
+            value={bgTrafficEnabled}
+            onValueChange={handleToggleBgTraffic}
+            trackColor={{ false: '#CBD5E1', true: '#FF8A65' }}
+            thumbColor={bgTrafficEnabled ? '#FF5722' : '#f4f3f4'}
+          />
+        )}
+      </View>
 
       {/* Idioma */}
       <LanguagePicker />
@@ -1142,6 +1193,16 @@ const styles = StyleSheet.create({
   donateBtnTitle: { fontSize: 15, fontWeight: '800', color: '#5D4037' },
   donateBtnSub: { fontSize: 12, color: '#8D6E63', marginTop: 2 },
   donateBtnArrow: { fontSize: 24, color: '#FFC107', fontWeight: '700' },
+
+  // ─── Alertas de trânsito em segundo plano (#43-b) ─────────────────────────────
+  bgTrafficCard: {
+    flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 16,
+    marginBottom: 12, borderWidth: 1.5, borderColor: '#E2E8F0',
+  },
+  bgTrafficEmoji: { fontSize: 26, marginRight: 12 },
+  bgTrafficTexts: { flex: 1, marginRight: 8 },
+  bgTrafficTitle: { fontSize: 14, fontWeight: '800' },
+  bgTrafficSub: { fontSize: 12, marginTop: 3, lineHeight: 16 },
 
 
   // ─── Modal editar nome ─────────────────────────────────────────────────────

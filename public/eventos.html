@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-TSS9J9VDTC"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-TSS9J9VDTC');
+  </script>
+
+  <!-- Google AdSense -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4349309505537394" crossorigin="anonymous"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Veja blitz de lei seca ao vivo perto de você. Alertoo mostra em tempo real blitz, fiscalizações e alertas reportados pela comunidade. Grátis." />
+  <meta name="keywords" content="lei seca, blitz lei seca, fiscalização lei seca, blitz hoje, lei seca ao vivo, festas perto de mim, baladas hoje, eventos hoje, o que fazer hoje, shows ao vivo, alertas de trânsito, drunkcheck" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://alertoo.com.br/eventos" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Blitz Lei Seca ao Vivo — Alertoo" />
+  <meta property="og:description" content="Veja em tempo real onde estão as blitz de lei seca. Alertas reportados pela comunidade. Grátis no Android e iOS." />
+  <meta property="og:image" content="https://alertoo.com.br/feature-graphic-1024x500.png" />
+  <meta property="og:url" content="https://alertoo.com.br/eventos" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Alertoo" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Blitz Lei Seca ao Vivo — Alertoo" />
+  <meta name="twitter:description" content="Alertas de lei seca em tempo real, reportados pela comunidade. Grátis." />
+  <meta name="twitter:image" content="https://alertoo.com.br/feature-graphic-1024x500.png" />
+
+  <!-- Structured Data: FAQ sobre lei seca -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Como saber onde está a lei seca hoje?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No Alertoo você vê em tempo real todas as blitz de lei seca reportadas pela comunidade. Acesse alertoo.com.br/eventos ou baixe o app grátis para Android e iOS."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "O que é lei seca?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A Lei Seca (Lei 11.705/2008) proíbe a ingestão de qualquer quantidade de álcool por motoristas no Brasil. As blitz de lei seca são fiscalizações realizadas pela polícia para verificar se motoristas estão dirigindo sob influência de álcool."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Como reportar uma blitz de lei seca?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Baixe o Alertoo gratuitamente na Play Store ou App Store, localize o ponto no mapa e toque em 'Reportar'. Seu alerta aparece em tempo real para todos os usuários da região."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "O Alertoo é gratuito?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Sim! O Alertoo é totalmente gratuito. Baixe agora e veja blitz, acidentes, alagamentos e muito mais em tempo real."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <!-- Structured Data: WebPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Blitz Lei Seca ao Vivo — Alertoo",
+    "description": "Veja em tempo real onde estão as blitz de lei seca. Alertas reportados pela comunidade.",
+    "url": "https://alertoo.com.br/eventos",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Alertoo",
+      "url": "https://alertoo.com.br",
+      "logo": "https://alertoo.com.br/icon.png"
+    }
+  }
+  </script>
+
+  <title>Blitz Lei Seca ao Vivo Agora — Alertoo</title>
+  <link rel="icon" href="/icon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --brand: #FF5722;
+      --dark: #0F172A;
+      --dark-2: #1E293B;
+      --dark-3: #0A0F1A;
+      --white: #FFFFFF;
+    }
+    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--dark-3); color: var(--white); overflow-x: hidden; }
+
+    /* ── NAV ────────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 5%;
+      background: rgba(10,15,26,0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo img { width: 32px; height: 32px; border-radius: 9px; }
+    .nav-logo span { font-size: 18px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
+    .nav-logo span em { color: var(--brand); font-style: normal; }
+    .nav-back {
+      text-decoration: none; color: rgba(255,255,255,0.55); font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+      transition: all .18s;
+    }
+    .nav-back:hover { color: #fff; border-color: rgba(255,255,255,0.25); }
+    .nav-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; color: var(--brand);
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--brand);
+      box-shadow: 0 0 0 3px rgba(255,87,34,0.25);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 3px rgba(255,87,34,0.25); }
+      50%      { box-shadow: 0 0 0 7px rgba(255,87,34,0.07); }
+    }
+
+    /* ── LAYOUT PRINCIPAL ───────────────────────────────────────────── */
+    .page { display: flex; flex-direction: column; height: 100vh; padding-top: 61px; }
+
+    /* Barra de filtros */
+    .filter-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 20px; overflow-x: auto; flex-shrink: 0;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .filter-label { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: .8px; white-space: nowrap; margin-right: 4px; }
+    .f-chip {
+      padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+      border: 1.5px solid rgba(255,255,255,0.1); background: transparent;
+      color: rgba(255,255,255,0.5); cursor: pointer; transition: all .15s; white-space: nowrap; flex-shrink: 0;
+    }
+    .f-chip:hover { border-color: var(--brand); color: rgba(255,255,255,0.85); }
+    .f-chip.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+    /* Body split */
+    .content { display: flex; flex: 1; overflow: hidden; }
+
+    /* Sidebar lista */
+    .sidebar {
+      width: 340px; flex-shrink: 0; display: flex; flex-direction: column;
+      border-right: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+    }
+    .sidebar-header {
+      padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .sidebar-title { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.6); }
+    .sidebar-actions { display: flex; gap: 8px; align-items: center; }
+    .btn-refresh {
+      background: none; border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.4); width: 30px; height: 30px;
+      border-radius: 8px; font-size: 15px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: all .2s;
+    }
+    .btn-refresh:hover { border-color: var(--brand); color: var(--brand); transform: rotate(60deg); }
+    .count-badge {
+      font-size: 11px; font-weight: 800; color: #fff; background: var(--brand);
+      padding: 2px 8px; border-radius: 999px;
+    }
+    .list-scroll {
+      flex: 1; overflow-y: auto; padding: 8px;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent;
+    }
+    .list-scroll::-webkit-scrollbar { width: 4px; }
+    .list-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+    /* Cards da lista */
+    .ev-item {
+      display: flex; align-items: center; gap: 11px;
+      padding: 11px 12px; border-radius: 12px; cursor: pointer;
+      transition: background .15s; margin-bottom: 4px;
+      border: 1px solid transparent;
+    }
+    .ev-item:hover { background: rgba(255,255,255,0.05); }
+    .ev-item.active { background: rgba(255,87,34,0.1); border-color: rgba(255,87,34,0.3); }
+    .ev-icon {
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .ev-body { flex: 1; min-width: 0; }
+    .ev-name {
+      font-size: 13px; font-weight: 700; color: #fff;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ev-sub {
+      font-size: 11px; color: rgba(255,255,255,0.38); margin-top: 3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ev-confirms {
+      font-size: 10px; font-weight: 800; padding: 3px 8px;
+      border-radius: 999px; flex-shrink: 0; color: #fff;
+    }
+    .ev-stats-row {
+      display: flex; align-items: center; gap: 10px; margin-top: 5px; flex-wrap: wrap;
+    }
+    .ev-stat-pill {
+      font-size: 10px; color: rgba(255,255,255,0.45); display: flex; align-items: center; gap: 3px; font-weight: 600;
+    }
+    .list-empty {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; gap: 12px;
+      color: rgba(255,255,255,0.25); font-size: 14px; text-align: center; padding: 40px;
+    }
+    .list-empty span { font-size: 42px; }
+
+    /* Mapa */
+    .map-col { flex: 1; position: relative; }
+    #evMap { width: 100%; height: 100%; }
+
+    /* Loading overlay */
+    .map-overlay {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      background: rgba(10,15,26,0.88); backdrop-filter: blur(8px);
+      color: rgba(255,255,255,0.45); font-size: 14px; z-index: 999;
+    }
+    .spinner {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 3px solid rgba(255,87,34,0.2); border-top-color: var(--brand);
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Modal de detalhe completo ───────────────────────────────── */
+    .ev-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+      align-items: flex-end; justify-content: center;
+    }
+    .ev-modal-overlay.open { display: flex; }
+    .ev-modal {
+      background: #1C1C1E; border-radius: 24px 24px 0 0;
+      width: 100%; max-width: 640px; max-height: 92vh;
+      display: flex; flex-direction: column;
+      animation: slideUp .28s cubic-bezier(.32,1,.6,1);
+    }
+    @keyframes slideUp { from { transform: translateY(100%); opacity:0; } to { transform: translateY(0); opacity:1; } }
+    .ev-modal-handle { width: 40px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.15); margin: 12px auto 0; flex-shrink: 0; }
+    .ev-modal-scroll { overflow-y: auto; flex: 1; padding: 0 20px 36px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
+    .ev-modal-photo { width: 100%; height: 200px; object-fit: cover; border-radius: 14px; margin-top: 16px; display: block; }
+    .ev-modal-photo-placeholder { width: 100%; height: 110px; border-radius: 14px; margin-top: 16px; display: flex; align-items: center; justify-content: center; font-size: 52px; }
+    .ev-modal-header { display: flex; align-items: flex-start; gap: 12px; margin-top: 16px; }
+    .ev-modal-icon { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+    .ev-modal-titles { flex: 1; min-width: 0; }
+    .ev-modal-cat { font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+    .ev-modal-title { font-size: 20px; font-weight: 900; color: #fff; line-height: 1.25; }
+    .ev-modal-location { font-size: 13px; color: rgba(255,255,255,0.4); margin-top: 5px; }
+    .ev-modal-close { width: 32px; height: 32px; border-radius: 50%; border: none; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6); font-size: 16px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .ev-modal-tag { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; color: #fff; margin-top: 10px; }
+    .ev-modal-stats { display: flex; gap: 8px; margin-top: 16px; }
+    .ev-stat { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 10px 8px; text-align: center; }
+    .ev-stat-val { font-size: 18px; font-weight: 900; color: #fff; }
+    .ev-stat-label { font-size: 10px; color: rgba(255,255,255,0.38); margin-top: 2px; }
+    .ev-modal-meta { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+    .ev-meta-chip { font-size: 12px; color: rgba(255,255,255,0.38); display: flex; align-items: center; gap: 4px; }
+    .ev-modal-desc { font-size: 14px; color: rgba(255,255,255,0.6); line-height: 1.65; margin-top: 14px; }
+    .ev-divider { height: 1px; background: rgba(255,255,255,0.07); margin: 18px 0; }
+    .ev-modal-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px,1fr)); gap: 8px; margin-top: 16px; }
+    .ev-action { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 11px 6px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); cursor: pointer; text-decoration: none; color: inherit; }
+    .ev-action:hover { background: rgba(255,255,255,0.1); }
+    .ev-action-icon { font-size: 20px; line-height: 1; }
+    .ev-action-label { font-size: 10px; color: rgba(255,255,255,0.45); font-weight: 600; text-align: center; }
+    .ev-nav-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; border-radius: 14px; border: none; background: #FF5722; color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; margin-top: 16px; text-decoration: none; }
+    .ev-nav-btn:hover { opacity: .87; }
+
+    /* Popup Leaflet */
+    .leaflet-popup-content-wrapper {
+      background: #1C1C1E !important; border-radius: 14px !important;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7) !important; border: none !important; padding: 0 !important;
+    }
+    .leaflet-popup-content { margin: 0 !important; }
+    .leaflet-popup-tip { background: #1C1C1E !important; }
+    .leaflet-popup-close-button { color: rgba(255,255,255,0.4) !important; font-size: 18px !important; top: 8px !important; right: 10px !important; }
+    .map-popup { display: flex; align-items: flex-start; gap: 12px; padding: 14px 40px 14px 14px; min-width: 220px; }
+    .map-popup-icon { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+    .map-popup-title { font-size: 14px; font-weight: 700; color: #fff; }
+    .map-popup-desc { font-size: 12px; color: #8E8E93; margin-top: 2px; }
+    .map-popup-meta { font-size: 11px; color: #555; margin-top: 5px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .map-popup-chip {
+      padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; color: #fff;
+    }
+
+    /* ── Anúncios AdSense ───────────────────────────────────────────── */
+    .ad-wrap {
+      background: rgba(255,255,255,0.025);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 10px 8px 8px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      flex-shrink: 0;
+    }
+    .ad-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 1.2px;
+      text-transform: uppercase; color: rgba(255,255,255,0.2);
+      width: 100%; text-align: center;
+    }
+    /* Anúncio embutido na lista (entre eventos) */
+    .list-ad-item {
+      background: rgba(255,255,255,0.018);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 8px;
+      margin-bottom: 4px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      min-height: 120px;
+    }
+    /* Anúncio no modal de detalhe */
+    .modal-ad-wrap {
+      background: rgba(255,255,255,0.025);
+      border-top: 1px solid rgba(255,255,255,0.07);
+      border-radius: 10px;
+      padding: 10px 8px 8px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      margin-top: 20px;
+    }
+
+    /* Responsivo mobile */
+    @media (max-width: 700px) {
+      .sidebar { display: none; }
+      .ev-modal { max-height: 96vh; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="/">
+      <img src="/icon.png" alt="Alertoo" />
+      <span>Alert<em>oo</em></span>
+    </a>
+    <div class="nav-badge">
+      <div class="live-dot"></div>
+      <span id="navCount">Carregando...</span>
+    </div>
+    <a class="nav-back" href="/" data-i18n="nav.back">← Voltar ao site</a>
+  </nav>
+
+  <div class="page">
+
+    <!-- Filtros -->
+    <div class="filter-bar">
+      <span class="filter-label" data-i18n="events.filter">Filtrar:</span>
+      <button class="f-chip active" data-type="all" data-i18n="events.all">Todos</button>
+      <button class="f-chip" data-type="traffic" data-i18n="events.traffic">🚦 Trânsito</button>
+      <button class="f-chip" data-type="accident" data-i18n="events.accident">🚗 Acidente</button>
+      <button class="f-chip" data-type="drunkcheck" data-i18n="events.dui">🍺 Lei Seca</button>
+      <button class="f-chip" data-type="policeblitz" data-i18n="events.police">👮 Blitz</button>
+      <button class="f-chip" data-type="flood" data-i18n="events.flood">🌊 Alagamento</button>
+      <button class="f-chip" data-type="roadwork" data-i18n="events.roadwork">🚧 Obras</button>
+      <button class="f-chip" data-type="hazard" data-i18n="events.hazard">⚠️ Perigo</button>
+      <button class="f-chip" data-type="closure" data-i18n="events.closure">🚫 Interdição</button>
+      <button class="f-chip" data-type="entertainment" data-i18n="events.entertainment">🎉 Entretenimento</button>
+    </div>
+
+    <div class="content">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title" id="sidebarTitle">0 eventos</span>
+          <div class="sidebar-actions">
+            <span class="count-badge" id="sidebarBadge">0</span>
+            <button class="btn-refresh" id="btnRefresh" title="Atualizar">↺</button>
+          </div>
+        </div>
+        <div class="list-scroll" id="eventList"></div>
+
+        <!-- Anúncio fixo rodapé sidebar (desktop) -->
+        <!-- 📌 Substitua SLOT_SIDEBAR pelo ID do seu ad unit em adsense.google.com -->
+        <div class="ad-wrap" id="sidebarAdWrap">
+          <span class="ad-label">Publicidade</span>
+          <ins class="adsbygoogle"
+               style="display:block;width:300px;height:250px"
+               data-ad-client="ca-pub-4349309505537394"
+               data-ad-slot="SLOT_SIDEBAR"
+               data-ad-format="rectangle"></ins>
+        </div>
+      </div>
+
+      <!-- Mapa -->
+      <div class="map-col">
+        <div id="evMap"></div>
+        <div class="map-overlay" id="mapOverlay">
+          <div class="spinner"></div>
+          <span>Carregando eventos...</span>
+        </div>
+
+        <!-- Modal de detalhe completo -->
+        <div class="ev-modal-overlay" id="evModalOverlay">
+          <div class="ev-modal" id="evModal">
+            <div class="ev-modal-handle"></div>
+            <div class="ev-modal-scroll" id="evModalBody"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getFirestore, collection, query, where, onSnapshot, Timestamp }
+      from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+    const app = initializeApp({
+      apiKey:            'AIzaSyCoI9rNBK07vGZBuygprq4PkDKGT0iZkYU',
+      authDomain:        'lei-seca---eventos.firebaseapp.com',
+      projectId:         'lei-seca---eventos',
+      storageBucket:     'lei-seca---eventos.firebasestorage.app',
+      messagingSenderId: '657066902706',
+      appId:             '1:657066902706:web:3e3d49f23a819c5ce1b5ab',
+    });
+    const db = getFirestore(app);
+
+    const CATS = {
+      // Trânsito
+      traffic:     { label: 'Congestionamento', emoji: '🐢', color: '#F4511E', type: 'traffic' },
+      hazard:      { label: 'Perigo na via',    emoji: '⚠️', color: '#FFB300', type: 'traffic' },
+      accident:    { label: 'Acidente',         emoji: '🚗', color: '#E53935', type: 'traffic' },
+      policeblitz: { label: 'Blitz Policial',   emoji: '👮', color: '#3949AB', type: 'traffic' },
+      drunkcheck:  { label: 'Lei Seca',         emoji: '🍺', color: '#00897B', type: 'traffic' },
+      flood:       { label: 'Alagamento',       emoji: '🌊', color: '#1E88E5', type: 'traffic' },
+      closure:     { label: 'Interdição',       emoji: '🚫', color: '#8E24AA', type: 'traffic' },
+      roadwork:    { label: 'Obras',            emoji: '🚧', color: '#FB8C00', type: 'traffic' },
+      // Entretenimento
+      show:        { label: 'Show',             emoji: '🎤', color: '#E91E63', type: 'entertainment' },
+      festival:    { label: 'Festival',         emoji: '🎪', color: '#9C27B0', type: 'entertainment' },
+      sports:      { label: 'Esporte',          emoji: '⚽', color: '#2196F3', type: 'entertainment' },
+      fair:        { label: 'Feira',            emoji: '🛍️', color: '#FF9800', type: 'entertainment' },
+      food:        { label: 'Gastronomia',      emoji: '🍔', color: '#F44336', type: 'entertainment' },
+      art:         { label: 'Arte/Cultura',     emoji: '🎨', color: '#00BCD4', type: 'entertainment' },
+      party:       { label: 'Festa',            emoji: '🎉', color: '#FF4081', type: 'entertainment' },
+      other:       { label: 'Outro',            emoji: '📍', color: '#607D8B', type: 'entertainment' },
+    };
+
+    let allEvents = [], activeFilter = 'all', map = null, markers = [], activeIdx = -1;
+
+    // ── AdSense helpers ───────────────────────────────────────────────
+    // IDs dos ad units — crie em adsense.google.com → Anúncios → Por unidade de anúncio
+    // e substitua os valores abaixo pelos IDs gerados.
+    const AD_SLOTS = {
+      sidebar:  'SLOT_SIDEBAR',  // 📌 ex: '1234567890'  (300×250 — sidebar)
+      list:     'SLOT_LIST',     // 📌 ex: '0987654321'  (responsivo — entre eventos)
+      modal:    'SLOT_MODAL',    // 📌 ex: '1122334455'  (responsivo — modal)
+    };
+
+    function pushAd(container, slot, format = 'auto') {
+      if (!container || slot.startsWith('SLOT_')) return; // ainda não configurado
+      const ins = document.createElement('ins');
+      ins.className = 'adsbygoogle';
+      ins.style.display = 'block';
+      ins.setAttribute('data-ad-client', 'ca-pub-4349309505537394');
+      ins.setAttribute('data-ad-slot', slot);
+      ins.setAttribute('data-ad-format', format);
+      ins.setAttribute('data-full-width-responsive', 'true');
+      container.appendChild(ins);
+      try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (_) {}
+    }
+
+    function getMeta(ev) {
+      return CATS[ev.category] ?? { label: ev.category, emoji: '📍', color: '#607D8B', type: ev._type };
+    }
+
+    function timeAgo(ms) {
+      const d = Date.now() - ms, m = Math.floor(d / 60000);
+      if (m < 1) return 'agora';
+      if (m < 60) return `há ${m} min`;
+      const h = Math.floor(m / 60);
+      return h < 24 ? `há ${h}h` : `há ${Math.floor(h/24)}d`;
+    }
+
+    function makeLeiSecaIcon() {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="88" viewBox="0 0 96 88">
+        <!-- anel externo -->
+        <rect x="1" y="1" width="94" height="74" rx="20" fill="none" stroke="#00C853" stroke-width="2" opacity="0.35"/>
+        <!-- anel interno -->
+        <rect x="7" y="7" width="82" height="62" rx="16" fill="none" stroke="#00C853" stroke-width="2" opacity="0.6"/>
+        <!-- corpo -->
+        <rect x="14" y="14" width="68" height="50" rx="13" fill="#00C853" stroke="#fff" stroke-width="2.5"/>
+        <!-- emoji -->
+        <text x="48" y="36" text-anchor="middle" font-size="20" dominant-baseline="middle">🍺</text>
+        <!-- label -->
+        <text x="48" y="55" text-anchor="middle" font-size="10" font-weight="900" fill="#fff" letter-spacing="1.5">LEI SECA</text>
+        <!-- cauda -->
+        <polygon points="48,86 38,74 58,74" fill="#00C853" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>`;
+      return L.divIcon({ html: svg, className: '', iconSize: [96, 88], iconAnchor: [48, 88], popupAnchor: [0, -90] });
+    }
+
+    function makeIcon(emoji, color, urgent) {
+      const pulse = urgent
+        ? `<circle cx="24" cy="24" r="22" fill="none" stroke="${color}" stroke-width="2.5" opacity="0.35"/>`
+        : '';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="62" viewBox="0 0 52 62">
+        ${pulse}
+        <rect x="6" y="6" width="40" height="40" rx="13" fill="${color}" stroke="#fff" stroke-width="2.5"/>
+        <text x="26" y="31" text-anchor="middle" font-size="22" dominant-baseline="middle">${emoji}</text>
+        <polygon points="26,60 18,46 34,46" fill="${color}"/>
+        <polygon points="26,58 18,46 34,46" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>`;
+      return L.divIcon({ html: svg, className: '', iconSize: [52, 62], iconAnchor: [26, 62], popupAnchor: [0, -64] });
+    }
+
+    function filtered() {
+      if (activeFilter === 'all') return allEvents;
+      if (activeFilter === 'traffic') return allEvents.filter(e => e._type === 'traffic');
+      if (activeFilter === 'entertainment') return allEvents.filter(e => e._type === 'entertainment');
+      return allEvents.filter(e => e.category === activeFilter);
+    }
+
+    function renderAll() {
+      const evs = filtered();
+      updateCounts(evs.length);
+      renderMarkers(evs);
+      renderList(evs);
+    }
+
+    function updateCounts(n) {
+      document.getElementById('navCount').textContent = `${allEvents.length} eventos ao vivo`;
+      document.getElementById('sidebarTitle').textContent = `${n} evento${n !== 1 ? 's' : ''}`;
+      document.getElementById('sidebarBadge').textContent = n;
+    }
+
+    function renderMarkers(evs) {
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
+      activeIdx = -1;
+
+      evs.forEach((ev, i) => {
+        const meta = getMeta(ev);
+        const urgent = (ev.confirmations ?? 0) >= 3;
+        const city = [ev.cityName, ev.stateUF].filter(Boolean).join(', ');
+        const confirms = ev.confirmations > 0
+          ? `<span class="map-popup-chip" style="background:${urgent ? '#E53935' : '#43A047'}">${ev.confirmations} ✓</span>` : '';
+        const popup = `<div class="map-popup">
+          <div class="map-popup-icon" style="background:${meta.color}22">${meta.emoji}</div>
+          <div>
+            <div class="map-popup-title">${meta.label}</div>
+            ${ev.title ? `<div class="map-popup-desc">${ev.title}</div>` : ''}
+            <div class="map-popup-meta">
+              ${confirms}
+              ${city ? `<span>${city}</span>` : ''}
+              <span>${timeAgo(ev.createdAt)}</span>
+            </div>
+          </div>
+        </div>`;
+        const icon = ev.category === 'drunkcheck'
+          ? makeLeiSecaIcon()
+          : makeIcon(meta.emoji, meta.color, urgent);
+        const m = L.marker([ev.latitude, ev.longitude], { icon }).addTo(map);
+        m.on('click', () => { selectItem(i); openModal(ev); });
+        markers.push(m);
+      });
+
+      if (markers.length > 0) {
+        map.fitBounds(L.featureGroup(markers).getBounds().pad(0.2), { maxZoom: 13 });
+      }
+    }
+
+    function renderList(evs) {
+      const el = document.getElementById('eventList');
+      if (evs.length === 0) {
+        el.innerHTML = `<div class="list-empty"><span>📍</span><p>Nenhum evento ativo nessa categoria.</p></div>`;
+        return;
+      }
+
+      // Monta HTML dos cards + marcadores de posição para anúncios
+      const AD_EVERY = 5; // injeta 1 anúncio a cada N eventos
+      const parts = [];
+      evs.forEach((ev, i) => {
+        const meta = getMeta(ev);
+        const city = [ev.cityName, ev.stateUF].filter(Boolean).join(', ');
+        const confirms = ev.confirmations ?? 0;
+        const denials  = ev.denials ?? 0;
+        const urgent   = confirms >= 3;
+
+        let statsHtml = '';
+        if (ev._type === 'entertainment') {
+          const likes     = ev.likes ?? ev.likesCount ?? 0;
+          const attendees = ev.attendeeCount ?? ev.rsvpCount ?? 0;
+          const views     = ev.viewCount ?? ev.views ?? 0;
+          const comments  = ev.commentCount ?? ev.comments ?? 0;
+          const rating    = ev.avgRating ?? ev.averageRating ?? 0;
+          const pills = [];
+          if (likes > 0)     pills.push(`<span class="ev-stat-pill">❤️ ${likes}</span>`);
+          if (attendees > 0) pills.push(`<span class="ev-stat-pill">🎟️ ${attendees} vão</span>`);
+          if (views > 0)     pills.push(`<span class="ev-stat-pill">👁️ ${views}</span>`);
+          if (comments > 0)  pills.push(`<span class="ev-stat-pill">💬 ${comments}</span>`);
+          if (rating > 0)    pills.push(`<span class="ev-stat-pill">⭐ ${rating.toFixed(1)}</span>`);
+          if (pills.length)  statsHtml = `<div class="ev-stats-row">${pills.join('')}</div>`;
+        } else {
+          const pills = [];
+          if (confirms > 0) pills.push(`<span class="ev-stat-pill" style="color:${urgent?'#EF9A9A':'#A5D6A7'}">✓ ${confirms}</span>`);
+          if (denials > 0)  pills.push(`<span class="ev-stat-pill">✗ ${denials}</span>`);
+          if (pills.length) statsHtml = `<div class="ev-stats-row">${pills.join('')}</div>`;
+        }
+
+        parts.push(`<div class="ev-item" data-i="${i}" onclick="window.__evSel(${i})">
+          <div class="ev-icon" style="background:${meta.color}25">${meta.emoji}</div>
+          <div class="ev-body">
+            <div class="ev-name">${meta.label}${ev.title ? ' — ' + ev.title : ''}</div>
+            <div class="ev-sub">${[city, timeAgo(ev.createdAt)].filter(Boolean).join(' · ')}</div>
+            ${statsHtml}
+          </div>
+        </div>`);
+
+        // Placeholder de anúncio a cada AD_EVERY eventos (exceto após o último)
+        if ((i + 1) % AD_EVERY === 0 && i < evs.length - 1) {
+          parts.push(`<div class="list-ad-item" data-ad-list="true">
+            <span class="ad-label">Publicidade</span>
+          </div>`);
+        }
+      });
+
+      el.innerHTML = parts.join('');
+
+      // Inicializa os ad units da lista via DOM (não via innerHTML — scripts não executam)
+      el.querySelectorAll('[data-ad-list]').forEach(wrap => {
+        pushAd(wrap, AD_SLOTS.list, 'auto');
+      });
+    }
+
+    function fmtDate(ms) {
+      if (!ms) return null;
+      return new Date(ms).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+
+    function timeLeft(ms) {
+      const diff = ms - Date.now();
+      if (diff <= 0) return 'expirado';
+      const m = Math.floor(diff / 60000);
+      if (m < 60) return `expira em ${m} min`;
+      const h = Math.floor(m / 60);
+      return `expira em ${h}h${m % 60 > 0 ? (m%60)+'min' : ''}`;
+    }
+
+    function tierLabel(tier) {
+      if (!tier) return null;
+      const map = { bronze: { text: '🥉 Bronze', color: '#CD7F32' }, silver: { text: '🥈 Prata', color: '#9E9E9E' }, gold: { text: '🥇 Ouro', color: '#FFD700' } };
+      return map[tier] ?? null;
+    }
+
+    function mapsLinks(ev) {
+      const q = encodeURIComponent([ev.cityName, ev.stateUF].filter(Boolean).join(', ') || (ev.latitude + ',' + ev.longitude));
+      const coord = `${ev.latitude},${ev.longitude}`;
+      return {
+        maps: `https://www.google.com/maps/search/?api=1&query=${coord}`,
+        waze: `https://waze.com/ul?ll=${coord}&navigate=yes`,
+      };
+    }
+
+    function openModal(ev) {
+      const meta = getMeta(ev);
+      const city = [ev.cityName, ev.stateUF].filter(Boolean).join(', ');
+      const urgent = (ev.confirmations ?? 0) >= 3;
+      const links = mapsLinks(ev);
+      let html = '';
+
+      if (ev._type === 'entertainment') {
+        // ── Foto ──────────────────────────────────────────────────────────
+        const photo = ev.promotionPhotoUrls?.[0] ?? ev.promotionPhotoUrl ?? ev.photoUrl ?? null;
+        const tier = tierLabel(ev.tier ?? ev.promotionTier ?? null);
+        if (photo) {
+          html += `<img class="ev-modal-photo" src="${photo}" alt="" loading="lazy"/>`;
+        } else {
+          html += `<div class="ev-modal-photo-placeholder" style="background:${meta.color}22">${meta.emoji}</div>`;
+        }
+        // ── Header ────────────────────────────────────────────────────────
+        html += `<div class="ev-modal-header">
+          <div class="ev-modal-icon" style="background:${meta.color}25">${meta.emoji}</div>
+          <div class="ev-modal-titles">
+            <div class="ev-modal-cat" style="color:${meta.color}">${meta.label}</div>
+            <div class="ev-modal-title">${ev.title ?? meta.label}</div>
+            ${city ? `<div class="ev-modal-location">📍 ${city}</div>` : ''}
+            ${tier ? `<span class="ev-modal-tag" style="background:${tier.color}30;color:${tier.color}">${tier.text}</span>` : ''}
+          </div>
+          <button class="ev-modal-close" onclick="closeModal()">✕</button>
+        </div>`;
+        // ── Meta ──────────────────────────────────────────────────────────
+        html += `<div class="ev-modal-meta">
+          <span class="ev-meta-chip">🕐 ${timeAgo(ev.createdAt)}</span>
+          ${ev.expiresAt ? `<span class="ev-meta-chip">⏳ ${timeLeft(ev.expiresAt?.toMillis?.() ?? ev.expiresAt)}</span>` : ''}
+        </div>`;
+        // ── Stats ─────────────────────────────────────────────────────────
+        const likes = ev.likes ?? ev.likesCount ?? 0;
+        const comments = ev.commentCount ?? ev.comments ?? 0;
+        const attendees = ev.attendeeCount ?? ev.rsvpCount ?? 0;
+        const rating = ev.avgRating ?? ev.averageRating ?? 0;
+        const rCount = ev.ratingCount ?? 0;
+        html += `<div class="ev-modal-stats">
+          <div class="ev-stat"><div class="ev-stat-val">❤️ ${likes}</div><div class="ev-stat-label">Curtidas</div></div>
+          <div class="ev-stat"><div class="ev-stat-val">💬 ${comments}</div><div class="ev-stat-label">Comentários</div></div>
+          <div class="ev-stat"><div class="ev-stat-val">🎟️ ${attendees}</div><div class="ev-stat-label">Vou lá</div></div>
+          ${rating > 0 ? `<div class="ev-stat"><div class="ev-stat-val">⭐ ${rating.toFixed(1)}</div><div class="ev-stat-label">${rCount} aval.</div></div>` : ''}
+        </div>`;
+        // ── Descrição ──────────────────────────────────────────────────────
+        if (ev.description) html += `<p class="ev-modal-desc">${ev.description}</p>`;
+        // ── Data do evento ────────────────────────────────────────────────
+        const evDate = ev.eventDate?.toMillis?.() ?? ev.eventDate ?? null;
+        if (evDate) html += `<div class="ev-meta-chip" style="margin-top:10px">📅 ${fmtDate(evDate)}</div>`;
+        // ── Ações ─────────────────────────────────────────────────────────
+        html += `<div class="ev-divider"></div>`;
+        html += `<div class="ev-modal-actions">
+          <a class="ev-action" href="${links.maps}" target="_blank" rel="noopener">
+            <span class="ev-action-icon">🗺️</span><span class="ev-action-label">Google Maps</span>
+          </a>
+          <a class="ev-action" href="${links.waze}" target="_blank" rel="noopener">
+            <span class="ev-action-icon">🚗</span><span class="ev-action-label">Waze</span>
+          </a>`;
+        if (ev.externalLink || ev.ticketLink) {
+          html += `<a class="ev-action" href="${ev.externalLink ?? ev.ticketLink}" target="_blank" rel="noopener">
+            <span class="ev-action-icon">🔗</span><span class="ev-action-label">Site / Ingressos</span>
+          </a>`;
+        }
+        if (evDate) {
+          const calTitle = encodeURIComponent(ev.title ?? meta.label);
+          const calDate = new Date(evDate).toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+          html += `<a class="ev-action" href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${calTitle}&dates=${calDate}/${calDate}" target="_blank" rel="noopener">
+            <span class="ev-action-icon">📅</span><span class="ev-action-label">Agenda</span>
+          </a>`;
+        }
+        html += `</div>`;
+
+      } else {
+        // ── Trânsito ──────────────────────────────────────────────────────
+        html += `<div class="ev-modal-photo-placeholder" style="background:${meta.color}22">${meta.emoji}</div>`;
+        html += `<div class="ev-modal-header">
+          <div class="ev-modal-icon" style="background:${meta.color}25">${meta.emoji}</div>
+          <div class="ev-modal-titles">
+            <div class="ev-modal-cat" style="color:${meta.color}">${meta.label}</div>
+            <div class="ev-modal-title">${ev.title ?? meta.label}</div>
+            ${city ? `<div class="ev-modal-location">📍 ${city}</div>` : ''}
+          </div>
+          <button class="ev-modal-close" onclick="closeModal()">✕</button>
+        </div>`;
+        // ── Meta ──────────────────────────────────────────────────────────
+        const expMs = ev.expiresAt?.toMillis?.() ?? ev.expiresAt ?? null;
+        html += `<div class="ev-modal-meta">
+          <span class="ev-meta-chip">🕐 ${timeAgo(ev.createdAt)}</span>
+          ${expMs ? `<span class="ev-meta-chip">⏳ ${timeLeft(expMs)}</span>` : ''}
+          ${ev.createdAt ? `<span class="ev-meta-chip">📅 ${fmtDate(ev.createdAt)}</span>` : ''}
+        </div>`;
+        // ── Confirmações / Negações ────────────────────────────────────────
+        const confirms = ev.confirmations ?? 0;
+        const denials = ev.denials ?? 0;
+        html += `<div class="ev-modal-stats">
+          <div class="ev-stat"><div class="ev-stat-val" style="color:${urgent ? '#EF5350' : '#66BB6A'}">✓ ${confirms}</div><div class="ev-stat-label">Confirmações</div></div>
+          <div class="ev-stat"><div class="ev-stat-val">✗ ${denials}</div><div class="ev-stat-label">Negações</div></div>
+          <div class="ev-stat"><div class="ev-stat-val">${confirms - denials}</div><div class="ev-stat-label">Saldo</div></div>
+        </div>`;
+        // ── Descrição ──────────────────────────────────────────────────────
+        if (ev.description) html += `<p class="ev-modal-desc">${ev.description}</p>`;
+        // ── Ações ─────────────────────────────────────────────────────────
+        html += `<div class="ev-divider"></div>`;
+        html += `<div class="ev-modal-actions">
+          <a class="ev-action" href="${links.maps}" target="_blank" rel="noopener">
+            <span class="ev-action-icon">🗺️</span><span class="ev-action-label">Google Maps</span>
+          </a>
+          <a class="ev-action" href="${links.waze}" target="_blank" rel="noopener">
+            <span class="ev-action-icon">🚗</span><span class="ev-action-label">Waze</span>
+          </a>
+          <a class="ev-action" href="https://waze.com/ul?ll=${ev.latitude},${ev.longitude}&navigate=yes" target="_blank" rel="noopener">
+            <span class="ev-action-icon">🧭</span><span class="ev-action-label">Navegar</span>
+          </a>
+        </div>`;
+      }
+
+      // Rodapé com anúncio responsivo
+      html += `<div class="modal-ad-wrap" id="modalAdSlot">
+        <span class="ad-label">Publicidade</span>
+      </div>`;
+
+      const body = document.getElementById('evModalBody');
+      body.innerHTML = html;
+      document.getElementById('evModalOverlay').classList.add('open');
+
+      // Inicializa o ad unit do modal
+      pushAd(document.getElementById('modalAdSlot'), AD_SLOTS.modal, 'auto');
+    }
+
+    function closeModal() {
+      document.getElementById('evModalOverlay').classList.remove('open');
+    }
+
+    // Fechar clicando fora do modal
+    document.getElementById('evModalOverlay').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    window.closeModal = closeModal;
+
+    function selectItem(i) {
+      activeIdx = i;
+      document.querySelectorAll('.ev-item').forEach((el, idx) => {
+        el.classList.toggle('active', idx === i);
+      });
+      const card = document.querySelectorAll('.ev-item')[i];
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      const evs = filtered();
+      const ev = evs[i];
+      if (ev && markers[i]) {
+        map.setView([ev.latitude, ev.longitude], 14, { animate: true });
+      }
+      if (ev) openModal(ev);
+    }
+
+    window.__evSel = selectItem;
+
+    let trafficEvents = [], entertainmentEvents = [];
+
+    function mergeAndRender() {
+      allEvents = [...trafficEvents, ...entertainmentEvents]
+        .sort((a, b) => b.createdAt - a.createdAt);
+      document.getElementById('mapOverlay').style.display = 'none';
+      renderAll();
+    }
+
+    function loadEvents() {
+      document.getElementById('mapOverlay').style.display = 'flex';
+      const now = Timestamp.now();
+      const toEv = (d, type) => ({
+        ...d.data(), id: d.id, _type: type,
+        createdAt: d.data().createdAt?.toMillis?.() ?? Date.now(),
+        confirmations: d.data().confirmations ?? 0,
+      });
+
+      // Listeners em tempo real: novos eventos, likes/views/comentários e
+      // expirações refletem na hora, sem precisar recarregar a página.
+      onSnapshot(query(collection(db, 'events'), where('expiresAt', '>', now)), snap => {
+        trafficEvents = snap.docs.map(d => toEv(d, 'traffic'));
+        mergeAndRender();
+      }, e => console.error('Firestore (events):', e));
+
+      onSnapshot(query(collection(db, 'entertainment_events'), where('expiresAt', '>', now)), snap => {
+        entertainmentEvents = snap.docs.map(d => toEv(d, 'entertainment'));
+        mergeAndRender();
+      }, e => console.error('Firestore (entertainment_events):', e));
+    }
+
+    let userMarker = null;
+
+    function initMap() {
+      map = L.map('evMap', { zoomControl: true, attributionControl: false }).setView([-15.77, -47.92], 4);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd', maxZoom: 19,
+      }).addTo(map);
+    }
+
+    function locateUser() {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        // Centraliza o mapa na região do usuário
+        map.setView([lat, lng], 13, { animate: true });
+        // Ícone de posição do usuário
+        const userIcon = L.divIcon({
+          html: `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+            <circle cx="11" cy="11" r="9" fill="#2196F3" stroke="#fff" stroke-width="2.5"/>
+            <circle cx="11" cy="11" r="3.5" fill="#fff"/>
+          </svg>`,
+          className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+        });
+        if (userMarker) map.removeLayer(userMarker);
+        userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 })
+          .bindPopup('<div style="color:#fff;background:#1C1C1E;padding:8px 12px;border-radius:10px;font-size:13px;font-weight:600">📍 Você está aqui</div>', { className: '' })
+          .addTo(map);
+      }, () => {/* permissão negada — silencioso */}, { timeout: 6000 });
+    }
+
+    // Filtros
+    document.querySelectorAll('.f-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.f-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeFilter = btn.dataset.type;
+        renderAll();
+      });
+    });
+
+    // Refresh — dados já chegam em tempo real via onSnapshot; o botão apenas
+    // re-renderiza a partir do estado mais recente (evita listeners duplicados).
+    document.getElementById('btnRefresh').addEventListener('click', mergeAndRender);
+
+    initMap();
+    locateUser();
+    loadEvents();
+
+    // Inicializa o ad fixo do rodapé da sidebar
+    // (o <ins> já está no HTML estático; apenas dá o push)
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (_) {}
+  </script>
+  <script src="/i18n.js"></script>
+  <script src="/i18n-extra.js"></script>
+</body>
+</html>

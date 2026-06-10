@@ -4,6 +4,7 @@ import {
   collection,
   addDoc,
   doc,
+  deleteDoc,
   increment,
   onSnapshot,
   query,
@@ -22,7 +23,7 @@ import { trackEventCreated } from '../services/reviewService';
 import { RoadEvent, EventCategory, EVENT_CATEGORIES } from '../types';
 import { POINTS } from '../types/user';
 import { notifyIfNearby, sendLocalNotification } from '../services/notificationService';
-import { loadSavedRoutes, isPointNearRoute } from '../components/SavedRouteModal';
+import { loadSavedRoutes, isPointNearRoute } from '../services/savedRoutesService';
 import { useAppStore } from './appStore';
 
 const EVENTS_COLLECTION = 'events';
@@ -59,9 +60,11 @@ interface EventsState {
     stateUF?: string;
     cityName?: string;
     countryCode?: string;
+    speedLimit?: number;
   }) => Promise<void>;
   confirmEvent: (id: string) => Promise<void>;
   denyEvent: (id: string) => Promise<void>;
+  deleteEvent: (id: string) => Promise<void>;
 }
 
 export const useEventsStore = create<EventsState>((set, get) => ({
@@ -165,6 +168,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
         stateUF: data.stateUF ?? undefined,
         cityName: data.cityName ?? undefined,
         countryCode: data.countryCode ?? undefined,
+        speedLimit: data.speedLimit ?? undefined,
       };
     }
 
@@ -228,6 +232,9 @@ export const useEventsStore = create<EventsState>((set, get) => ({
         }
       }
 
+      // Sincroniza _knownEventIds com o snapshot atual (remove IDs de eventos expirados)
+      // Evita crescimento indefinido do Set em sessões longas
+      _knownEventIds.clear();
       events.forEach((e) => _knownEventIds.add(e.id));
       isFirstLoad = false;
       set({ events, loading: false, isFromCache: fromCache });
@@ -274,7 +281,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
   },
 
   // ─── Criar evento (com rate limiting) ────────────────────────────────────
-  addEvent: async ({ category, title, description, latitude, longitude, stateUF, cityName, countryCode }) => {
+  addEvent: async ({ category, title, description, latitude, longitude, stateUF, cityName, countryCode, speedLimit }) => {
     const uid = getCurrentUserId();
 
     // #3 — block anonymous users (entertainment store already does this; now road does too)
@@ -308,6 +315,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
       stateUF: stateUF ?? null,
       cityName: cityName ?? null,
       countryCode: countryCode ?? null,
+      speedLimit: speedLimit ?? null,
     });
 
     set({ _lastEventAt: now });
@@ -362,5 +370,13 @@ export const useEventsStore = create<EventsState>((set, get) => ({
     if (!alreadyVoted && ownerId && ownerId !== 'anonymous' && ownerId !== uid) {
       awardPoints(ownerId, POINTS.DENIAL_RECEIVED).catch(() => {});
     }
+  },
+
+  // ─── Excluir evento (somente admin) ─────────────────────────────────────
+  deleteEvent: async (id) => {
+    await deleteDoc(doc(db, EVENTS_COLLECTION, id));
+    // Remove do estado local imediatamente (otimista)
+    set((s) => ({ events: s.events.filter((e) => e.id !== id) }));
+    _knownEventIds.delete(id);
   },
 }));

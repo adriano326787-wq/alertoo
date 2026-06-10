@@ -148,6 +148,8 @@ const styles = StyleSheet.create({
   sheet: {
     backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 20, paddingTop: 12, maxHeight: '90%',
+    // Em tablets/telas largas, evita que o sheet fique esticado de ponta a ponta
+    width: '100%', maxWidth: 480, alignSelf: 'center',
   },
   handle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

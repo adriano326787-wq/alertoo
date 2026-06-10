@@ -17,6 +17,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     tab_map: 'Mapa',
     tab_events: 'Eventos',
     tab_profile: 'Perfil',
+    tab_ranking: 'Ranking',
 
     // Filtro
     filter_title: 'Filtrar alertas',
@@ -166,6 +167,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     add_address: 'Endereço (opcional)',
     add_publish: 'Publicar',
     add_road_type: 'Tipo de ocorrência',
+    add_road_speed_limit: 'Limite de velocidade',
     add_road_report: 'Reportar',
 
     // Comentários
@@ -283,11 +285,27 @@ const translations: Record<LangCode, Record<string, string>> = {
     cat_road_closure:     'Interdição',
     cat_road_traffic:     'Congestionamento',
     cat_road_hazard:      'Perigo na via',
+    cat_road_radar:       'Radar',
+
+    // Notificação push — detecção de trânsito por GPS
+    traffic_alert_slow_title:    'Trânsito lento detectado',
+    traffic_alert_stopped_title: 'Você está parado há um tempo',
+    traffic_alert_notif_body:    'Toque para reportar o que está acontecendo',
+
+    // Rastreamento em segundo plano (#43-b) — toggle no perfil + notificação persistente (Android)
+    bg_traffic_setting_title: 'Alertas de trânsito fora do app',
+    bg_traffic_setting_desc: 'Receba avisos de trânsito lento ou parado mesmo com o app fechado, enquanto você dirige.',
+    bg_traffic_notif_title: 'Alertoo está monitorando o trânsito',
+    bg_traffic_notif_body: 'Você será avisado se o trânsito ficar lento ou parar',
+    bg_traffic_permission_denied: 'Permissão de localização negada. Ative o acesso à localização nas configurações do app.',
+    bg_traffic_foreground_only: 'Para alertas com o app fechado, permita o acesso à localização "Sempre" nas configurações do app.',
 
     // Categorias de entretenimento
     cat_ent_bar:        'Bar',
     cat_ent_restaurant: 'Restaurante',
+    cat_ent_restaurante: 'Restaurante',
     cat_ent_party:      'Festa',
+    cat_ent_festa:      'Festa',
     cat_ent_show:       'Show',
     cat_ent_festival:   'Festival',
     cat_ent_club:       'Balada',
@@ -310,6 +328,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     road_confirm_action: 'Confirmar',
     road_deny_action: 'Negar',
     time_left_label: 'Resta',
+    speed_limit_stat: 'Limite',
 
     // Notificações locais
     notification_road: '🚨 Alerta de Estrada',
@@ -325,6 +344,10 @@ const translations: Record<LangCode, Record<string, string>> = {
     fav_road: '🚦 Trânsito',
     fav_view: 'Ver',
     fav_go: 'Ir ao local',
+    driver_mode_title: 'Modo Motorista',
+    driver_no_alerts: 'Nenhum alerta próximo',
+    driver_clear_road: 'Via livre — nenhum alerta próximo',
+    driver_exit: 'Sair do modo motorista',
 
     // Comentários
     comments_placeholder: 'Escreva um comentário...',
@@ -415,6 +438,8 @@ const translations: Record<LangCode, Record<string, string>> = {
     address_placeholder: 'Ex: Rua das Flores, 123 — Centro',
     field_required_address: '⚠ Endereço obrigatório',
     photo_optional: '📷 Foto (opcional)',
+    add_event_link: '🔗 Link do evento (opcional)',
+    event_link_open: 'Abrir link',
     publish_failed: 'Não foi possível publicar',
 
     // EntertainmentScreen — strings hardcoded
@@ -542,6 +567,13 @@ const translations: Record<LangCode, Record<string, string>> = {
     report_success_msg: 'Obrigado! Nossa equipe irá analisar o conteúdo.',
     report_already_sent: 'Você já denunciou este evento.',
     report_login_required: 'Faça login para denunciar eventos.',
+
+    // Leaderboard
+    leaderboard_title: 'Ranking',
+    leaderboard_sub: 'Top usuários por pontuação',
+
+    // FilterModal — categoria de entretenimento
+    filter_category: 'Categoria de evento',
   },
 
   en: {
@@ -549,6 +581,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     tab_map: 'Map',
     tab_events: 'Events',
     tab_profile: 'Profile',
+    tab_ranking: 'Ranking',
 
     filter_title: 'Filter alerts',
     filter_clear: 'Clear filter',
@@ -686,6 +719,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     add_address: 'Address (optional)',
     add_publish: 'Publish',
     add_road_type: 'Occurrence type',
+    add_road_speed_limit: 'Speed limit',
     add_road_report: 'Report',
 
     comments_title: 'Comments',
@@ -792,10 +826,25 @@ const translations: Record<LangCode, Record<string, string>> = {
     cat_road_closure:     'Road Closure',
     cat_road_traffic:     'Traffic Jam',
     cat_road_hazard:      'Road Hazard',
+    cat_road_radar:       'Speed Camera',
+
+    traffic_alert_slow_title:    'Slow traffic detected',
+    traffic_alert_stopped_title: "You've been stopped for a while",
+    traffic_alert_notif_body:    "Tap to report what's happening",
+
+    // Background tracking (#43-b) — profile toggle + persistent notification (Android)
+    bg_traffic_setting_title: 'Traffic alerts outside the app',
+    bg_traffic_setting_desc: 'Get notified about slow or stopped traffic even with the app closed while you drive.',
+    bg_traffic_notif_title: 'Alertoo is monitoring traffic',
+    bg_traffic_notif_body: "You'll be notified if traffic slows down or stops",
+    bg_traffic_permission_denied: 'Location permission denied. Enable location access in the app settings.',
+    bg_traffic_foreground_only: 'For alerts with the app closed, allow "Always" location access in the app settings.',
 
     cat_ent_bar:        'Bar',
     cat_ent_restaurant: 'Restaurant',
+    cat_ent_restaurante: 'Restaurant',
     cat_ent_party:      'Party',
+    cat_ent_festa:      'Party',
     cat_ent_show:       'Show',
     cat_ent_festival:   'Festival',
     cat_ent_club:       'Nightclub',
@@ -816,6 +865,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     road_confirm_action: 'Confirm',
     road_deny_action: 'Deny',
     time_left_label: 'Left',
+    speed_limit_stat: 'Limit',
 
     notification_road: '🚨 Road Alert',
     notification_ent:  '🎉 Event',
@@ -829,6 +879,10 @@ const translations: Record<LangCode, Record<string, string>> = {
     fav_road: '🚦 Traffic',
     fav_view: 'View',
     fav_go: 'Go there',
+    driver_mode_title: 'Driver Mode',
+    driver_no_alerts: 'No nearby alerts',
+    driver_clear_road: 'Clear road — no alerts nearby',
+    driver_exit: 'Exit driver mode',
 
     comments_placeholder: 'Write a comment...',
 
@@ -916,6 +970,8 @@ const translations: Record<LangCode, Record<string, string>> = {
     address_placeholder: 'e.g. 123 Flowers St — Downtown',
     field_required_address: '⚠ Address required',
     photo_optional: '📷 Photo (optional)',
+    add_event_link: '🔗 Event link (optional)',
+    event_link_open: 'Open link',
     publish_failed: 'Could not publish',
 
     // EntertainmentScreen
@@ -1043,6 +1099,13 @@ const translations: Record<LangCode, Record<string, string>> = {
     report_success_msg: 'Thank you! Our team will review the content.',
     report_already_sent: 'You already reported this event.',
     report_login_required: 'Sign in to report events.',
+
+    // Leaderboard
+    leaderboard_title: 'Ranking',
+    leaderboard_sub: 'Top users by score',
+
+    // FilterModal
+    filter_category: 'Event category',
   },
 
   es: {
@@ -1050,6 +1113,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     tab_map: 'Mapa',
     tab_events: 'Eventos',
     tab_profile: 'Perfil',
+    tab_ranking: 'Ranking',
 
     filter_title: 'Filtrar alertas',
     filter_clear: 'Limpiar filtro',
@@ -1165,6 +1229,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     add_address: 'Dirección (opcional)',
     add_publish: 'Publicar',
     add_road_type: 'Tipo de incidente',
+    add_road_speed_limit: 'Límite de velocidad',
     add_road_report: 'Reportar',
 
     comments_title: 'Comentarios',
@@ -1271,10 +1336,25 @@ const translations: Record<LangCode, Record<string, string>> = {
     cat_road_closure:     'Cierre de vía',
     cat_road_traffic:     'Tráfico',
     cat_road_hazard:      'Peligro en la vía',
+    cat_road_radar:       'Radar de Velocidad',
+
+    traffic_alert_slow_title:    'Tráfico lento detectado',
+    traffic_alert_stopped_title: 'Llevas un tiempo detenido',
+    traffic_alert_notif_body:    'Toca para reportar lo que está pasando',
+
+    // Rastreo en segundo plano (#43-b) — interruptor en el perfil + notificación persistente (Android)
+    bg_traffic_setting_title: 'Alertas de tráfico fuera de la app',
+    bg_traffic_setting_desc: 'Recibe avisos de tráfico lento o detenido aunque la app esté cerrada mientras conduces.',
+    bg_traffic_notif_title: 'Alertoo está monitoreando el tráfico',
+    bg_traffic_notif_body: 'Te avisaremos si el tráfico se ralentiza o se detiene',
+    bg_traffic_permission_denied: 'Permiso de ubicación denegado. Activa el acceso a la ubicación en los ajustes de la app.',
+    bg_traffic_foreground_only: 'Para alertas con la app cerrada, permite el acceso a la ubicación "Siempre" en los ajustes de la app.',
 
     cat_ent_bar:        'Bar',
     cat_ent_restaurant: 'Restaurante',
+    cat_ent_restaurante: 'Restaurante',
     cat_ent_party:      'Fiesta',
+    cat_ent_festa:      'Fiesta',
     cat_ent_show:       'Show',
     cat_ent_festival:   'Festival',
     cat_ent_club:       'Discoteca',
@@ -1295,6 +1375,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     road_confirm_action: 'Confirmar',
     road_deny_action: 'Negar',
     time_left_label: 'Resta',
+    speed_limit_stat: 'Límite',
 
     notification_road: '🚨 Alerta de Tráfico',
     notification_ent:  '🎉 Evento',
@@ -1308,6 +1389,10 @@ const translations: Record<LangCode, Record<string, string>> = {
     fav_road: '🚦 Tráfico',
     fav_view: 'Ver',
     fav_go: 'Ir al lugar',
+    driver_mode_title: 'Modo Conductor',
+    driver_no_alerts: 'Sin alertas cercanas',
+    driver_clear_road: 'Vía libre — sin alertas cercanas',
+    driver_exit: 'Salir del modo conductor',
 
     comments_placeholder: 'Escribe un comentario...',
 
@@ -1395,6 +1480,8 @@ const translations: Record<LangCode, Record<string, string>> = {
     address_placeholder: 'Ej: Calle de las Flores, 123 — Centro',
     field_required_address: '⚠ Dirección obligatoria',
     photo_optional: '📷 Foto (opcional)',
+    add_event_link: '🔗 Enlace del evento (opcional)',
+    event_link_open: 'Abrir enlace',
     publish_failed: 'No se pudo publicar',
 
     // EntertainmentScreen
@@ -1522,6 +1609,13 @@ const translations: Record<LangCode, Record<string, string>> = {
     report_success_msg: 'Gracias. Nuestro equipo revisará el contenido.',
     report_already_sent: 'Ya has denunciado este evento.',
     report_login_required: 'Inicia sesión para denunciar eventos.',
+
+    // Leaderboard
+    leaderboard_title: 'Ranking',
+    leaderboard_sub: 'Mejores usuarios por puntuación',
+
+    // FilterModal
+    filter_category: 'Categoría de evento',
   },
 
   fr: {
@@ -1529,6 +1623,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     tab_map: 'Carte',
     tab_events: 'Événements',
     tab_profile: 'Profil',
+    tab_ranking: 'Classement',
 
     filter_title: 'Filtrer les alertes',
     filter_clear: 'Effacer le filtre',
@@ -1644,6 +1739,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     add_address: 'Adresse (facultative)',
     add_publish: 'Publier',
     add_road_type: "Type d'incident",
+    add_road_speed_limit: 'Limite de vitesse',
     add_road_report: 'Signaler',
 
     comments_title: 'Commentaires',
@@ -1750,10 +1846,25 @@ const translations: Record<LangCode, Record<string, string>> = {
     cat_road_closure:     'Fermeture de route',
     cat_road_traffic:     'Embouteillage',
     cat_road_hazard:      'Danger sur la route',
+    cat_road_radar:       'Radar de Vitesse',
+
+    traffic_alert_slow_title:    'Trafic ralenti détecté',
+    traffic_alert_stopped_title: 'Vous êtes arrêté depuis un moment',
+    traffic_alert_notif_body:    'Appuyez pour signaler ce qui se passe',
+
+    // Suivi en arrière-plan (#43-b) — interrupteur dans le profil + notification persistante (Android)
+    bg_traffic_setting_title: 'Alertes trafic hors de l\'app',
+    bg_traffic_setting_desc: 'Recevez des alertes de trafic ralenti ou arrêté même avec l\'app fermée pendant que vous conduisez.',
+    bg_traffic_notif_title: 'Alertoo surveille le trafic',
+    bg_traffic_notif_body: 'Vous serez averti si le trafic ralentit ou s\'arrête',
+    bg_traffic_permission_denied: 'Permission de localisation refusée. Activez l\'accès à la localisation dans les paramètres de l\'app.',
+    bg_traffic_foreground_only: 'Pour des alertes avec l\'app fermée, autorisez l\'accès à la localisation "Toujours" dans les paramètres de l\'app.',
 
     cat_ent_bar:        'Bar',
     cat_ent_restaurant: 'Restaurant',
+    cat_ent_restaurante: 'Restaurant',
     cat_ent_party:      'Fête',
+    cat_ent_festa:      'Fête',
     cat_ent_show:       'Spectacle',
     cat_ent_festival:   'Festival',
     cat_ent_club:       'Boîte de nuit',
@@ -1774,6 +1885,7 @@ const translations: Record<LangCode, Record<string, string>> = {
     road_confirm_action: 'Confirmer',
     road_deny_action: 'Refuser',
     time_left_label: 'Reste',
+    speed_limit_stat: 'Limite',
 
     notification_road: '🚨 Alerte Routière',
     notification_ent:  '🎉 Événement',
@@ -1787,6 +1899,10 @@ const translations: Record<LangCode, Record<string, string>> = {
     fav_road: '🚦 Circulation',
     fav_view: 'Voir',
     fav_go: 'Y aller',
+    driver_mode_title: 'Mode conducteur',
+    driver_no_alerts: 'Aucune alerte à proximité',
+    driver_clear_road: 'Route libre — aucune alerte à proximité',
+    driver_exit: 'Quitter le mode conducteur',
 
     comments_placeholder: 'Écrivez un commentaire...',
 
@@ -1874,6 +1990,8 @@ const translations: Record<LangCode, Record<string, string>> = {
     address_placeholder: 'Ex : 123 rue des Fleurs — Centre',
     field_required_address: '⚠ Adresse obligatoire',
     photo_optional: '📷 Photo (facultative)',
+    add_event_link: '🔗 Lien de l\'événement (facultatif)',
+    event_link_open: 'Ouvrir le lien',
     publish_failed: 'Impossible de publier',
 
     // EntertainmentScreen
@@ -2001,6 +2119,13 @@ const translations: Record<LangCode, Record<string, string>> = {
     report_success_msg: 'Merci ! Notre équipe examinera le contenu.',
     report_already_sent: 'Vous avez déjà signalé cet événement.',
     report_login_required: 'Connectez-vous pour signaler des événements.',
+
+    // Leaderboard
+    leaderboard_title: 'Classement',
+    leaderboard_sub: 'Meilleurs utilisateurs par score',
+
+    // FilterModal
+    filter_category: "Catégorie d'événement",
   },
 };
 

@@ -3,6 +3,7 @@ import {
   Modal, View, Text, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Image, Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { EntertainmentCategory, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
@@ -11,6 +12,7 @@ import { validateEventContent } from '../utils/contentFilter';
 import { useT } from '../hooks/useT';
 import { tEntCat } from '../utils/i18n';
 import { useTick } from '../hooks/useTick';
+import { EntertainmentBenefitsBanner } from './EntertainmentBenefitsBanner';
 
 interface Props {
   visible: boolean;
@@ -25,6 +27,7 @@ interface Props {
 
 export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, countryCode, onClose, onEventCreated }: Props) {
   const t = useT();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const [category, setCategory] = useState<EntertainmentCategory>('bar');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -190,8 +193,9 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
       >
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(bottomInset, 16) + 20 }]}>
           <View style={styles.handle} />
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -199,6 +203,8 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
             automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           >
             <Text style={styles.title}>{t('add_event_title')}</Text>
+
+            <EntertainmentBenefitsBanner />
 
             {(cityName || stateUF) && (
               <View style={styles.locationBadge}>
@@ -317,7 +323,11 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 36, maxHeight: '90%' },
+  sheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '90%',
+    // Em tablets/telas largas, evita que o sheet fique esticado de ponta a ponta
+    width: '100%', maxWidth: 480, alignSelf: 'center',
+  },
   handle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   title: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
   locationBadge: { backgroundColor: '#F3E5F5', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginBottom: 16 },

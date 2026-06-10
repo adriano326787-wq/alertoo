@@ -25,7 +25,6 @@ import {
   Easing,
   ActivityIndicator,
 } from 'react-native';
-import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/useTheme';
@@ -33,8 +32,8 @@ import { shadow, platformShadow, radius } from '../../theme/tokens';
 import { useT } from '../../hooks/useT';
 import { track } from '../../services/analytics';
 
-// Chave lida dos extras do app.config.js (evita hardcoded e acesso dinâmico a process.env)
-const MAPS_KEY: string = ((Constants.expoConfig?.extra) as any)?.googleMapsApiKey ?? '';
+// EXPO_PUBLIC_* é substituído literalmente pelo Metro no bundle
+const MAPS_KEY: string = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
 
 // ─── Tipos públicos ──────────────────────────────────────────────────────────
 
@@ -69,60 +68,111 @@ interface Props {
     emoji?: string;
     type: 'road' | 'entertainment';
   }>;
+  /** Localização atual do usuário — usada para biasing do autocomplete */
+  userLocation?: { latitude: number; longitude: number } | null;
   onSelectResult: (r: SearchResult) => void;
 }
 
-// ─── Google Places API ────────────────────────────────────────────────────────
+// ─── Estratégia de busca em cascata (Waze-style) ─────────────────────────────
+//
+// 1. Google Places Autocomplete — sugestões enquanto digita (requer Places API)
+// 2. Google Geocoding API       — resolve endereço completo (mesmo key, mais permissivo)
+// 3. expo-location geocodeAsync — fallback nativo (sempre funciona no Android)
 
-async function fetchSuggestions(input: string): Promise<PlaceSuggestion[]> {
-  if (!MAPS_KEY || input.length < 2) return [];
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
+async function tryAbortableFetch(url: string, timeoutMs = 5000): Promise<any | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const url =
+    const res = await fetch(url, { signal: ctrl.signal });
+    return await res.json();
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
+
+async function fetchSuggestions(
+  input: string,
+  userLocation?: { latitude: number; longitude: number } | null
+): Promise<PlaceSuggestion[]> {
+  if (input.length < 2) return [];
+
+  // ── Estratégia 1: Google Places Autocomplete ────────────────────────────────
+  if (MAPS_KEY) {
+    const bias = userLocation
+      ? `&location=${userLocation.latitude},${userLocation.longitude}&radius=50000`
+      : '&components=country:br';
+    const json = await tryAbortableFetch(
       `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-      `?input=${encodeURIComponent(input)}&language=pt-BR&key=${MAPS_KEY}`;
-    const res = await fetch(url, { signal: controller.signal });
-    const json = await res.json();
-    if (json.status !== 'OK' && json.status !== 'ZERO_RESULTS') return [];
-    return (json.predictions ?? []).slice(0, 5).map((p: any) => ({
-      placeId: p.place_id,
-      mainText: p.structured_formatting?.main_text ?? p.description,
-      secondaryText: p.structured_formatting?.secondary_text ?? '',
-    }));
-  } catch {
-    return [];
-  } finally {
-    clearTimeout(timeout);
+      `?input=${encodeURIComponent(input)}&language=pt-BR${bias}&key=${MAPS_KEY}`
+    );
+    if (json?.status === 'OK' && json.predictions?.length > 0) {
+      return json.predictions.slice(0, 6).map((p: any) => ({
+        placeId: p.place_id,
+        mainText: p.structured_formatting?.main_text ?? p.description,
+        secondaryText: p.structured_formatting?.secondary_text ?? '',
+      }));
+    }
   }
+
+  // ── Estratégia 2: Google Geocoding API (texto livre → coordenada) ───────────
+  if (MAPS_KEY) {
+    const region = userLocation ? '&region=br' : '&components=country:BR';
+    const json = await tryAbortableFetch(
+      `https://maps.googleapis.com/maps/api/geocode/json` +
+      `?address=${encodeURIComponent(input)}&language=pt-BR${region}&key=${MAPS_KEY}`
+    );
+    if (json?.status === 'OK' && json.results?.length > 0) {
+      return json.results.slice(0, 5).map((r: any) => ({
+        placeId: r.place_id ?? `geo:${r.geometry.location.lat}:${r.geometry.location.lng}`,
+        mainText: r.address_components?.[0]?.long_name ?? input,
+        secondaryText: r.formatted_address ?? '',
+      }));
+    }
+  }
+
+  // ── Estratégia 3: expo-location geocodeAsync (nativo, sempre disponível) ────
+  try {
+    const results = await Location.geocodeAsync(input);
+    if (results.length === 0) return [];
+    const out: PlaceSuggestion[] = [];
+    for (const r of results.slice(0, 4)) {
+      try {
+        const [place] = await Location.reverseGeocodeAsync({ latitude: r.latitude, longitude: r.longitude });
+        const main = [place?.name, place?.street].filter(Boolean).join(', ') || input;
+        const sub = [place?.city, place?.region].filter(Boolean).join(', ');
+        out.push({ placeId: `geo:${r.latitude}:${r.longitude}`, mainText: main, secondaryText: sub });
+      } catch {
+        out.push({ placeId: `geo:${r.latitude}:${r.longitude}`, mainText: input, secondaryText: '' });
+      }
+    }
+    return out;
+  } catch { return []; }
 }
 
 async function fetchPlaceCoords(
   placeId: string
 ): Promise<{ lat: number; lng: number; name: string; address: string } | null> {
-  if (!MAPS_KEY) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
-  try {
-    const url =
-      `https://maps.googleapis.com/maps/api/place/details/json` +
-      `?place_id=${placeId}&fields=geometry,name,formatted_address&key=${MAPS_KEY}`;
-    const res = await fetch(url, { signal: controller.signal });
-    const json = await res.json();
-    if (json.status !== 'OK') return null;
-    const loc = json.result?.geometry?.location;
-    if (!loc) return null;
-    return {
-      lat: loc.lat,
-      lng: loc.lng,
-      name: json.result.name ?? '',
-      address: json.result.formatted_address ?? '',
-    };
-  } catch {
+  // Resultado do geocoding nativo — coords embutidas no placeId
+  if (placeId.startsWith('geo:')) {
+    const [, lat, lng] = placeId.split(':');
+    const la = parseFloat(lat), lo = parseFloat(lng);
+    if (!isNaN(la) && !isNaN(lo)) return { lat: la, lng: lo, name: '', address: '' };
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
+  // Google Places Details
+  if (!MAPS_KEY) return null;
+  const json = await tryAbortableFetch(
+    `https://maps.googleapis.com/maps/api/place/details/json` +
+    `?place_id=${placeId}&fields=geometry,name,formatted_address&key=${MAPS_KEY}`
+  );
+  if (json?.status !== 'OK') return null;
+  const loc = json.result?.geometry?.location;
+  if (!loc) return null;
+  return {
+    lat: loc.lat, lng: loc.lng,
+    name: json.result.name ?? '',
+    address: json.result.formatted_address ?? '',
+  };
+
 }
 
 /** Fallback quando não há chave do Maps: usa geocoding nativo do SO */
@@ -144,7 +194,7 @@ async function geocodeFallback(query: string): Promise<SearchResult[]> {
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
-export function MapSearchBar({ localEvents = [], onSelectResult }: Props) {
+export function MapSearchBar({ localEvents = [], userLocation, onSelectResult }: Props) {
   const t = useT();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -199,7 +249,7 @@ export function MapSearchBar({ localEvents = [], onSelectResult }: Props) {
       setLoading(true);
       try {
         if (MAPS_KEY) {
-          const s = await fetchSuggestions(query);
+          const s = await fetchSuggestions(query, userLocation);
           setSuggestions(s);
           setFallbackResults([]);
         } else {
@@ -279,7 +329,7 @@ export function MapSearchBar({ localEvents = [], onSelectResult }: Props) {
         <TextInput
           ref={inputRef}
           style={[styles.input, { color: theme.text.primary }]}
-          placeholder={t('search_placeholder') || 'Buscar endereço ou evento…'}
+          placeholder={t('search_placeholder') || '🔍 Para onde? Digite um endereço…'}
           placeholderTextColor={theme.text.tertiary}
           value={query}
           onChangeText={setQuery}
@@ -310,7 +360,11 @@ export function MapSearchBar({ localEvents = [], onSelectResult }: Props) {
         >
           {!hasResults && !loading ? (
             <Text style={[styles.emptyText, { color: theme.text.tertiary }]}>
-              Nada encontrado para "{query}"
+              Nada encontrado para "{query}"{'\n'}
+              <Text style={{ fontSize: 11, lineHeight: 16 }}>
+                💡 Dica: inclua a cidade ou estado{'\n'}
+                Ex: "Estrada Francisco da Cruz, RJ"
+              </Text>
             </Text>
           ) : (
             <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 380 }}>

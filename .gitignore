@@ -38,11 +38,17 @@ yarn-error.*
 .env.local
 .env*.local
 
-# Google Play Service Account (NUNCA commitar)
+# Google Service Account / Firebase credentials (NUNCA commitar)
 google-play-service-account.json
+google-play-key.json
+GoogleService-Info.plist
 
 # typescript
 *.tsbuildinfo
+
+# build logs
+*.log
+build_log.txt
 
 # generated native folders
 /ios

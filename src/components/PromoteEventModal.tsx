@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Modal, Alert, ActivityIndicator, Image, Animated,
+  Modal, Alert, ActivityIndicator, Image, Animated, TextInput,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -66,6 +67,7 @@ export function PromoteEventModal({
   const [selectedWeeks, setSelectedWeeks]     = useState(1);
   const [singleDayDow, setSingleDayDow]       = useState<number>(new Date().getDay());
   const [photoUris, setPhotoUris]             = useState<string[]>([]);
+  const [eventLink, setEventLink]             = useState('');
   const [uploadProgress, setUploadProgress]   = useState(0);
   const [loading, setLoading]                 = useState(false);
   const [showBuyCredits, setShowBuyCredits]   = useState(false);
@@ -146,11 +148,16 @@ export function PromoteEventModal({
           }),
         ),
       );
+      const normalizedLink = eventLink.trim()
+        ? (eventLink.trim().startsWith('http') ? eventLink.trim() : `https://${eventLink.trim()}`)
+        : null;
+
       await createPromotion({
         userId, eventId: event.id, tier: selectedTier,
         photoUrl: uploadedUrls[0] ?? null, photoUrls: uploadedUrls,
         skipCreditCheck: isAdmin,
         packageId: selectedPackage, weeks: selectedWeeks, activeDays,
+        link: normalizedLink,
       });
       if (!isAdmin) {
         const newCredits = await getUserCredits(userId);
@@ -174,6 +181,7 @@ export function PromoteEventModal({
     setSelectedWeeks(1);
     setSingleDayDow(new Date().getDay());
     setPhotoUris([]);
+    setEventLink('');
     setUploadProgress(0);
     onClose();
   }
@@ -187,6 +195,7 @@ export function PromoteEventModal({
   return (
     <>
       <Modal visible={visible} animationType="slide" onRequestClose={handleClose} statusBarTranslucent>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <SafeAreaView style={styles.safe}>
 
           {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -462,6 +471,32 @@ export function PromoteEventModal({
             </View>
 
             {/* ══════════════════════════════════════════════════════════════════
+                PASSO 5 — Link do evento (opcional)
+            ══════════════════════════════════════════════════════════════════ */}
+            <View style={styles.stepHeader}>
+              <View style={styles.stepBadge}><Text style={styles.stepNum}>5</Text></View>
+              <View style={styles.stepTitleRow}>
+                <Text style={styles.stepTitle}>Link do evento</Text>
+                <Text style={styles.stepOptional}>opcional</Text>
+              </View>
+            </View>
+
+            <Text style={styles.photoHint}>
+              Adicione um link para o site, ingresso ou redes sociais do evento. Aparece no card para todos os usuários.
+            </Text>
+            <TextInput
+              style={styles.linkInput}
+              placeholder="https://..."
+              placeholderTextColor="#94A3B8"
+              value={eventLink}
+              onChangeText={setEventLink}
+              keyboardType="url"
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={300}
+            />
+
+            {/* ══════════════════════════════════════════════════════════════════
                 RESUMO DO PEDIDO
             ══════════════════════════════════════════════════════════════════ */}
             <View style={styles.summaryCard}>
@@ -570,6 +605,7 @@ export function PromoteEventModal({
 
           </ScrollView>
         </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
 
       <BuyCreditsScreen
@@ -607,7 +643,11 @@ const styles = StyleSheet.create({
   balanceChipText: { fontSize: 14, fontWeight: '900' },
   balanceChipSub: { fontSize: 9, fontWeight: '600', marginTop: 1, opacity: 0.8 },
 
-  content: { padding: 16, paddingBottom: 48, gap: 0 },
+  content: {
+    padding: 16, paddingBottom: 48, gap: 0,
+    // Em tablets/telas largas, evita que o conteúdo fique esticado de ponta a ponta
+    width: '100%', maxWidth: 480, alignSelf: 'center',
+  },
 
   // ─── Evento ──────────────────────────────────────────────────────────────────
   eventCard: {
@@ -732,6 +772,13 @@ const styles = StyleSheet.create({
   weekCardUnitSel: { color: '#FF572280' },
   weekCardPrice: { fontSize: 11, fontWeight: '800', color: '#94A3B8' },
   weekCardPriceSel: { color: '#FF5722' },
+
+  // ─── Link ────────────────────────────────────────────────────────────────────
+  linkInput: {
+    borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 12,
+    padding: 14, fontSize: 14, color: '#1a1a1a',
+    backgroundColor: '#fff', marginBottom: 4,
+  },
 
   // ─── Fotos ────────────────────────────────────────────────────────────────────
   photoHint: { fontSize: 12, color: '#64748B', marginBottom: 10, lineHeight: 17 },

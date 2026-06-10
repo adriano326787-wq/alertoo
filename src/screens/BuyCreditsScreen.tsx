@@ -35,7 +35,7 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
   const [rewardLoading, setRewardLoading] = useState(false);
   const [pixModalVisible, setPixModalVisible] = useState(false);
   const [stripeModalVisible, setStripeModalVisible] = useState(false);
-  const { ready: adReady, cooldownActive, show: showRewardedAd } = useRewardedAd();
+  const { ready: adReady, cooldownActive, unavailable: adUnavailable, show: showRewardedAd } = useRewardedAd();
   const { mpPaymentReturn, setMPPaymentReturn } = useAppStore();
 
   async function handleWatchAd() {
@@ -108,17 +108,48 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
     let url = '';
     let preferenceId = '';
     let usedFallback = false;
+    let mpError = '';
 
     try {
       const result = await createMPPreferenceCloud(selected.id);
       url = result.initPoint;
       preferenceId = result.preferenceId;
-    } catch {
-      // Cloud Function indisponível — usa link genérico mas sem verificação automática
+      if (!url) throw new Error('URL de checkout não retornada pelo servidor.');
+    } catch (e: any) {
+      // Exibe o erro real para diagnóstico — não falha silenciosamente
+      mpError = e?.message ?? 'Erro desconhecido ao criar preferência.';
+      if (__DEV__) console.error('[MP] createMPPreference falhou:', mpError);
       url = MP_FALLBACK_URL;
       usedFallback = true;
     } finally {
       setLoading(false);
+    }
+
+    // Se a Cloud Function falhou, avisa o usuário com o erro real
+    if (usedFallback && mpError) {
+      Alert.alert(
+        'Erro ao iniciar pagamento',
+        `Não foi possível gerar o link de pagamento.\n\nDetalhe: ${mpError}\n\nVocê será redirecionado para o Mercado Pago onde poderá tentar novamente.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Continuar assim mesmo',
+            onPress: async () => {
+              try {
+                await Linking.openURL(url);
+                Alert.alert(
+                  t('buy_credits_fallback_title'),
+                  t('buy_credits_fallback_msg'),
+                  [{ text: t('understood') }],
+                );
+              } catch {
+                Alert.alert(t('error'), t('buy_credits_open_mp_failed'));
+              }
+            },
+          },
+        ]
+      );
+      return;
     }
 
     try {
@@ -128,13 +159,6 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
         // Fluxo normal: persiste no AsyncStorage (sobrevive remount) e entra em verificação
         AsyncStorage.setItem(PENDING_PREF_KEY, JSON.stringify({ preferenceId, pkgId: selected.id })).catch(() => {});
         setPendingVerification({ preferenceId, pkg: selected });
-      } else {
-        // Fallback: sem preferenceId, verificação automática impossível
-        Alert.alert(
-          t('buy_credits_fallback_title'),
-          t('buy_credits_fallback_msg'),
-          [{ text: t('understood') }],
-        );
       }
     } catch {
       Alert.alert(t('error'), t('buy_credits_open_mp_failed'));
@@ -202,10 +226,10 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
           <TouchableOpacity
             style={[
               styles.rewardedCard,
-              (cooldownActive || rewardLoading || !adReady) && styles.rewardedCardDisabled,
+              (cooldownActive || rewardLoading || !adReady || adUnavailable) && styles.rewardedCardDisabled,
             ]}
             onPress={handleWatchAd}
-            disabled={cooldownActive || rewardLoading || !adReady}
+            disabled={cooldownActive || rewardLoading || !adReady || adUnavailable}
             activeOpacity={0.85}
           >
             <View style={styles.rewardedLeft}>
@@ -215,18 +239,22 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
                 <Text style={styles.rewardedSub}>
                   {cooldownActive
                     ? t('buy_credits_ad_cooldown')
-                    : adReady
-                      ? t('buy_credits_ad_ready')
-                      : t('buy_credits_ad_loading')}
+                    : adUnavailable
+                      ? 'Anúncio indisponível no momento. Tente mais tarde.'
+                      : adReady
+                        ? t('buy_credits_ad_ready')
+                        : t('buy_credits_ad_loading')}
                 </Text>
               </View>
             </View>
             {rewardLoading ? (
               <ActivityIndicator color="#1565C0" />
-            ) : !adReady && !cooldownActive ? (
+            ) : !adReady && !cooldownActive && !adUnavailable ? (
               <ActivityIndicator color="#93C5FD" size="small" />
             ) : (
-              <Text style={styles.rewardedArrow}>{cooldownActive ? '⏳' : '▶'}</Text>
+              <Text style={styles.rewardedArrow}>
+                {cooldownActive ? '⏳' : adUnavailable ? '⚠️' : '▶'}
+              </Text>
             )}
           </TouchableOpacity>
 

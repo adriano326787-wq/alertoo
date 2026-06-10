@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alertoo — Autenticando...</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #FF5722;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      padding: 36px 28px;
+      text-align: center;
+      max-width: 340px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+    .emoji { font-size: 52px; margin-bottom: 18px; }
+    h2 { font-size: 20px; font-weight: 800; color: #1a1a1a; margin-bottom: 10px; }
+    p  { font-size: 14px; color: #888; line-height: 1.5; margin-bottom: 28px; }
+    a.btn {
+      display: inline-block;
+      background: #FF5722;
+      color: #fff;
+      text-decoration: none;
+      padding: 15px 32px;
+      border-radius: 13px;
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: 0.3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="emoji">🔔</div>
+    <h2>Retornando ao Alertoo…</h2>
+    <p>Se o app não abrir automaticamente,<br>toque no botão abaixo.</p>
+    <a class="btn" id="deeplink">Abrir Alertoo</a>
+  </div>
+
+  <script>
+    (function () {
+      // Parâmetros chegam no fragment para fluxo implícito (id_token)
+      // ou na query string para fluxo de código (code).
+      var fragment = window.location.hash.replace(/^#/, '');
+      var query    = window.location.search.replace(/^\?/, '');
+      var params   = fragment || query;
+
+      if (params) {
+        var deeplink = 'alertoo://oauth2redirect?' + params;
+        document.getElementById('deeplink').href = deeplink;
+
+        // Tentativa de redirecionamento automático
+        try {
+          window.location.replace(deeplink);
+        } catch (e) {}
+
+        // Fallback — abre após 800 ms se o replace não disparar
+        setTimeout(function () {
+          window.location.href = deeplink;
+        }, 800);
+      }
+    })();
+  </script>
+</body>
+</html>

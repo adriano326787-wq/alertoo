@@ -3,7 +3,8 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert, Modal,
 } from 'react-native';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { version } from '../../package.json';
+import * as WebBrowser from 'expo-web-browser';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   signInWithEmail,
@@ -18,11 +19,8 @@ import { useAppStore } from '../store/appStore';
 import { useT } from '../hooks/useT';
 import { User } from 'firebase/auth';
 
-// webClientId = cliente tipo 3 (web) do mesmo projeto Firebase
-GoogleSignin.configure({
-  webClientId: GOOGLE_CLIENT_IDS.webClientId,
-  offlineAccess: false,
-});
+// Necessário para fechar o Chrome Custom Tab ao retornar ao app após autenticação
+WebBrowser.maybeCompleteAuthSession();
 
 interface GoogleBtnProps {
   onSuccess: (idToken: string | null, accessToken?: string | null) => void;
@@ -31,47 +29,78 @@ interface GoogleBtnProps {
 
 function GoogleAuthButton({ onSuccess, disabled }: GoogleBtnProps) {
   const t = useT();
-  async function handlePress() {
+  const [authLoading, setAuthLoading] = useState(false);
+
+  async function handleGoogleSignIn() {
+    setAuthLoading(true);
     try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      // Nonce obrigatório para response_type=id_token (implicit flow)
+      const nonce = Math.random().toString(36).substring(2, 18);
 
-      // Limpa sessão cacheada (pode estar apontando para projeto antigo após troca de config)
-      try { await GoogleSignin.signOut(); } catch {}
+      // URL OAuth do Google.
+      // redirect_uri = relay page HTTPS registrada no Google Cloud Console.
+      // A relay page converte o fragmento #id_token=... em query string e
+      // redireciona para alertoo://oauth2redirect?id_token=...
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_IDS.webClientId,
+        redirect_uri: 'https://alertoo.com.br/auth-callback',
+        response_type: 'id_token',
+        scope: 'openid profile email',
+        nonce,
+        prompt: 'select_account',
+      });
 
-      const userInfo: any = await GoogleSignin.signIn();
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 
-      // Lib v16: { type: 'success', data: { idToken, user: {...} } }
-      // Lib antigas: { idToken, user: {...} }
-      const idToken =
-        userInfo?.data?.idToken ??
-        userInfo?.idToken ??
-        userInfo?.user?.idToken ??
-        null;
+      // CRÍTICO: passamos 'alertoo://oauth2redirect' como scheme a interceptar.
+      // O Chrome Custom Tab fecha automaticamente quando navega para alertoo://.
+      // Com 'https://...' ele carregaria a página normalmente sem fechar.
+      const result = await WebBrowser.openAuthSessionAsync(
+        authUrl,
+        'alertoo://oauth2redirect',
+      );
 
-      if (!idToken) {
-        Alert.alert(t('error'), t('auth_google_token_error'));
+      if (result.type !== 'success') {
+        // Usuário cancelou ou fechou o browser sem autenticar
         return;
       }
 
-      if (__DEV__) console.log('[GoogleSignIn] idToken obtido, prosseguindo para Firebase...');
-      onSuccess(idToken, null);
-    } catch (error: any) {
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) return;
-      if (error.code === statusCodes.IN_PROGRESS) return;
-      const code = error.code ?? 'sem código';
-      const msg = error.message ?? 'erro desconhecido';
-      if (__DEV__) console.error('[GoogleSignIn] erro:', code, msg, error);
-      Alert.alert(t('auth_google_error_title'), `Código: ${code}\n\nMensagem: ${msg}`);
+      // result.url = 'alertoo://oauth2redirect?id_token=eyJ...&...'
+      // A relay page converte '#id_token=...' em '?id_token=...'
+      const queryString = result.url.includes('?') ? result.url.split('?')[1] : '';
+      const urlParams = new URLSearchParams(queryString);
+      const idToken = urlParams.get('id_token');
+      const accessToken = urlParams.get('access_token');
+
+      if (__DEV__) {
+        console.log('[GoogleSignIn] result.url:', result.url);
+        console.log('[GoogleSignIn] idToken present:', !!idToken);
+      }
+
+      if (idToken || accessToken) {
+        onSuccess(idToken, accessToken ?? null);
+      } else {
+        Alert.alert(t('error'), t('auth_google_token_error'));
+      }
+    } catch (err: any) {
+      const msg = err?.message ?? 'Erro desconhecido';
+      if (__DEV__) console.error('[GoogleSignIn] erro:', msg);
+      Alert.alert(t('auth_google_error_title'), msg);
+    } finally {
+      setAuthLoading(false);
     }
   }
 
   return (
     <TouchableOpacity
-      style={[styles.socialBtn, disabled && styles.socialBtnDisabled]}
-      onPress={handlePress}
-      disabled={disabled}
+      style={[styles.socialBtn, (disabled || authLoading) && styles.socialBtnDisabled]}
+      onPress={handleGoogleSignIn}
+      disabled={disabled || authLoading}
     >
-      <Text style={styles.googleIcon}>G</Text>
+      {authLoading
+        ? <ActivityIndicator size="small" color="#666" style={{ marginRight: 8 }} />
+        : <Text style={styles.googleIcon}>G</Text>
+      }
       <Text style={styles.socialBtnText}>{t('auth_google')}</Text>
     </TouchableOpacity>
   );
@@ -387,6 +416,8 @@ export function AuthScreen({ onAuthenticated }: Props) {
           <Text style={styles.teaserTitle}>{t('auth_ranks_title')}</Text>
           <Text style={styles.teaserText}>{t('auth_ranks_desc')}</Text>
         </View>
+
+        <Text style={styles.versionText}>v{version}</Text>
       </ScrollView>
 
       {/* Modal recuperação de senha */}
@@ -548,6 +579,7 @@ const styles = StyleSheet.create({
   },
   anonBtnText: { fontSize: 14, color: '#999', fontWeight: '600', textDecorationLine: 'underline' },
   anonNote: { textAlign: 'center', fontSize: 11, color: '#ccc', marginTop: 4, lineHeight: 16 },
+  versionText: { textAlign: 'center', fontSize: 10, color: '#d0d0d0', marginTop: 20, marginBottom: 8 },
 
   teaser: {
     marginTop: 36, backgroundColor: '#FFF3E0',

@@ -23,12 +23,12 @@ interface Props {
 export function FilterModal({ visible, onClose }: Props) {
   const t = useT();
   const { events, filterStateUF, filterCityName, setFilter } = useEventsStore();
-  const entEvents = useEntertainmentStore((s) => s.events);
+  const { events: entEvents, filterCategory: storedFilterCategory, setFilterCategory } = useEntertainmentStore();
   const userCountryCode = useAppStore((s) => s.userCountryCode);
 
   const [tempState, setTempState] = useState<string | null>(filterStateUF);
   const [tempCity, setTempCity] = useState<string | null>(filterCityName);
-  const [tempCategory, setTempCategory] = useState<EntertainmentCategory | null>(null);
+  const [tempCategory, setTempCategory] = useState<EntertainmentCategory | null>(storedFilterCategory);
 
   // ─── Regiões dinâmicas extraídas dos eventos carregados ───────────────────
   const availableRegions = useMemo(() => {
@@ -48,13 +48,16 @@ export function FilterModal({ visible, onClose }: Props) {
 
   const handleApply = () => {
     setFilter(tempState, tempCity);
+    setFilterCategory(tempCategory);
     onClose();
   };
 
-  // Categorias disponíveis nos eventos atuais
+  // Categorias disponíveis nos eventos atuais (filtra categorias inválidas/desconhecidas)
   const availableCategories = useMemo(() => {
     const seen = new Set<EntertainmentCategory>();
-    entEvents.forEach((e) => seen.add(e.category));
+    entEvents.forEach((e) => {
+      if (e.category && ENTERTAINMENT_CATEGORIES[e.category]) seen.add(e.category);
+    });
     return [...seen].sort();
   }, [entEvents]);
 
@@ -63,6 +66,7 @@ export function FilterModal({ visible, onClose }: Props) {
     setTempCity(null);
     setTempCategory(null);
     setFilter(null, null);
+    setFilterCategory(null);
     onClose();
   };
 
@@ -149,6 +153,7 @@ export function FilterModal({ visible, onClose }: Props) {
               >
                 {availableCategories.map((cat) => {
                   const meta = ENTERTAINMENT_CATEGORIES[cat];
+                  if (!meta) return null;
                   const selected = tempCategory === cat;
                   return (
                     <TouchableOpacity
