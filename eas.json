@@ -36,6 +36,7 @@
     "production": {
       "autoIncrement": false,
       "channel": "production",
+      "credentialsSource": "local",
       "android": {
         "buildType": "app-bundle",
         "resourceClass": "medium"

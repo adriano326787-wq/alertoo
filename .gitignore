@@ -20,6 +20,8 @@ expo-env.d.ts
 *.mobileprovision
 android/keystore/*.keystore
 android/keystore/*.jks
+# Credenciais EAS locais — contêm senhas da keystore (NUNCA commitar)
+credentials.json
 
 # Metro
 .metro-health-check*
