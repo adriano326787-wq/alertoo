@@ -87,10 +87,19 @@
   <link rel="stylesheet" href="/lib/leaflet.css" />
   <link rel="stylesheet" href="/main.css" />
 
-  <!-- Google AdSense — ca-pub-4349309505537394 -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4349309505537394" crossorigin="anonymous"></script>
+  <!-- Google AdSense — ca-pub-4349309505537394 (só carrega após consentimento LGPD) -->
   <script>
-    function loadAdSense() { /* já carregado no head */ }
+    let __adsLoaded = false;
+    function loadAdSense() {
+      if (__adsLoaded) return;
+      __adsLoaded = true;
+      const s = document.createElement('script');
+      s.async = true;
+      s.crossOrigin = 'anonymous';
+      s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4349309505537394';
+      document.head.appendChild(s);
+    }
+    if (localStorage.getItem('cookie_consent') === 'accepted') loadAdSense();
   </script>
 
 </head>
@@ -132,6 +141,7 @@
         </div>
       </div>
     </div>
+    <a class="btn-account js-account-link" id="navAccount" href="/conta" data-i18n="nav.account">👤 Entrar</a>
     <a class="btn-download" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" data-i18n="nav.download">
       ▶ Baixar agora
     </a>
@@ -152,6 +162,7 @@
     <a href="/alternativa-waze" onclick="closeMobileMenu()" data-i18n="mobile.vsWaze">🗺️ vs Waze</a>
     <a href="/sobre" onclick="closeMobileMenu()" data-i18n="mobile.about">ℹ️ Sobre o Alertoo</a>
     <a href="#faq" onclick="closeMobileMenu()" data-i18n="mobile.faq">❓ FAQ</a>
+    <a href="/conta" class="js-account-link" onclick="closeMobileMenu()" data-i18n="nav.account">👤 Entrar</a>
     <a href="#download" onclick="closeMobileMenu()" data-i18n="mobile.download">⬇ Baixar agora</a>
   </div>
 
@@ -529,6 +540,7 @@
         <a href="#features" data-i18n="footer.features">Recursos</a>
         <a href="#como-funciona" data-i18n="footer.how">Como funciona</a>
         <a href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank">▶ Google Play</a>
+        <a href="/conta" data-i18n="footer.account">👤 Minha Conta</a>
         <a href="#" style="opacity:0.4;pointer-events:none;" data-i18n="footer.iosSoon">🍎 App Store (em breve)</a>
         <a href="/sobre" data-i18n="footer.about">Sobre o Alertoo</a>
       </div>
@@ -554,6 +566,36 @@
       <p data-i18n="footer.made">Feito com 🧡 no Brasil</p>
     </div>
   </footer>
+
+  <!-- LOGIN MODAL — mesma conta Firebase do app e do portal /conta -->
+  <div class="login-overlay" id="loginOverlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    <div class="login-card">
+      <button class="login-close" id="loginClose" aria-label="Fechar">✕</button>
+      <div class="login-title" id="loginTitle" data-i18n="login.title">Entre na sua conta</div>
+      <div class="login-sub" data-i18n="login.sub">Mesma conta do aplicativo — pontos, eventos e créditos sincronizados.</div>
+      <div class="login-tabs">
+        <button id="loginTabIn" class="active" data-i18n="login.tabIn">Entrar</button>
+        <button id="loginTabUp" data-i18n="login.tabUp">Criar conta</button>
+      </div>
+      <div id="loginMsg" class="login-msg"></div>
+      <div class="login-field">
+        <label for="loginEmail" data-i18n="login.email">E-mail</label>
+        <input type="email" id="loginEmail" autocomplete="email" placeholder="voce@email.com" />
+      </div>
+      <div class="login-field">
+        <label for="loginPass" data-i18n="login.password">Senha</label>
+        <input type="password" id="loginPass" autocomplete="current-password" placeholder="••••••••" />
+      </div>
+      <button class="login-btn" id="loginSubmit" data-i18n="login.btnIn">Entrar</button>
+      <button class="login-link" id="loginForgot" data-i18n="login.forgot">Esqueci minha senha</button>
+      <div class="login-divider" data-i18n="login.or">— ou —</div>
+      <button class="login-btn google" id="loginGoogle">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+        <span data-i18n="login.google">Continuar com Google</span>
+      </button>
+      <p class="login-note" data-i18n="login.note">Ao entrar você acessa o portal Minha Conta: perfil, eventos e créditos.</p>
+    </div>
+  </div>
 
   <!-- COOKIE BANNER (LGPD) -->
   <div class="cookie-banner" id="cookieBanner">
@@ -595,10 +637,14 @@
       if (!isOpen) item.classList.add('open');
     }
 
-    // ── iOS notify form ────────────────────────────────────────────
+    // ── iOS notify form — grava na lista de espera (Firestore) ─────
     function handleNotify(e) {
       e.preventDefault();
-      document.getElementById('notifyEmail').value = '';
+      const input = document.getElementById('notifyEmail');
+      const email = input.value.trim();
+      if (!email) return;
+      if (window.__saveWaitlistEmail) window.__saveWaitlistEmail(email).catch(() => {});
+      input.value = '';
       document.getElementById('notifyMsg').style.display = 'block';
     }
 
@@ -620,8 +666,12 @@
   <script src="/lib/leaflet.js" defer></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getFirestore, collection, query, where, getDocs, Timestamp }
+    import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp }
       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import {
+      getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+      sendPasswordResetEmail, sendEmailVerification, GoogleAuthProvider, signInWithPopup,
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
     const app = initializeApp({
       apiKey:            'AIzaSyCoI9rNBK07vGZBuygprq4PkDKGT0iZkYU',
@@ -632,6 +682,132 @@
       appId:             '1:657066902706:web:3e3d49f23a819c5ce1b5ab',
     });
     const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    // i18n helper — i18n.js carrega antes dos módulos, então alertooI18n já existe
+    const tt = (key, fallback) => (window.alertooI18n && window.alertooI18n.t(key)) || fallback;
+
+    // ═══ LOGIN / MINHA CONTA ═══════════════════════════════════════
+    const loginOverlay = document.getElementById('loginOverlay');
+    let signedIn = false;
+
+    function setAccountLinks(user) {
+      signedIn = !!user && !user.isAnonymous;
+      document.querySelectorAll('.js-account-link').forEach((a) => {
+        a.dataset.i18n = signedIn ? 'nav.myAccount' : 'nav.account';
+        a.textContent = tt(a.dataset.i18n, signedIn ? '👤 Minha Conta' : '👤 Entrar');
+      });
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      setAccountLinks(user);
+      // Login concluído com o modal aberto → segue para o portal
+      if (user && !user.isAnonymous && loginOverlay.classList.contains('open')) {
+        location.href = '/conta';
+      }
+    });
+
+    function openLogin() {
+      loginOverlay.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => document.getElementById('loginEmail').focus(), 60);
+    }
+    function closeLogin() {
+      loginOverlay.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    document.querySelectorAll('.js-account-link').forEach((a) => {
+      a.addEventListener('click', (e) => {
+        if (!signedIn) { e.preventDefault(); openLogin(); }
+        // logado → navegação normal para /conta
+      });
+    });
+    document.getElementById('loginClose').addEventListener('click', closeLogin);
+    loginOverlay.addEventListener('click', (e) => { if (e.target === loginOverlay) closeLogin(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && loginOverlay.classList.contains('open')) closeLogin();
+    });
+
+    let authMode = 'login';
+    const tabIn = document.getElementById('loginTabIn');
+    const tabUp = document.getElementById('loginTabUp');
+    const loginMsg = document.getElementById('loginMsg');
+    const btnSubmit = document.getElementById('loginSubmit');
+
+    function setAuthMode(m) {
+      authMode = m;
+      tabIn.classList.toggle('active', m === 'login');
+      tabUp.classList.toggle('active', m === 'register');
+      btnSubmit.textContent = m === 'login' ? tt('login.btnIn', 'Entrar') : tt('login.btnUp', 'Criar conta');
+      document.getElementById('loginPass').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+    }
+    tabIn.addEventListener('click', () => setAuthMode('login'));
+    tabUp.addEventListener('click', () => setAuthMode('register'));
+
+    const AUTH_ERR_KEYS = {
+      'auth/invalid-credential':   'login.errCreds',
+      'auth/user-not-found':       'login.errCreds',
+      'auth/wrong-password':       'login.errCreds',
+      'auth/email-already-in-use': 'login.errExists',
+      'auth/weak-password':        'login.errWeak',
+      'auth/invalid-email':        'login.errEmail',
+      'auth/too-many-requests':    'login.errMany',
+    };
+    function authErrorMsg(e) {
+      return tt(AUTH_ERR_KEYS[e && e.code] || 'login.errGeneric', 'Não foi possível entrar. Tente novamente.');
+    }
+    function showMsg(kind, text) { loginMsg.className = 'login-msg ' + kind; loginMsg.textContent = text; }
+
+    async function doAuth() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const pass = document.getElementById('loginPass').value;
+      loginMsg.className = 'login-msg';
+      if (!email || !pass) { showMsg('err', tt('login.fill', 'Preencha e-mail e senha.')); return; }
+      btnSubmit.disabled = true;
+      try {
+        if (authMode === 'login') {
+          await signInWithEmailAndPassword(auth, email, pass);
+        } else {
+          const cred = await createUserWithEmailAndPassword(auth, email, pass);
+          sendEmailVerification(cred.user).catch(() => {});
+        }
+        location.href = '/conta';
+        return;
+      } catch (e) { showMsg('err', authErrorMsg(e)); }
+      btnSubmit.disabled = false;
+    }
+    btnSubmit.addEventListener('click', doAuth);
+    ['loginEmail', 'loginPass'].forEach((id) => {
+      document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doAuth(); });
+    });
+
+    document.getElementById('loginGoogle').addEventListener('click', async () => {
+      loginMsg.className = 'login-msg';
+      try {
+        await signInWithPopup(auth, new GoogleAuthProvider());
+        location.href = '/conta';
+      } catch (e) {
+        if (e && e.code !== 'auth/popup-closed-by-user') showMsg('err', authErrorMsg(e));
+      }
+    });
+
+    document.getElementById('loginForgot').addEventListener('click', async () => {
+      const email = document.getElementById('loginEmail').value.trim();
+      if (!email) { showMsg('err', tt('login.forgotHint', 'Digite seu e-mail acima e clique de novo.')); return; }
+      try {
+        await sendPasswordResetEmail(auth, email);
+        showMsg('ok', tt('login.resetSent', 'E-mail de recuperação enviado. Confira sua caixa de entrada.'));
+      } catch (e) { showMsg('err', authErrorMsg(e)); }
+    });
+
+    // ═══ LISTA DE ESPERA iOS ═══════════════════════════════════════
+    window.__saveWaitlistEmail = (email) =>
+      addDoc(collection(db, 'ios_waitlist'), {
+        email,
+        lang: window.__alertooLang || 'pt-BR',
+        createdAt: serverTimestamp(),
+      });
 
     const TRAFFIC_CATS = {
       traffic:     { label: 'Congestionamento', emoji: '🐢', color: '#F4511E' },
@@ -710,10 +886,18 @@
     }
 
     function filtered() {
-      if (activeFilter === 'all') return allEvents;
-      if (activeFilter === 'traffic') return allEvents.filter(e => e._type === 'traffic');
-      if (activeFilter === 'entertainment') return allEvents.filter(e => e._type === 'entertainment');
-      return allEvents.filter(e => e.category === activeFilter);
+      let evs;
+      if (activeFilter === 'all') evs = allEvents;
+      else if (activeFilter === 'traffic') evs = allEvents.filter(e => e._type === 'traffic');
+      else if (activeFilter === 'entertainment') evs = allEvents.filter(e => e._type === 'entertainment');
+      else evs = allEvents.filter(e => e.category === activeFilter);
+      // Com a localização conhecida, prioriza o que está perto do usuário
+      if (userPos) {
+        evs = [...evs].sort((a, b) =>
+          distKm(userPos.lat, userPos.lng, a.latitude, a.longitude) -
+          distKm(userPos.lat, userPos.lng, b.latitude, b.longitude));
+      }
+      return evs;
     }
 
     function renderMarkers() {
@@ -737,7 +921,16 @@
       });
 
       if (markers.length > 0) {
-        map.fitBounds(L.featureGroup(markers).getBounds().pad(0.25), { maxZoom: 12 });
+        if (userPos) {
+          // Enquadra o usuário + eventos num raio de 50 km; senão, mantém o centro nele
+          const pts = evs
+            .filter(ev => distKm(userPos.lat, userPos.lng, ev.latitude, ev.longitude) <= 50)
+            .map(ev => [ev.latitude, ev.longitude]);
+          pts.push([userPos.lat, userPos.lng]);
+          if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 13 });
+        } else {
+          map.fitBounds(L.featureGroup(markers).getBounds().pad(0.25), { maxZoom: 12 });
+        }
       }
       renderList(evs);
     }
@@ -763,11 +956,13 @@
         const city = [ev.cityName, ev.stateUF].filter(Boolean).join(', ');
         const confirms = ev.confirmations ?? 0;
         const urgent = confirms >= 3;
+        const dist = userPos ? `📍 ${fmtDist(distKm(userPos.lat, userPos.lng, ev.latitude, ev.longitude))}` : '';
+        const sub = [city, timeAgo(ev.createdAt), dist].filter(Boolean).join(' · ');
         return `<div class="ev-card" data-i="${i}" onclick="window.__evClick(${i})">
           <div class="ev-card-icon" style="background:${meta.color}28">${meta.emoji}</div>
           <div class="ev-card-body">
             <div class="ev-card-title">${meta.label}${ev.title ? ' — ' + ev.title : ''}</div>
-            <div class="ev-card-sub">${city || ''} ${city ? '·' : ''} ${timeAgo(ev.createdAt)}</div>
+            <div class="ev-card-sub">${sub}</div>
           </div>
           ${confirms > 0 ? `<div class="ev-card-badge${urgent ? ' urgent' : ''}">${confirms}</div>` : ''}
         </div>`;
@@ -806,32 +1001,120 @@
       renderMarkers();
     }
 
-    let userMarker = null;
+    // ═══ GEOLOCALIZAÇÃO ════════════════════════════════════════════
+    // Camadas de localização, da melhor para a pior:
+    //  1. GPS/navegador (preciso) — com cache de 5 min para resposta rápida
+    //  2. Última posição conhecida (localStorage, até 24h) — centra o mapa na hora
+    //  3. Fallback por IP (~cidade) quando o GPS é negado ou indisponível
+    const POS_KEY = 'alertoo_last_pos';
+    let userMarker = null, userCircle = null, userPos = null, geoBusy = false;
+
+    function distKm(lat1, lon1, lat2, lon2) {
+      const rad = Math.PI / 180;
+      const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+      return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+    function fmtDist(km) {
+      if (km < 1) return `${Math.round(km * 1000)} m`;
+      return `${km.toFixed(km < 10 ? 1 : 0).replace('.', ',')} km`;
+    }
+
+    function loadCachedPos() {
+      try {
+        const p = JSON.parse(localStorage.getItem(POS_KEY));
+        if (p && typeof p.lat === 'number' && Date.now() - p.ts < 24 * 3600 * 1000) return p;
+      } catch {}
+      return null;
+    }
+
+    function drawUser() {
+      const userIcon = L.divIcon({
+        html: `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+          <circle cx="11" cy="11" r="9" fill="#2196F3" stroke="#fff" stroke-width="2.5"/>
+          <circle cx="11" cy="11" r="3.5" fill="#fff"/>
+        </svg>`,
+        className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+      });
+      if (userMarker) map.removeLayer(userMarker);
+      if (userCircle) map.removeLayer(userCircle);
+      userMarker = L.marker([userPos.lat, userPos.lng], { icon: userIcon, zIndexOffset: 1000 })
+        .bindPopup(`<div style="color:#fff;background:#1C1C1E;padding:8px 12px;border-radius:10px;font-size:13px;font-weight:600">${tt('map.youAreHere', '📍 Você está aqui')}</div>`)
+        .addTo(map);
+      if (userPos.acc && userPos.acc > 30 && userPos.acc < 5000) {
+        userCircle = L.circle([userPos.lat, userPos.lng], {
+          radius: userPos.acc, color: '#2196F3', weight: 1, opacity: 0.5, fillOpacity: 0.08,
+        }).addTo(map);
+      }
+    }
+
+    function setUserPos(lat, lng, acc, { fly = true, zoom = 13, persist = true } = {}) {
+      userPos = { lat, lng, acc: acc ?? null };
+      if (persist) {
+        try { localStorage.setItem(POS_KEY, JSON.stringify({ lat, lng, acc: acc ?? null, ts: Date.now() })); } catch {}
+      }
+      drawUser();
+      if (fly) map.setView([lat, lng], zoom, { animate: true });
+      if (allEvents.length) renderMarkers(); // reordena lista/mapa por distância
+    }
+
+    async function ipLocate() {
+      // Aproximação por IP (nível cidade) — último recurso.
+      // geojs.io retorna lat/lng como string; ipapi.co como number.
+      const sources = ['https://get.geojs.io/v1/ip/geo.json', 'https://ipapi.co/json/'];
+      for (const url of sources) {
+        try {
+          const r = await fetch(url);
+          const j = await r.json();
+          const lat = parseFloat(j.latitude), lng = parseFloat(j.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            setUserPos(lat, lng, null, { zoom: 10, persist: false });
+            return;
+          }
+        } catch {}
+      }
+    }
+
+    function requestGeo(fromClick) {
+      if (!navigator.geolocation) { if (!userPos) ipLocate(); return; }
+      if (geoBusy) return;
+      geoBusy = true;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          geoBusy = false;
+          setUserPos(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy,
+            { zoom: fromClick ? 14 : 13 });
+        },
+        () => {
+          geoBusy = false;
+          if (!userPos) ipLocate(); // negado/timeout → aproxima por IP
+        },
+        // clique do usuário → alta precisão; carga da página → rápido (aceita cache de 5 min)
+        { enableHighAccuracy: !!fromClick, timeout: 10000, maximumAge: fromClick ? 0 : 5 * 60_000 }
+      );
+    }
 
     function initMap() {
       map = L.map('liveMap', { zoomControl: true, attributionControl: false }).setView([-15.77, -47.92], 4);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         subdomains: 'abcd', maxZoom: 19,
       }).addTo(map);
-    }
-
-    function locateUser() {
-      if (!navigator.geolocation) return;
-      navigator.geolocation.getCurrentPosition(pos => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        map.setView([lat, lng], 13, { animate: true });
-        const userIcon = L.divIcon({
-          html: `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
-            <circle cx="11" cy="11" r="9" fill="#2196F3" stroke="#fff" stroke-width="2.5"/>
-            <circle cx="11" cy="11" r="3.5" fill="#fff"/>
-          </svg>`,
-          className: '', iconSize: [22, 22], iconAnchor: [11, 11],
-        });
-        if (userMarker) map.removeLayer(userMarker);
-        userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 })
-          .bindPopup('<div style="color:#fff;background:#1C1C1E;padding:8px 12px;border-radius:10px;font-size:13px;font-weight:600">📍 Você está aqui</div>')
-          .addTo(map);
-      }, () => {}, { timeout: 6000 });
+      // Botão "minha localização"
+      const LocateCtl = L.Control.extend({
+        options: { position: 'topleft' },
+        onAdd() {
+          const btn = L.DomUtil.create('button', 'locate-btn');
+          btn.type = 'button';
+          btn.innerHTML = '🎯';
+          btn.title = tt('map.locate', 'Minha localização');
+          btn.setAttribute('aria-label', btn.title);
+          L.DomEvent.disableClickPropagation(btn);
+          btn.addEventListener('click', () => requestGeo(true));
+          return btn;
+        },
+      });
+      map.addControl(new LocateCtl());
     }
 
     document.querySelectorAll('.ev-filter').forEach(btn => {
@@ -849,7 +1132,9 @@
     });
 
     initMap();
-    locateUser();
+    const cachedPos = loadCachedPos();
+    if (cachedPos) setUserPos(cachedPos.lat, cachedPos.lng, cachedPos.acc, { zoom: 12, persist: false });
+    requestGeo(false);
     loadEvents();
   </script>
 

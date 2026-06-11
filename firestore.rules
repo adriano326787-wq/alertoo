@@ -117,6 +117,18 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    // ── Lista de espera iOS (formulário público do site) ──────────────────
+    match /ios_waitlist/{entryId} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'lang', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() >= 5
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email.matches('.+@.+\\..+')
+        && (!('lang' in request.resource.data)
+            || (request.resource.data.lang is string && request.resource.data.lang.size() <= 8));
+      allow read, update, delete: if isAdmin();
+    }
+
     // ── Denúncias de eventos ───────────────────────────────────────────────
     match /reports/{reportId} {
       allow get: if request.auth != null

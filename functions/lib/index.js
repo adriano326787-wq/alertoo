@@ -625,6 +625,7 @@ exports.createDonationPreference = (0, https_1.onCall)({ secrets: [MP_ACCESS_TOK
 // Remove eventos de entretenimento cuja data de expiração já passou.
 // Executa às 3h (América/São_Paulo) para minimizar impacto nos usuários.
 exports.cleanupExpiredEvents = (0, scheduler_1.onSchedule)({ schedule: 'every 24 hours', region: 'us-central1', timeZone: 'America/Sao_Paulo' }, async () => {
+    // expiresAt é gravado pelo app como Timestamp (Timestamp.fromMillis)
     const now = firestore_2.Timestamp.now();
     // Lote 1: entertainment_events
     const expiredEnt = await db.collection('entertainment_events')
@@ -636,14 +637,29 @@ exports.cleanupExpiredEvents = (0, scheduler_1.onSchedule)({ schedule: 'every 24
         .where('expiresAt', '<', now)
         .limit(400)
         .get();
+    // Lote 3: radares móveis/blitz expirados (radar fixo tem expiresAt null)
+    const expiredRadars = await db.collection('radars')
+        .where('expiresAt', '<', now)
+        .limit(400)
+        .get();
+    // Lote 4: radares fixos "frios" — sem confirmação da comunidade há 180 dias
+    const staleCutoff = firestore_2.Timestamp.fromMillis(Date.now() - 180 * 24 * 60 * 60 * 1000);
+    const staleRadars = await db.collection('radars')
+        .where('lastConfirmedAt', '<', staleCutoff)
+        .limit(400)
+        .get();
+    // Dedupe — um radar móvel pode aparecer em ambas as queries de radar
+    const toDelete = new Map();
+    [...expiredEnt.docs, ...expiredRoad.docs, ...expiredRadars.docs, ...staleRadars.docs]
+        .forEach((d) => toDelete.set(d.ref.path, d.ref));
     const batch = db.batch();
-    expiredEnt.docs.forEach((d) => batch.delete(d.ref));
-    expiredRoad.docs.forEach((d) => batch.delete(d.ref));
-    if (expiredEnt.size + expiredRoad.size > 0) {
+    toDelete.forEach((ref) => batch.delete(ref));
+    if (toDelete.size > 0) {
         await batch.commit();
     }
     console.log(`[cleanup] ${expiredEnt.size} eventos de entretenimento + ` +
-        `${expiredRoad.size} road events expirados removidos.`);
+        `${expiredRoad.size} road events expirados + ` +
+        `${expiredRadars.size} radares expirados + ${staleRadars.size} radares frios removidos.`);
 });
 // ─── Rate limiting server-side: road events (#13) ────────────────────────────
 // Ao criar um road event, registra timestamp no documento do usuário.

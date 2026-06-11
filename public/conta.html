@@ -347,6 +347,10 @@
       } catch (e) { msg.className = 'msg err'; msg.textContent = authError(e); }
       $('btnAuth').disabled = false;
     };
+    // Enter no formulário envia (login/cadastro)
+    ['email', 'password'].forEach((id) => {
+      $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnAuth').click(); });
+    });
     $('btnGoogle').onclick = async () => {
       const msg = $('authMsg'); msg.className = 'msg';
       try { await signInWithPopup(auth, new GoogleAuthProvider()); }
