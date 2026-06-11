@@ -23,7 +23,7 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sendLocalNotification } from './notificationService';
+import { sendLocalNotification, setupNotificationChannels } from './notificationService';
 import { t } from '../utils/i18n';
 
 export const BACKGROUND_LOCATION_TASK = 'alertoo-background-traffic-task';
@@ -38,13 +38,47 @@ const SLOW_DURATION_MS      = 30_000;
 const STOPPED_DURATION_MS   = 60_000;
 const COOLDOWN_MS           = 5 * 60_000;
 
+// Contexto de veículo — mesmos valores de useTrafficSpeedDetection.
+// Só alerta se o usuário esteve a velocidade de veículo recentemente
+// (evita spam para pedestres parados em bar/casa/fila).
+const VEHICLE_SPEED_THRESHOLD_KMH = 25;
+const VEHICLE_CONTEXT_WINDOW_MS   = 3 * 60_000;
+
+// Anti-fadiga: máximo de alertas de trânsito por dia e janela de silêncio
+// noturno (22h–6h, hora local do dispositivo).
+const MAX_ALERTS_PER_DAY = 5;
+const QUIET_HOUR_START   = 22;
+const QUIET_HOUR_END     = 6;
+
 interface BgState {
   slowSince: number | null;
   stoppedSince: number | null;
   lastAlertAt: number;
+  /** Último instante em que o usuário esteve a velocidade de veículo */
+  lastVehicleSpeedAt: number | null;
+  /** Contagem de alertas no dia corrente (chave dayKey) */
+  alertsToday: number;
+  /** Dia (YYYY-MM-DD local) a que alertsToday se refere */
+  dayKey: string;
 }
 
-const DEFAULT_STATE: BgState = { slowSince: null, stoppedSince: null, lastAlertAt: 0 };
+const DEFAULT_STATE: BgState = {
+  slowSince: null,
+  stoppedSince: null,
+  lastAlertAt: 0,
+  lastVehicleSpeedAt: null,
+  alertsToday: 0,
+  dayKey: '',
+};
+
+function localDayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function inQuietHours(d: Date): boolean {
+  const h = d.getHours();
+  return h >= QUIET_HOUR_START || h < QUIET_HOUR_END;
+}
 
 async function loadState(): Promise<BgState> {
   try {
@@ -74,14 +108,36 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
 
   const state = await loadState();
   const now = Date.now();
+  const nowDate = new Date(now);
+
+  // Reset do contador diário ao virar o dia
+  const dayKey = localDayKey(nowDate);
+  if (state.dayKey !== dayKey) {
+    state.dayKey = dayKey;
+    state.alertsToday = 0;
+  }
+
+  // Marca contexto de veículo (≥25 km/h recentemente)
+  if (speedKmh >= VEHICLE_SPEED_THRESHOLD_KMH) {
+    state.lastVehicleSpeedAt = now;
+  }
+  const inVehicleContext =
+    state.lastVehicleSpeedAt !== null &&
+    now - state.lastVehicleSpeedAt <= VEHICLE_CONTEXT_WINDOW_MS;
+
   const cooldownOk = now - state.lastAlertAt > COOLDOWN_MS;
+  const allowedNow =
+    cooldownOk &&
+    inVehicleContext &&
+    state.alertsToday < MAX_ALERTS_PER_DAY &&
+    !inQuietHours(nowDate);
   let alertKind: 'slow' | 'stopped' | null = null;
 
   if (speedKmh < STOPPED_THRESHOLD_KMH) {
     state.slowSince = null;
     if (state.stoppedSince === null) {
       state.stoppedSince = now;
-    } else if (cooldownOk && now - state.stoppedSince >= STOPPED_DURATION_MS) {
+    } else if (allowedNow && now - state.stoppedSince >= STOPPED_DURATION_MS) {
       alertKind = 'stopped';
       state.stoppedSince = null;
     }
@@ -90,7 +146,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     if (speedKmh < SLOW_THRESHOLD_KMH) {
       if (state.slowSince === null) {
         state.slowSince = now;
-      } else if (cooldownOk && now - state.slowSince >= SLOW_DURATION_MS) {
+      } else if (allowedNow && now - state.slowSince >= SLOW_DURATION_MS) {
         alertKind = 'slow';
         state.slowSince = null;
       }
@@ -101,6 +157,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
 
   if (alertKind) {
     state.lastAlertAt = now;
+    state.alertsToday += 1;
     const title = alertKind === 'stopped'
       ? `🛑 ${t('traffic_alert_stopped_title')}`
       : `🚦 ${t('traffic_alert_slow_title')}`;
@@ -162,6 +219,9 @@ export async function enableBackgroundTrafficAlerts(): Promise<BackgroundTraffic
 
   await saveState({ ...DEFAULT_STATE });
 
+  // Pré-cria o canal de importância mínima antes do serviço (ver notificationService)
+  await setupNotificationChannels().catch(() => {});
+
   const alreadyStarted = await isBackgroundTrackingActive();
   if (!alreadyStarted) {
     await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
@@ -205,6 +265,8 @@ export async function resumeBackgroundTrafficAlertsIfEnabled(): Promise<void> {
   try {
     const bg = await Location.getBackgroundPermissionsAsync();
     if (bg.status !== 'granted') return; // permissão revogada — não força nada
+
+    await setupNotificationChannels().catch(() => {});
 
     if (!(await isBackgroundTrackingActive())) {
       await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {

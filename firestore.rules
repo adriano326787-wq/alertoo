@@ -28,7 +28,32 @@ service cloud.firestore {
           || request.auth.uid == resource.data.userId
         );
       allow delete: if request.auth != null
-        && (request.auth.uid == resource.data.userId || isAdmin());
+        && (request.auth.uid == resource.data.userId
+            || isAdmin()
+            // 10ª negação deleta via transação no cliente (denyEvent) —
+            // o deletante não é o dono, então precisa desta exceção
+            || resource.data.denials >= 9);
+    }
+
+    // ── Radares (base colaborativa — não expiram por TTL, expiram por confiança)
+    match /radars/{radarId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.confirmations == 0
+        && request.resource.data.denials == 0
+        && isValidRadar(request.resource.data);
+      // Votos (confirmar/negar): qualquer autenticado, mas só campos de voto.
+      // Dono não pode mover o radar nem mudar createdBy.
+      allow update: if request.auth != null
+        && !('createdBy' in request.resource.data.diff(resource.data).affectedKeys())
+        && isRadarVoteChange(request.resource.data, resource.data);
+      allow delete: if request.auth != null
+        && (request.auth.uid == resource.data.createdBy
+            || isAdmin()
+            // 5ª negação deleta via transação no cliente (denyRadar)
+            || resource.data.denials >= 4);
     }
 
     // ── Eventos de entretenimento ──────────────────────────────────────────
@@ -140,6 +165,25 @@ service cloud.firestore {
         && data.longitude >= -75.0 && data.longitude <= -28.0
         // description opcional (app envia null quando vazio), mas se for string tem limite
         && (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 500));
+  }
+
+  // ── Validação de radar ─────────────────────────────────────────────────────
+  function isValidRadar(data) {
+    return data.type in ['fixed', 'mobile', 'blitz']
+        && data.createdBy is string
+        && data.createdBy.size() <= 128
+        && data.latitude is number
+        && data.latitude >= -35.0 && data.latitude <= 6.0
+        && data.longitude is number
+        && data.longitude >= -75.0 && data.longitude <= -28.0
+        && (!('speedLimit' in data) || data.speedLimit == null
+            || (data.speedLimit is number && data.speedLimit >= 10 && data.speedLimit <= 150));
+  }
+
+  // ── Detecta se a mudança no radar é apenas voto/renovação ──────────────────
+  function isRadarVoteChange(newData, oldData) {
+    let voteFields = ['confirmations', 'denials', 'voterStamps', 'lastConfirmedAt', 'status'];
+    return newData.diff(oldData).affectedKeys().hasOnly(voteFields);
   }
 
   // ── Validação de entertainment event ──────────────────────────────────────

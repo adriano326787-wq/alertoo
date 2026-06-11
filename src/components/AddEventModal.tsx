@@ -15,10 +15,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventCategory, EVENT_CATEGORIES } from '../types';
+import { RadarType, RADAR_TYPES } from '../types/radar';
 import { useEventsStore } from '../store/eventsStore';
+import { useRadarsStore } from '../store/radarsStore';
 import { validateEventContent } from '../utils/contentFilter';
 import { useT } from '../hooks/useT';
-import { tRoadCat } from '../utils/i18n';
+import { tRoadCat, tRadarType } from '../utils/i18n';
 import { useTick } from '../hooks/useTick';
 
 // Limites de velocidade comuns em vias brasileiras (km/h)
@@ -40,9 +42,11 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
   const { bottom: bottomInset } = useSafeAreaInsets();
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>('drunkcheck');
   const [speedLimit, setSpeedLimit] = useState<number | null>(null);
+  const [radarType, setRadarType] = useState<RadarType>('fixed');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const addEvent = useEventsStore((s) => s.addEvent);
+  const addRadar = useRadarsStore((s) => s.addRadar);
   const _lastEventAt = useEventsStore((s) => s._lastEventAt);
   const RATE_LIMIT_MS = 30_000;
   // #31 — only tick every second when actually rate-limited (avoids wasted re-renders)
@@ -58,6 +62,7 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
     if (!visible) {
       setSelectedCategory('drunkcheck');
       setSpeedLimit(null);
+      setRadarType('fixed');
       setDescription('');
     }
   }, [visible]);
@@ -94,18 +99,32 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
     Keyboard.dismiss(); // #17 — fecha teclado antes do spinner aparecer
     setSaving(true);
     try {
-      const meta = EVENT_CATEGORIES[selectedCategory];
-      await addEvent({
-        category: selectedCategory,
-        title: meta.label,
-        description: description.trim() || undefined,
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude,
-        stateUF,
-        cityName,
-        countryCode,
-        speedLimit: selectedCategory === 'radar' ? (speedLimit ?? undefined) : undefined,
-      });
+      if (selectedCategory === 'radar') {
+        // Radar vai para a coleção colaborativa dedicada (não expira por TTL;
+        // entra como 'pending' até 2 confirmações de outros usuários)
+        await addRadar({
+          type: radarType,
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
+          speedLimit: speedLimit ?? undefined,
+          stateUF,
+          cityName,
+          countryCode,
+        });
+        Alert.alert(`📷 ${t('radar_title')}`, t('radar_pending_note'));
+      } else {
+        const meta = EVENT_CATEGORIES[selectedCategory];
+        await addEvent({
+          category: selectedCategory,
+          title: meta.label,
+          description: description.trim() || undefined,
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
+          stateUF,
+          cityName,
+          countryCode,
+        });
+      }
       setDescription('');
       setSpeedLimit(null);
       onEventCreated?.();
@@ -160,6 +179,28 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
 
             {selectedCategory === 'radar' && (
               <>
+                <Text style={styles.label}>{t('radar_select_type')}</Text>
+                <View style={styles.chips}>
+                  {(Object.entries(RADAR_TYPES) as [RadarType, typeof RADAR_TYPES[RadarType]][]).map(
+                    ([key, meta]) => (
+                      <TouchableOpacity
+                        key={key}
+                        style={[
+                          styles.chip,
+                          { borderColor: meta.color },
+                          radarType === key && { backgroundColor: meta.color },
+                        ]}
+                        onPress={() => setRadarType(key)}
+                      >
+                        <Text style={styles.chipEmoji}>{meta.emoji}</Text>
+                        <Text style={[styles.chipLabel, radarType === key && styles.chipLabelSelected]}>
+                          {tRadarType(key)}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  )}
+                </View>
+
                 <Text style={styles.label}>{t('add_road_speed_limit')}</Text>
                 <View style={styles.chips}>
                   {SPEED_LIMIT_OPTIONS.map((kmh) => (

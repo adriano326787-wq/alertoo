@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Acesse sua conta Alertoo: perfil, eventos criados, créditos de promoção e compras. Mesma conta do aplicativo." />
+  <meta name="robots" content="noindex, follow" />
+  <link rel="canonical" href="https://alertoo.com.br/conta" />
+  <title>Minha Conta — Alertoo</title>
+  <link rel="icon" href="/icon.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <style>
+    :root {
+      --brand: #FF5722;
+      --brand-dark: #E64A19;
+      --ink: #1a1a1a;
+      --muted: #667;
+      --bg: #f6f7f9;
+      --card: #fff;
+      --ok: #2E7D32;
+      --err: #C62828;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; }
+    a { color: var(--brand); text-decoration: none; }
+
+    header.topbar {
+      background: var(--brand); color: #fff; padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar .logo { font-weight: 800; font-size: 18px; color: #fff; }
+    .topbar .logo span { opacity: .85; font-weight: 600; }
+    .topbar button { background: rgba(255,255,255,.15); color: #fff; border: 0; padding: 8px 14px; border-radius: 10px; font-weight: 700; cursor: pointer; }
+
+    main { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    .card { background: var(--card); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .card h2 { font-size: 17px; margin-bottom: 12px; }
+    .muted { color: var(--muted); font-size: 13px; }
+
+    /* ── Auth ─────────────────────────────── */
+    .auth-wrap { max-width: 420px; margin: 6vh auto 0; }
+    .auth-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+    .auth-tabs button { flex: 1; padding: 10px; border: 0; border-radius: 10px; background: #eceff1; font-weight: 700; cursor: pointer; color: #555; }
+    .auth-tabs button.active { background: var(--brand); color: #fff; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: 11px 12px; border: 1px solid #dde; border-radius: 10px; font-size: 15px; background: #fff;
+    }
+    .btn { display: block; width: 100%; padding: 13px; border: 0; border-radius: 12px; background: var(--brand); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+    .btn:disabled { background: #ccc; cursor: default; }
+    .btn.secondary { background: #fff; color: var(--ink); border: 1px solid #dde; }
+    .btn.google { background: #fff; color: #333; border: 1px solid #dde; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .divider { text-align: center; color: #aab; font-size: 12px; margin: 14px 0; }
+    .link-btn { background: none; border: 0; color: var(--brand); font-size: 13px; cursor: pointer; margin-top: 10px; }
+    .msg { padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 12px; display: none; }
+    .msg.err { background: #FFEBEE; color: var(--err); display: block; }
+    .msg.ok  { background: #E8F5E9; color: var(--ok);  display: block; }
+
+    /* ── Tabs do portal ───────────────────── */
+    nav.tabs { display: flex; gap: 6px; margin-bottom: 18px; overflow-x: auto; }
+    nav.tabs button {
+      padding: 10px 16px; border: 0; border-radius: 20px; background: #fff; color: #555;
+      font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    nav.tabs button.active { background: var(--brand); color: #fff; }
+    section.tab { display: none; }
+    section.tab.active { display: block; }
+
+    /* ── Perfil ───────────────────────────── */
+    .profile-head { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+    .avatar { width: 64px; height: 64px; border-radius: 32px; background: #FBE9E7; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 14px; }
+    .stat { background: #fafbfc; border: 1px solid #eef; border-radius: 12px; padding: 12px; text-align: center; }
+    .stat b { display: block; font-size: 20px; }
+    .stat span { font-size: 12px; color: var(--muted); }
+    .progress { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+    .progress i { display: block; height: 100%; background: var(--brand); }
+
+    /* ── Eventos ──────────────────────────── */
+    .event-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f1f3; }
+    .event-item:last-child { border-bottom: 0; }
+    .event-emoji { font-size: 26px; }
+    .event-info { flex: 1; min-width: 0; }
+    .event-info b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .event-info small { color: var(--muted); }
+    .pill { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 10px; }
+    .pill.live { background: #E8F5E9; color: var(--ok); }
+    .pill.dead { background: #eceff1; color: #789; }
+    .icon-btn { background: none; border: 0; font-size: 16px; cursor: pointer; padding: 6px; }
+
+    /* ── Créditos ─────────────────────────── */
+    .pkg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .pkg { border: 2px solid #eef; border-radius: 14px; padding: 16px; text-align: center; cursor: pointer; background: #fff; }
+    .pkg:hover, .pkg.selected { border-color: var(--brand); }
+    .pkg b { font-size: 22px; display: block; }
+    .pkg .price { color: var(--brand); font-weight: 800; margin-top: 4px; }
+    #payment-element { margin: 16px 0; }
+    .credits-badge { font-size: 26px; font-weight: 900; color: var(--brand); }
+
+    /* ── Mapa de criação ──────────────────── */
+    #pickMap { height: 280px; border-radius: 12px; margin-bottom: 12px; }
+    .loading { text-align: center; padding: 50px 0; color: var(--muted); }
+    @media (max-width: 560px) { main { padding: 14px 10px 60px; } }
+  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/">🔔 Alertoo <span>· Minha Conta</span></a>
+    <button id="btnLogout" style="display:none">Sair</button>
+  </header>
+
+  <main>
+    <!-- ═══ LOGIN / CADASTRO ═══ -->
+    <div id="authView" class="auth-wrap" style="display:none">
+      <div class="card">
+        <div class="auth-tabs">
+          <button id="tabLogin" class="active">Entrar</button>
+          <button id="tabRegister">Criar conta</button>
+        </div>
+        <div id="authMsg" class="msg"></div>
+        <div class="field">
+          <label>E-mail</label>
+          <input type="email" id="email" autocomplete="email" placeholder="voce@email.com" />
+        </div>
+        <div class="field">
+          <label>Senha</label>
+          <input type="password" id="password" autocomplete="current-password" placeholder="••••••••" />
+        </div>
+        <button class="btn" id="btnAuth">Entrar</button>
+        <button class="link-btn" id="btnForgot">Esqueci minha senha</button>
+        <div class="divider">— ou —</div>
+        <button class="btn google" id="btnGoogle">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+          Continuar com Google
+        </button>
+        <p class="muted" style="margin-top:14px; text-align:center">
+          Mesma conta do aplicativo — seus pontos, eventos e créditos sincronizam automaticamente.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══ PORTAL ═══ -->
+    <div id="portalView" style="display:none">
+      <nav class="tabs">
+        <button data-tab="perfil" class="active">👤 Perfil</button>
+        <button data-tab="eventos">📍 Meus eventos</button>
+        <button data-tab="criar">➕ Criar evento</button>
+        <button data-tab="creditos">💳 Créditos</button>
+      </nav>
+
+      <!-- Perfil -->
+      <section class="tab active" id="tab-perfil">
+        <div class="card">
+          <div class="profile-head">
+            <div class="avatar" id="pAvatar">🌱</div>
+            <div style="flex:1">
+              <b id="pName" style="font-size:18px">—</b>
+              <button class="icon-btn" id="btnEditName" title="Editar nome">✏️</button>
+              <div class="muted" id="pEmail">—</div>
+              <div class="muted" id="pSince"></div>
+            </div>
+          </div>
+          <div>
+            <b id="pRank">—</b> · <span id="pPoints">0</span> pontos
+            <div class="progress"><i id="pProgress" style="width:0%"></i></div>
+            <small class="muted" id="pNextRank"></small>
+          </div>
+          <div class="stats-grid" id="pStats"></div>
+        </div>
+        <div class="card">
+          <h2>Histórico de compras</h2>
+          <div id="purchaseList" class="muted">Carregando…</div>
+        </div>
+        <div class="card">
+          <h2>Conta</h2>
+          <p class="muted">Para excluir sua conta e dados, acesse <a href="/deletar-conta">deletar conta</a>.</p>
+        </div>
+      </section>
+
+      <!-- Meus eventos -->
+      <section class="tab" id="tab-eventos">
+        <div class="card">
+          <h2>🎉 Eventos de entretenimento</h2>
+          <div id="myEntEvents" class="muted">Carregando…</div>
+        </div>
+        <div class="card">
+          <h2>🚗 Alertas de trânsito</h2>
+          <div id="myRoadEvents" class="muted">Carregando…</div>
+        </div>
+      </section>
+
+      <!-- Criar evento -->
+      <section class="tab" id="tab-criar">
+        <div class="card">
+          <h2>Criar evento de entretenimento</h2>
+          <div id="createMsg" class="msg"></div>
+          <div class="field">
+            <label>Título *</label>
+            <input id="evTitle" maxlength="120" placeholder="Ex.: Show de MPB no centro" />
+          </div>
+          <div class="field">
+            <label>Categoria *</label>
+            <select id="evCategory">
+              <option value="party">🎉 Festa</option>
+              <option value="show">🎤 Show</option>
+              <option value="club">🪩 Balada</option>
+              <option value="bar">🍻 Bar</option>
+              <option value="restaurant">🍔 Restaurante</option>
+              <option value="festival">🎪 Festival</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Descrição</label>
+            <textarea id="evDescription" rows="3" maxlength="1000" placeholder="Detalhes do evento…"></textarea>
+          </div>
+          <div class="field">
+            <label>Endereço</label>
+            <input id="evAddress" maxlength="200" placeholder="Rua, número, bairro" />
+          </div>
+          <label class="muted" style="display:block; margin-bottom:6px">📌 Toque no mapa para marcar o local *</label>
+          <div id="pickMap"></div>
+          <div class="muted" id="pickedCoord" style="margin-bottom:12px">Nenhum local selecionado</div>
+          <button class="btn" id="btnCreateEvent">Publicar evento</button>
+          <p class="muted" style="margin-top:10px">O evento aparece no app e no site imediatamente. Duração automática conforme a categoria (18–72 h).</p>
+        </div>
+      </section>
+
+      <!-- Créditos -->
+      <section class="tab" id="tab-creditos">
+        <div class="card" style="text-align:center">
+          <div class="muted">Seus créditos de promoção</div>
+          <div class="credits-badge" id="creditBalance">—</div>
+          <p class="muted">Créditos servem para destacar seus eventos no mapa (Bronze, Prata e Ouro) — no app e no site.</p>
+        </div>
+        <div class="card">
+          <h2>Comprar créditos</h2>
+          <div id="payMsg" class="msg"></div>
+          <div class="pkg-grid" id="pkgGrid"></div>
+          <div id="payment-element"></div>
+          <button class="btn" id="btnPay" style="display:none">Pagar</button>
+          <p class="muted" style="margin-top:10px">Pagamento seguro via Stripe. Os créditos caem na sua conta na hora e funcionam também no aplicativo.</p>
+        </div>
+      </section>
+    </div>
+
+    <div id="loadingView" class="loading">Carregando sua conta…</div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://js.stripe.com/v3/"></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import {
+      getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+      sendPasswordResetEmail, sendEmailVerification, GoogleAuthProvider, signInWithPopup, signOut, updateProfile,
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import {
+      getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where,
+      orderBy, limit, getDocs, onSnapshot, Timestamp,
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+    const app = initializeApp({
+      apiKey:            'AIzaSyCoI9rNBK07vGZBuygprq4PkDKGT0iZkYU',
+      authDomain:        'lei-seca---eventos.firebaseapp.com',
+      projectId:         'lei-seca---eventos',
+      storageBucket:     'lei-seca---eventos.firebasestorage.app',
+      messagingSenderId: '657066902706',
+      appId:             '1:657066902706:web:3e3d49f23a819c5ce1b5ab',
+    });
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const functions = getFunctions(app, 'us-central1');
+
+    const STRIPE_PK = 'pk_live_51TVahq3EQbk26oKK7r6XtnrgKIf6Tgo00ckXubTa5huxvTM7Ts1uWdJZVP50QIXjjvmlmoFONjuDWA2MUDuh5Vgb00Ofle87oa';
+    const stripe = Stripe(STRIPE_PK);
+
+    // Mesmos pacotes do app (manter em sincronia com src/types/promotion.ts)
+    const PACKAGES = [
+      { id: 'pkg_1',  credits: 1,  price: 4.99 },
+      { id: 'pkg_5',  credits: 5,  price: 19.99 },
+      { id: 'pkg_10', credits: 10, price: 34.99 },
+      { id: 'pkg_20', credits: 20, price: 59.99 },
+    ];
+    const RANKS = [
+      { label: 'Iniciante',    emoji: '🌱', min: 0 },
+      { label: 'Explorador',   emoji: '🔭', min: 100 },
+      { label: 'Colaborador',  emoji: '⭐', min: 300 },
+      { label: 'Especialista', emoji: '🏆', min: 700 },
+      { label: 'Mestre',       emoji: '👑', min: 1500 },
+    ];
+    const ENT_CATS = {
+      party: '🎉 Festa', show: '🎤 Show', club: '🪩 Balada', bar: '🍻 Bar',
+      restaurant: '🍔 Restaurante', festival: '🎪 Festival', other: '📍 Outro',
+      sports: '⚽ Esporte', fair: '🛍️ Feira', food: '🍔 Gastronomia', art: '🎨 Arte',
+    };
+    const ROAD_CATS = {
+      drunkcheck: '🍺 Lei Seca', policeblitz: '👮 Blitz', accident: '🚗 Acidente',
+      roadwork: '🚧 Obras', flood: '🌊 Alagamento', closure: '🚫 Interdição',
+      traffic: '🐢 Congestionamento', hazard: '⚠️ Perigo', radar: '📷 Radar',
+    };
+    const ENT_TTL_HOURS = { show: 18, party: 20, club: 20, bar: 36, restaurant: 36, festival: 72 };
+
+    const $ = (id) => document.getElementById(id);
+    let currentUser = null;
+    let unsubProfile = null;
+
+    // ═══ AUTH ═══════════════════════════════════════════════════════════════
+    let authMode = 'login';
+    $('tabLogin').onclick = () => setAuthMode('login');
+    $('tabRegister').onclick = () => setAuthMode('register');
+    function setAuthMode(m) {
+      authMode = m;
+      $('tabLogin').classList.toggle('active', m === 'login');
+      $('tabRegister').classList.toggle('active', m === 'register');
+      $('btnAuth').textContent = m === 'login' ? 'Entrar' : 'Criar conta';
+    }
+    function authError(e) {
+      const map = {
+        'auth/invalid-credential': 'E-mail ou senha incorretos.',
+        'auth/user-not-found': 'Conta não encontrada.',
+        'auth/wrong-password': 'Senha incorreta.',
+        'auth/email-already-in-use': 'Este e-mail já tem uma conta. Use "Entrar".',
+        'auth/weak-password': 'A senha precisa ter pelo menos 6 caracteres.',
+        'auth/invalid-email': 'E-mail inválido.',
+        'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos.',
+      };
+      return map[e?.code] || 'Não foi possível entrar. Tente novamente.';
+    }
+    $('btnAuth').onclick = async () => {
+      const email = $('email').value.trim(), pass = $('password').value;
+      const msg = $('authMsg'); msg.className = 'msg';
+      if (!email || !pass) { msg.className = 'msg err'; msg.textContent = 'Preencha e-mail e senha.'; return; }
+      $('btnAuth').disabled = true;
+      try {
+        if (authMode === 'login') {
+          await signInWithEmailAndPassword(auth, email, pass);
+        } else {
+          const cred = await createUserWithEmailAndPassword(auth, email, pass);
+          sendEmailVerification(cred.user).catch(() => {});
+        }
+      } catch (e) { msg.className = 'msg err'; msg.textContent = authError(e); }
+      $('btnAuth').disabled = false;
+    };
+    $('btnGoogle').onclick = async () => {
+      const msg = $('authMsg'); msg.className = 'msg';
+      try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+      catch (e) { if (e?.code !== 'auth/popup-closed-by-user') { msg.className = 'msg err'; msg.textContent = authError(e); } }
+    };
+    $('btnForgot').onclick = async () => {
+      const email = $('email').value.trim();
+      const msg = $('authMsg');
+      if (!email) { msg.className = 'msg err'; msg.textContent = 'Digite seu e-mail acima e clique de novo.'; return; }
+      try {
+        await sendPasswordResetEmail(auth, email);
+        msg.className = 'msg ok'; msg.textContent = 'E-mail de recuperação enviado. Confira sua caixa de entrada.';
+      } catch (e) { msg.className = 'msg err'; msg.textContent = authError(e); }
+    };
+    $('btnLogout').onclick = () => signOut(auth);
+
+    onAuthStateChanged(auth, (user) => {
+      currentUser = user;
+      $('loadingView').style.display = 'none';
+      if (user && !user.isAnonymous) {
+        $('authView').style.display = 'none';
+        $('portalView').style.display = 'block';
+        $('btnLogout').style.display = 'block';
+        loadPortal(user);
+      } else {
+        if (unsubProfile) { unsubProfile(); unsubProfile = null; }
+        $('authView').style.display = 'block';
+        $('portalView').style.display = 'none';
+        $('btnLogout').style.display = 'none';
+      }
+    });
+
+    // ═══ TABS ═══════════════════════════════════════════════════════════════
+    document.querySelectorAll('nav.tabs button').forEach((b) => {
+      b.onclick = () => {
+        document.querySelectorAll('nav.tabs button').forEach((x) => x.classList.remove('active'));
+        document.querySelectorAll('section.tab').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        $('tab-' + b.dataset.tab).classList.add('active');
+        if (b.dataset.tab === 'criar') setTimeout(initPickMap, 50);
+      };
+    });
+
+    // ═══ PERFIL ═════════════════════════════════════════════════════════════
+    async function loadPortal(user) {
+      // Garante doc de perfil (mesma estrutura do app)
+      const userRef = doc(db, 'users', user.uid);
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        await setDoc(userRef, {
+          uid: user.uid,
+          displayName: user.displayName || user.email?.split('@')[0] || 'Usuário',
+          email: user.email || null,
+          photoURL: user.photoURL || null,
+          points: 0,
+          eventsReported: 0,
+          confirmationsReceived: 0,
+          createdAt: Date.now(),
+        }).catch(() => {});
+      }
+
+      if (unsubProfile) unsubProfile();
+      unsubProfile = onSnapshot(userRef, (s) => {
+        const p = s.data() || {};
+        renderProfile(user, p);
+        $('creditBalance').textContent = `${p.promotionCredits ?? 0} 💎`;
+      });
+
+      loadMyEvents(user.uid);
+      loadPurchases(user.uid);
+      renderPackages();
+    }
+
+    function renderProfile(user, p) {
+      const points = p.points ?? 0;
+      let rank = RANKS[0], next = null;
+      for (let i = RANKS.length - 1; i >= 0; i--) {
+        if (points >= RANKS[i].min) { rank = RANKS[i]; next = RANKS[i + 1] || null; break; }
+      }
+      $('pAvatar').textContent = rank.emoji;
+      $('pName').textContent = p.displayName || user.displayName || '—';
+      $('pEmail').textContent = user.email || '';
+      if (p.createdAt) {
+        $('pSince').textContent = 'Membro desde ' + new Date(p.createdAt).toLocaleDateString('pt-BR');
+      }
+      $('pRank').textContent = `${rank.emoji} ${rank.label}`;
+      $('pPoints').textContent = points;
+      if (next) {
+        const pct = Math.min(100, Math.round(((points - rank.min) / (next.min - rank.min)) * 100));
+        $('pProgress').style.width = pct + '%';
+        $('pNextRank').textContent = `${next.min - points} pontos para ${next.emoji} ${next.label}`;
+      } else {
+        $('pProgress').style.width = '100%';
+        $('pNextRank').textContent = 'Rank máximo! 👑';
+      }
+      $('pStats').innerHTML = `
+        <div class="stat"><b>${p.eventsReported ?? 0}</b><span>Eventos criados</span></div>
+        <div class="stat"><b>${p.confirmationsReceived ?? 0}</b><span>Confirmações</span></div>
+        <div class="stat"><b>${p.likesReceived ?? 0}</b><span>Curtidas</span></div>
+        <div class="stat"><b>${p.commentsPosted ?? 0}</b><span>Comentários</span></div>`;
+    }
+
+    $('btnEditName').onclick = async () => {
+      const name = prompt('Novo nome de exibição:', $('pName').textContent);
+      if (!name || !name.trim() || !currentUser) return;
+      const clean = name.trim().slice(0, 80);
+      try {
+        await updateDoc(doc(db, 'users', currentUser.uid), { displayName: clean });
+        updateProfile(currentUser, { displayName: clean }).catch(() => {});
+      } catch { alert('Não foi possível atualizar o nome.'); }
+    };
+
+    // ═══ MEUS EVENTOS ═══════════════════════════════════════════════════════
+    async function loadMyEvents(uid) {
+      // Entretenimento
+      try {
+        const q1 = query(collection(db, 'entertainment_events'), where('userId', '==', uid), limit(50));
+        const s1 = await getDocs(q1);
+        renderEventList('myEntEvents', s1.docs, 'entertainment_events', ENT_CATS);
+      } catch { $('myEntEvents').textContent = 'Erro ao carregar.'; }
+      // Estrada
+      try {
+        const q2 = query(collection(db, 'events'), where('userId', '==', uid), limit(50));
+        const s2 = await getDocs(q2);
+        renderEventList('myRoadEvents', s2.docs, 'events', ROAD_CATS);
+      } catch { $('myRoadEvents').textContent = 'Erro ao carregar.'; }
+    }
+
+    function renderEventList(elId, docs, colName, cats) {
+      const el = $(elId);
+      if (docs.length === 0) { el.textContent = 'Nenhum evento ainda.'; return; }
+      el.innerHTML = '';
+      const now = Date.now();
+      docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+        .forEach((ev) => {
+          const expires = ev.expiresAt?.toMillis?.() ?? 0;
+          const live = expires > now;
+          const cat = cats[ev.category] || '📍';
+          const row = document.createElement('div');
+          row.className = 'event-item';
+          row.innerHTML = `
+            <div class="event-emoji">${cat.split(' ')[0]}</div>
+            <div class="event-info">
+              <b>${escapeHtml(ev.title || cat)}</b>
+              <small>${[ev.cityName, ev.stateUF].filter(Boolean).join(' — ')} ·
+                ${ev.createdAt?.toMillis ? new Date(ev.createdAt.toMillis()).toLocaleDateString('pt-BR') : ''}</small>
+            </div>
+            <span class="pill ${live ? 'live' : 'dead'}">${live ? 'ATIVO' : 'EXPIRADO'}</span>`;
+          const del = document.createElement('button');
+          del.className = 'icon-btn'; del.title = 'Excluir'; del.textContent = '🗑️';
+          del.onclick = async () => {
+            if (!confirm(`Excluir "${ev.title || 'evento'}"?`)) return;
+            try { await deleteDoc(doc(db, colName, ev.id)); row.remove(); }
+            catch { alert('Não foi possível excluir.'); }
+          };
+          row.appendChild(del);
+          el.appendChild(row);
+        });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // ═══ CRIAR EVENTO ═══════════════════════════════════════════════════════
+    let pickMap = null, pickMarker = null, pickedLatLng = null;
+    function initPickMap() {
+      if (pickMap) { pickMap.invalidateSize(); return; }
+      pickMap = L.map('pickMap').setView([-23.5505, -46.6333], 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap', maxZoom: 19,
+      }).addTo(pickMap);
+      navigator.geolocation?.getCurrentPosition(
+        (pos) => pickMap.setView([pos.coords.latitude, pos.coords.longitude], 14),
+        () => {}, { timeout: 5000 },
+      );
+      pickMap.on('click', (e) => {
+        pickedLatLng = e.latlng;
+        if (pickMarker) pickMarker.setLatLng(e.latlng);
+        else pickMarker = L.marker(e.latlng).addTo(pickMap);
+        $('pickedCoord').textContent = `📌 ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+      });
+    }
+
+    $('btnCreateEvent').onclick = async () => {
+      const msg = $('createMsg'); msg.className = 'msg';
+      const title = $('evTitle').value.trim();
+      const category = $('evCategory').value;
+      if (!currentUser) return;
+      if (title.length < 2) { msg.className = 'msg err'; msg.textContent = 'Dê um título ao evento (mín. 2 caracteres).'; return; }
+      if (!pickedLatLng) { msg.className = 'msg err'; msg.textContent = 'Toque no mapa para marcar o local do evento.'; return; }
+
+      $('btnCreateEvent').disabled = true;
+      try {
+        // Reverse geocode leve via Nominatim para cidade/UF (best-effort)
+        let cityName = null, stateUF = null;
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pickedLatLng.lat}&lon=${pickedLatLng.lng}&zoom=10&accept-language=pt-BR`);
+          const j = await r.json();
+          cityName = j.address?.city || j.address?.town || j.address?.municipality || null;
+          const ufMap = { 'Acre':'AC','Alagoas':'AL','Amapá':'AP','Amazonas':'AM','Bahia':'BA','Ceará':'CE','Distrito Federal':'DF','Espírito Santo':'ES','Goiás':'GO','Maranhão':'MA','Mato Grosso':'MT','Mato Grosso do Sul':'MS','Minas Gerais':'MG','Pará':'PA','Paraíba':'PB','Paraná':'PR','Pernambuco':'PE','Piauí':'PI','Rio de Janeiro':'RJ','Rio Grande do Norte':'RN','Rio Grande do Sul':'RS','Rondônia':'RO','Roraima':'RR','Santa Catarina':'SC','São Paulo':'SP','Sergipe':'SE','Tocantins':'TO' };
+          stateUF = ufMap[j.address?.state] || null;
+        } catch {}
+
+        const now = Date.now();
+        const ttl = (ENT_TTL_HOURS[category] ?? 36) * 3600_000;
+        const ref = doc(collection(db, 'entertainment_events'));
+        await setDoc(ref, {
+          category,
+          title,
+          description: $('evDescription').value.trim() || null,
+          address: $('evAddress').value.trim() || null,
+          latitude: pickedLatLng.lat,
+          longitude: pickedLatLng.lng,
+          createdAt: Timestamp.fromMillis(now),
+          expiresAt: Timestamp.fromMillis(now + ttl),
+          userId: currentUser.uid,
+          likes: [],
+          commentCount: 0,
+          stateUF, cityName, countryCode: 'BR',
+          photoUrl: null,
+          isFeatured: false,
+          promotionTier: null,
+          promotionEndDate: null,
+          promotionPhotoUrl: null,
+        });
+        msg.className = 'msg ok'; msg.textContent = '🎉 Evento publicado! Ele já aparece no app e no site.';
+        $('evTitle').value = ''; $('evDescription').value = ''; $('evAddress').value = '';
+        loadMyEvents(currentUser.uid);
+      } catch (e) {
+        msg.className = 'msg err';
+        msg.textContent = e?.code === 'permission-denied'
+          ? 'Sem permissão — aguarde 30 s entre eventos e tente de novo.'
+          : 'Não foi possível publicar. Tente novamente.';
+      }
+      $('btnCreateEvent').disabled = false;
+    };
+
+    // ═══ CRÉDITOS / STRIPE ══════════════════════════════════════════════════
+    let elements = null, selectedPkg = null, currentPiId = null;
+
+    function renderPackages() {
+      const grid = $('pkgGrid');
+      grid.innerHTML = '';
+      PACKAGES.forEach((p) => {
+        const d = document.createElement('div');
+        d.className = 'pkg';
+        d.innerHTML = `<b>${p.credits} 💎</b><div class="muted">${p.credits === 1 ? 'crédito' : 'créditos'}</div><div class="price">R$ ${p.price.toFixed(2).replace('.', ',')}</div>`;
+        d.onclick = () => selectPackage(p, d);
+        grid.appendChild(d);
+      });
+    }
+
+    async function selectPackage(pkg, el) {
+      document.querySelectorAll('.pkg').forEach((x) => x.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedPkg = pkg;
+      const msg = $('payMsg'); msg.className = 'msg';
+      $('btnPay').style.display = 'none';
+      $('payment-element').innerHTML = '<p class="muted">Preparando pagamento…</p>';
+      try {
+        const create = httpsCallable(functions, 'createStripePaymentIntent');
+        const { data } = await create({ packageId: pkg.id });
+        currentPiId = data.paymentIntentId;
+        elements = stripe.elements({ clientSecret: data.clientSecret, locale: 'pt-BR' });
+        $('payment-element').innerHTML = '';
+        const payEl = elements.create('payment');
+        payEl.mount('#payment-element');
+        $('btnPay').style.display = 'block';
+        $('btnPay').textContent = `Pagar R$ ${pkg.price.toFixed(2).replace('.', ',')}`;
+      } catch (e) {
+        $('payment-element').innerHTML = '';
+        msg.className = 'msg err';
+        msg.textContent = 'Não foi possível iniciar o pagamento. Tente novamente.';
+      }
+    }
+
+    $('btnPay').onclick = async () => {
+      if (!elements || !selectedPkg) return;
+      const msg = $('payMsg'); msg.className = 'msg';
+      $('btnPay').disabled = true;
+      try {
+        const { error, paymentIntent } = await stripe.confirmPayment({
+          elements,
+          redirect: 'if_required',
+        });
+        if (error) {
+          msg.className = 'msg err'; msg.textContent = error.message || 'Pagamento recusado.';
+        } else if (paymentIntent?.status === 'succeeded') {
+          const verify = httpsCallable(functions, 'verifyStripePayment');
+          const { data } = await verify({ paymentIntentId: paymentIntent.id });
+          if (data.status === 'approved') {
+            msg.className = 'msg ok';
+            msg.textContent = `✅ Pagamento aprovado! ${data.credits} crédito(s) adicionados à sua conta.`;
+            $('payment-element').innerHTML = '';
+            $('btnPay').style.display = 'none';
+            loadPurchases(currentUser.uid);
+          } else {
+            msg.className = 'msg err'; msg.textContent = 'Pagamento em processamento. Os créditos caem assim que confirmar.';
+          }
+        }
+      } catch {
+        msg.className = 'msg err'; msg.textContent = 'Erro ao processar o pagamento.';
+      }
+      $('btnPay').disabled = false;
+    };
+
+    async function loadPurchases(uid) {
+      try {
+        const q1 = query(collection(db, 'credit_purchases'), where('userId', '==', uid), limit(20));
+        const s = await getDocs(q1);
+        const el = $('purchaseList');
+        if (s.empty) { el.textContent = 'Nenhuma compra ainda.'; return; }
+        el.innerHTML = '';
+        s.docs
+          .map((d) => d.data())
+          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+          .forEach((p) => {
+            const row = document.createElement('div');
+            row.className = 'event-item';
+            row.innerHTML = `
+              <div class="event-emoji">💎</div>
+              <div class="event-info">
+                <b>${p.credits} crédito(s) — R$ ${(p.price ?? 0).toFixed(2).replace('.', ',')}</b>
+                <small>${new Date(p.createdAt).toLocaleDateString('pt-BR')} · ${p.paymentMethod}</small>
+              </div>`;
+            el.appendChild(row);
+          });
+      } catch { $('purchaseList').textContent = 'Erro ao carregar.'; }
+    }
+  </script>
+</body>
+</html>

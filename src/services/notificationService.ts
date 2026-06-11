@@ -1,10 +1,20 @@
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { haversineDistance } from '../utils/geo';
 import { t } from '../utils/i18n';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // Raio para notificar (km)
 export const NOTIFY_RADIUS_KM = 5;
+
+// Canal Android para alertas (trânsito / eventos próximos) — importância padrão
+export const ALERTS_CHANNEL_ID = 'alerts';
+
+// Canal do foreground service de localização (expo-location).
+// O id é `appScopeKey:taskName` (ver LocationTaskService.kt). Pré-criamos com
+// importância MÍNIMA (sem som, minimizado na bandeja) ANTES de o serviço
+// iniciar — o expo-location só cria o canal se ele não existir, então o nosso
+// vence e a notificação "Monitorando o trânsito" fica discreta.
+const BG_SERVICE_CHANNEL_ID = 'com.alertoo.app:alertoo-background-traffic-task';
 
 // Carrega expo-notifications de forma segura (falha silenciosa em emuladores sem suporte)
 function getNotifications() {
@@ -17,11 +27,38 @@ function getNotifications() {
 }
 
 let handlerSet = false;
+let channelsSet = false;
+
+/**
+ * Cria os canais de notificação Android (no-op no iOS e se já criados).
+ * Deve rodar antes de qualquer notificação e antes do foreground service.
+ */
+export async function setupNotificationChannels(): Promise<void> {
+  if (channelsSet || Platform.OS !== 'android') return;
+  const Notifications = getNotifications();
+  if (!Notifications) return;
+  try {
+    await Notifications.setNotificationChannelAsync(ALERTS_CHANNEL_ID, {
+      name: t('notif_channel_alerts'),
+      importance: Notifications.AndroidImportance.DEFAULT,
+      sound: 'default',
+    });
+    await Notifications.setNotificationChannelAsync(BG_SERVICE_CHANNEL_ID, {
+      name: t('notif_channel_monitoring'),
+      importance: Notifications.AndroidImportance.MIN,
+      sound: null,
+      enableVibrate: false,
+      showBadge: false,
+    });
+    channelsSet = true;
+  } catch (_) {}
+}
 
 function ensureHandler() {
   if (handlerSet) return;
   const Notifications = getNotifications();
   if (!Notifications) return;
+  setupNotificationChannels().catch(() => {});
   try {
     Notifications.setNotificationHandler({
       handleNotification: async () => {
@@ -84,7 +121,7 @@ export async function registerFcmToken(): Promise<void> {
   }
 }
 
-// Envia notificação local imediata
+// Envia notificação local imediata (no canal de alertas no Android)
 export async function sendLocalNotification(title: string, body: string, data?: Record<string, any>) {
   try {
     const Notifications = getNotifications();
@@ -92,7 +129,9 @@ export async function sendLocalNotification(title: string, body: string, data?: 
     ensureHandler();
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: data ?? {}, sound: true },
-      trigger: null,
+      trigger: Platform.OS === 'android'
+        ? { channelId: ALERTS_CHANNEL_ID }
+        : null,
     });
   } catch (_) {}
 }

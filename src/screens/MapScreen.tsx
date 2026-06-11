@@ -56,6 +56,11 @@ import { NavigationModal } from '../components/NavigationModal';
 import { NearbyEventPrompt } from '../components/NearbyEventPrompt';
 import { TrafficDetectionPrompt } from '../components/TrafficDetectionPrompt';
 import { useTrafficSpeedDetection, TrafficAlert } from '../hooks/useTrafficSpeedDetection';
+import { useRadarsStore } from '../store/radarsStore';
+import { RadarMarker } from '../components/RadarMarker';
+import { RadarInfoModal } from '../components/RadarInfoModal';
+import { RadarConfirmBanner } from '../components/RadarConfirmBanner';
+import { Radar } from '../types/radar';
 
 const MAX_REPORT_RADIUS_KM = 1;
 
@@ -267,6 +272,7 @@ export function MapScreen() {
   const [pendingCoord, setPendingCoord] = useState<PendingCoord | null>(null);
   const [selectedRoadEvent, setSelectedRoadEvent] = useState<RoadEvent | null>(null);
   const [selectedEntEvent, setSelectedEntEvent] = useState<EntertainmentEvent | null>(null);
+  const [selectedRadar, setSelectedRadar] = useState<Radar | null>(null);
   const [trafficAlert, setTrafficAlert] = useState<TrafficAlert | null>(null);
   const { top: topInset } = useSafeAreaInsets();
 
@@ -323,6 +329,12 @@ export function MapScreen() {
 
   // Stores
   const { loading: roadLoading, events: allRoadEvents, subscribeToEvents, confirmEvent, denyEvent, filterStateUF, isFromCache: roadFromCache } = useEventsStore();
+  const subscribeToRadars = useRadarsStore((s) => s.subscribeToRadars);
+  const allRadars = useRadarsStore((s) => s.radars);
+  const getVisibleRadars = useRadarsStore((s) => s.getVisibleRadars);
+  // Radares visíveis: ativos + pendentes do próprio usuário (recalcula quando a lista muda)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const visibleRadars = useMemo(() => getVisibleRadars(), [allRadars]);
   const { events: allEntertainmentEvents, subscribe: subscribeEntertainment, toggleLike, isFromCache: entFromCache, filterCategory: entFilterCategory } = useEntertainmentStore();
   const isOffline = roadFromCache || entFromCache;
   const isAdmin = useUserStore((s) => s.isAdmin);
@@ -473,6 +485,7 @@ export function MapScreen() {
   useEffect(() => {
     const unsubRoad = subscribeToEvents();
     const unsubEnt = subscribeEntertainment();
+    const unsubRadars = subscribeToRadars();
     centerOnUser();
     // Solicita permissão de notificação no contexto do mapa (item #4)
     // Feito aqui pois é o momento mais natural — usuário está usando o app
@@ -503,6 +516,7 @@ export function MapScreen() {
     return () => {
       unsubRoad();
       unsubEnt();
+      unsubRadars();
       if (hintTimer) clearTimeout(hintTimer);
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -674,6 +688,14 @@ export function MapScreen() {
             key={`ent-${event.id}`}
             event={event}
             onPress={setSelectedEntEvent}
+            zoomTier={zoomTier}
+          />
+        ))}
+        {visibleRadars.map((radar) => (
+          <RadarMarker
+            key={`radar-${radar.id}`}
+            radar={radar}
+            onPress={setSelectedRadar}
             zoomTier={zoomTier}
           />
         ))}
@@ -854,6 +876,11 @@ export function MapScreen() {
         onClose={() => setSelectedEntEvent(null)}
       />
 
+      <RadarInfoModal
+        radar={selectedRadar ? (allRadars.find((r) => r.id === selectedRadar.id) ?? selectedRadar) : null}
+        onClose={() => setSelectedRadar(null)}
+      />
+
       {commentTarget && (
         <CommentsModal
           visible={!!commentTarget}
@@ -1013,6 +1040,18 @@ export function MapScreen() {
           setPendingCoord({ coordinate, stateUF, cityName, countryCode });
           setRoadModalVisible(true);
         }}
+      />
+
+      {/* Confirmação passiva de radares — "esse radar ainda está aí?" (máx. 1/dia) */}
+      <RadarConfirmBanner
+        userLat={userLat}
+        userLon={userLon}
+        paused={
+          pickerVisible || roadModalVisible || entertainmentModalVisible ||
+          filterVisible || !!selectedRoadEvent || !!selectedEntEvent ||
+          !!selectedRadar || !!commentTarget || driverModeActive || showIntro ||
+          !!trafficAlert
+        }
       />
     </View>
   );

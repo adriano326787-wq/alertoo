@@ -726,6 +726,7 @@ export const createDonationPreference = onCall(
 export const cleanupExpiredEvents = onSchedule(
   { schedule: 'every 24 hours', region: 'us-central1', timeZone: 'America/Sao_Paulo' },
   async () => {
+    // expiresAt é gravado pelo app como Timestamp (Timestamp.fromMillis)
     const now = Timestamp.now();
 
     // Lote 1: entertainment_events
@@ -740,17 +741,35 @@ export const cleanupExpiredEvents = onSchedule(
       .limit(400)
       .get();
 
-    const batch = db.batch();
-    expiredEnt.docs.forEach((d) => batch.delete(d.ref));
-    expiredRoad.docs.forEach((d) => batch.delete(d.ref));
+    // Lote 3: radares móveis/blitz expirados (radar fixo tem expiresAt null)
+    const expiredRadars = await db.collection('radars')
+      .where('expiresAt', '<', now)
+      .limit(400)
+      .get();
 
-    if (expiredEnt.size + expiredRoad.size > 0) {
+    // Lote 4: radares fixos "frios" — sem confirmação da comunidade há 180 dias
+    const staleCutoff = Timestamp.fromMillis(Date.now() - 180 * 24 * 60 * 60 * 1000);
+    const staleRadars = await db.collection('radars')
+      .where('lastConfirmedAt', '<', staleCutoff)
+      .limit(400)
+      .get();
+
+    // Dedupe — um radar móvel pode aparecer em ambas as queries de radar
+    const toDelete = new Map<string, FirebaseFirestore.DocumentReference>();
+    [...expiredEnt.docs, ...expiredRoad.docs, ...expiredRadars.docs, ...staleRadars.docs]
+      .forEach((d) => toDelete.set(d.ref.path, d.ref));
+
+    const batch = db.batch();
+    toDelete.forEach((ref) => batch.delete(ref));
+
+    if (toDelete.size > 0) {
       await batch.commit();
     }
 
     console.log(
       `[cleanup] ${expiredEnt.size} eventos de entretenimento + ` +
-      `${expiredRoad.size} road events expirados removidos.`
+      `${expiredRoad.size} road events expirados + ` +
+      `${expiredRadars.size} radares expirados + ${staleRadars.size} radares frios removidos.`
     );
   },
 );
