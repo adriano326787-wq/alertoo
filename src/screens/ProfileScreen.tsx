@@ -66,33 +66,46 @@ export function ProfileScreen() {
   // ─── Alertas de trânsito em segundo plano (#43-b) ─────────────────────────────
   const [bgTrafficEnabled, setBgTrafficEnabled] = useState(false);
   const [bgTrafficLoading, setBgTrafficLoading] = useState(false);
+  // Divulgação em destaque exigida pelo Google Play: deve aparecer ANTES da
+  // solicitação de permissão de localização em segundo plano em runtime.
+  const [bgDisclosureVisible, setBgDisclosureVisible] = useState(false);
 
   useEffect(() => {
     getBackgroundTrafficAlertsPreference().then(setBgTrafficEnabled).catch(() => {});
   }, []);
 
-  const handleToggleBgTraffic = useCallback(async (value: boolean) => {
+  const proceedEnableBgTraffic = useCallback(async () => {
+    setBgDisclosureVisible(false);
     setBgTrafficLoading(true);
     try {
-      if (value) {
-        const result = await enableBackgroundTrafficAlerts();
-        if (result === 'granted') {
-          setBgTrafficEnabled(true);
-        } else if (result === 'foreground_only') {
-          setBgTrafficEnabled(false);
-          Alert.alert(t('bg_traffic_setting_title'), t('bg_traffic_foreground_only'));
-        } else {
-          setBgTrafficEnabled(false);
-          Alert.alert(t('bg_traffic_setting_title'), t('bg_traffic_permission_denied'));
-        }
-      } else {
-        await disableBackgroundTrafficAlerts();
+      const result = await enableBackgroundTrafficAlerts();
+      if (result === 'granted') {
+        setBgTrafficEnabled(true);
+      } else if (result === 'foreground_only') {
         setBgTrafficEnabled(false);
+        Alert.alert(t('bg_traffic_setting_title'), t('bg_traffic_foreground_only'));
+      } else {
+        setBgTrafficEnabled(false);
+        Alert.alert(t('bg_traffic_setting_title'), t('bg_traffic_permission_denied'));
       }
     } finally {
       setBgTrafficLoading(false);
     }
   }, [t]);
+
+  const handleToggleBgTraffic = useCallback(async (value: boolean) => {
+    if (value) {
+      setBgDisclosureVisible(true);
+      return;
+    }
+    setBgTrafficLoading(true);
+    try {
+      await disableBackgroundTrafficAlerts();
+      setBgTrafficEnabled(false);
+    } finally {
+      setBgTrafficLoading(false);
+    }
+  }, []);
 
   // ─── Promoção ────────────────────────────────────────────────────────────────
   // #8 — credits come from the real-time profile snapshot; no separate fetch needed
@@ -1056,6 +1069,24 @@ export function ProfileScreen() {
         </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Divulgação em destaque — localização em segundo plano (Google Play) */}
+      <Modal visible={bgDisclosureVisible} transparent animationType="fade" onRequestClose={() => setBgDisclosureVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.disclosureCard}>
+            <Text style={styles.disclosureEmoji}>🛰️</Text>
+            <Text style={styles.disclosureTitle}>{t('bg_traffic_disclosure_title')}</Text>
+            <Text style={styles.disclosureBody}>{t('bg_traffic_disclosure_body')}</Text>
+            <Text style={styles.disclosureDetail}>{t('bg_traffic_disclosure_detail')}</Text>
+            <TouchableOpacity style={styles.disclosureAccept} onPress={proceedEnableBgTraffic}>
+              <Text style={styles.disclosureAcceptText}>{t('bg_traffic_disclosure_accept')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.disclosureDecline} onPress={() => setBgDisclosureVisible(false)}>
+              <Text style={styles.disclosureDeclineText}>{t('bg_traffic_disclosure_decline')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1203,6 +1234,26 @@ const styles = StyleSheet.create({
   bgTrafficTexts: { flex: 1, marginRight: 8 },
   bgTrafficTitle: { fontSize: 14, fontWeight: '800' },
   bgTrafficSub: { fontSize: 12, marginTop: 3, lineHeight: 16 },
+
+  // Divulgação em destaque (Google Play — background location)
+  disclosureCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%',
+    alignItems: 'center', elevation: 10,
+  },
+  disclosureEmoji: { fontSize: 44, marginBottom: 12 },
+  disclosureTitle: { fontSize: 19, fontWeight: '900', color: '#1a1a1a', marginBottom: 12, textAlign: 'center' },
+  disclosureBody: {
+    fontSize: 15, color: '#333', lineHeight: 22, textAlign: 'center',
+    fontWeight: '600', marginBottom: 12,
+  },
+  disclosureDetail: { fontSize: 13, color: '#777', lineHeight: 19, textAlign: 'center', marginBottom: 20 },
+  disclosureAccept: {
+    backgroundColor: '#FF5722', borderRadius: 12, paddingVertical: 14,
+    alignItems: 'center', alignSelf: 'stretch',
+  },
+  disclosureAcceptText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  disclosureDecline: { paddingVertical: 13, alignItems: 'center', alignSelf: 'stretch' },
+  disclosureDeclineText: { fontSize: 14, fontWeight: '600', color: '#888' },
 
 
   // ─── Modal editar nome ─────────────────────────────────────────────────────

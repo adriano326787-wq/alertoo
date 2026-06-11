@@ -34,7 +34,7 @@
       }
     },
     "production": {
-      "autoIncrement": true,
+      "autoIncrement": false,
       "channel": "production",
       "android": {
         "buildType": "app-bundle",
@@ -55,7 +55,7 @@
         "track": "internal",
         "releaseStatus": "draft",
         "changesNotSentForReview": false
-      },
+      }
     }
   }
 }

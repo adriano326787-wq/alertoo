@@ -316,6 +316,11 @@ const translations: Record<LangCode, Record<string, string>> = {
     bg_traffic_notif_body: 'Você será avisado se o trânsito ficar lento ou parar',
     bg_traffic_permission_denied: 'Permissão de localização negada. Ative o acesso à localização nas configurações do app.',
     bg_traffic_foreground_only: 'Para alertas com o app fechado, permita o acesso à localização "Sempre" nas configurações do app.',
+    bg_traffic_disclosure_title: 'Localização em segundo plano',
+    bg_traffic_disclosure_body: 'O Alertoo coleta dados de localização para enviar alertas de trânsito lento ou parado enquanto você dirige, mesmo quando o app está fechado ou não está em uso.',
+    bg_traffic_disclosure_detail: 'Sua localização é usada apenas para detectar o trânsito ao seu redor. Ela não é compartilhada com terceiros nem usada para publicidade. Você pode desativar este recurso a qualquer momento.',
+    bg_traffic_disclosure_accept: 'Aceitar e continuar',
+    bg_traffic_disclosure_decline: 'Agora não',
 
     // Categorias de entretenimento
     cat_ent_bar:        'Bar',
@@ -873,6 +878,11 @@ const translations: Record<LangCode, Record<string, string>> = {
     bg_traffic_notif_body: "You'll be notified if traffic slows down or stops",
     bg_traffic_permission_denied: 'Location permission denied. Enable location access in the app settings.',
     bg_traffic_foreground_only: 'For alerts with the app closed, allow "Always" location access in the app settings.',
+    bg_traffic_disclosure_title: 'Background location',
+    bg_traffic_disclosure_body: 'Alertoo collects location data to send you alerts about slow or stopped traffic while you drive, even when the app is closed or not in use.',
+    bg_traffic_disclosure_detail: 'Your location is only used to detect traffic around you. It is never shared with third parties or used for advertising. You can turn this feature off at any time.',
+    bg_traffic_disclosure_accept: 'Accept and continue',
+    bg_traffic_disclosure_decline: 'Not now',
 
     cat_ent_bar:        'Bar',
     cat_ent_restaurant: 'Restaurant',
@@ -1400,6 +1410,11 @@ const translations: Record<LangCode, Record<string, string>> = {
     bg_traffic_notif_body: 'Te avisaremos si el tráfico se ralentiza o se detiene',
     bg_traffic_permission_denied: 'Permiso de ubicación denegado. Activa el acceso a la ubicación en los ajustes de la app.',
     bg_traffic_foreground_only: 'Para alertas con la app cerrada, permite el acceso a la ubicación "Siempre" en los ajustes de la app.',
+    bg_traffic_disclosure_title: 'Ubicación en segundo plano',
+    bg_traffic_disclosure_body: 'Alertoo recopila datos de ubicación para enviarte alertas de tráfico lento o detenido mientras conduces, incluso cuando la app está cerrada o no está en uso.',
+    bg_traffic_disclosure_detail: 'Tu ubicación solo se usa para detectar el tráfico a tu alrededor. Nunca se comparte con terceros ni se usa para publicidad. Puedes desactivar esta función en cualquier momento.',
+    bg_traffic_disclosure_accept: 'Aceptar y continuar',
+    bg_traffic_disclosure_decline: 'Ahora no',
 
     cat_ent_bar:        'Bar',
     cat_ent_restaurant: 'Restaurante',
@@ -1927,6 +1942,11 @@ const translations: Record<LangCode, Record<string, string>> = {
     bg_traffic_notif_body: 'Vous serez averti si le trafic ralentit ou s\'arrête',
     bg_traffic_permission_denied: 'Permission de localisation refusée. Activez l\'accès à la localisation dans les paramètres de l\'app.',
     bg_traffic_foreground_only: 'Pour des alertes avec l\'app fermée, autorisez l\'accès à la localisation "Toujours" dans les paramètres de l\'app.',
+    bg_traffic_disclosure_title: 'Localisation en arrière-plan',
+    bg_traffic_disclosure_body: "Alertoo collecte des données de localisation pour vous envoyer des alertes de trafic ralenti ou arrêté pendant que vous conduisez, même lorsque l'app est fermée ou inutilisée.",
+    bg_traffic_disclosure_detail: "Votre localisation sert uniquement à détecter le trafic autour de vous. Elle n'est jamais partagée avec des tiers ni utilisée à des fins publicitaires. Vous pouvez désactiver cette fonction à tout moment.",
+    bg_traffic_disclosure_accept: 'Accepter et continuer',
+    bg_traffic_disclosure_decline: 'Pas maintenant',
 
     cat_ent_bar:        'Bar',
     cat_ent_restaurant: 'Restaurant',
