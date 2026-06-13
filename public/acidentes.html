@@ -63,6 +63,13 @@
     .info-card h3{font-size:15px;font-weight:700;margin-bottom:8px}
     .info-card p{font-size:14px;color:var(--muted);line-height:1.6}
     .info-icon{font-size:28px;margin-bottom:10px}
+    .cities-section{max-width:860px;margin:0 auto 56px;padding:0 24px}
+    .cities-section h2{font-size:26px;font-weight:800;margin-bottom:16px}
+    .cities-section h3{font-size:18px;font-weight:700;margin:24px 0 12px}
+    .cities-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+    .city-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+    .city-card a{color:var(--text);text-decoration:none}
+    .city-card a:hover{color:var(--brand)}
     .faq-section{max-width:860px;margin:0 auto 72px;padding:0 24px}
     .faq-section h2{font-size:26px;font-weight:800;margin-bottom:24px}
     .faq-item{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;overflow:hidden}
@@ -144,6 +151,62 @@
   <div class="faq-item"><div class="faq-q" data-i18n="ac.faq.3">O Alertoo funciona em rodovias?</div><div class="faq-a" data-i18n-html="ac.faq.3.a">Sim! O Alertoo funciona em qualquer via do Brasil — rodovias federais (BR), estaduais (SP, RJ, MG...), vias urbanas e ruas. Qualquer usuário pode reportar uma ocorrência em qualquer local.</div></div>
   <div class="faq-item"><div class="faq-q" data-i18n="ac.faq.4">O Alertoo é melhor que o Waze para acidentes?</div><div class="faq-a" data-i18n-html="ac.faq.4.a">O Alertoo é focado em alertas colaborativos brasileiros — acidentes, lei seca, alagamentos e eventos. É um complemento ao Waze, com foco em ocorrências locais reportadas pela comunidade em tempo real.</div></div>
   <div class="faq-item"><div class="faq-q" data-i18n="ac.faq.5">O app Alertoo é gratuito?</div><div class="faq-a" data-i18n-html="ac.faq.5.a">Sim, totalmente gratuito! Disponível na Google Play e App Store sem nenhum custo.</div></div>
+</section>
+
+<!-- ESTADOS E CIDADES (SEO) -->
+<section class="cities-section">
+  <h2>Acidentes por Estado e Cidade</h2>
+  <h3>Por Estado</h3>
+  <div class="cities-grid">
+    <div class="city-card">🚨 <a href="/acidentes/acre">Acre</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/alagoas">Alagoas</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/amapa">Amapá</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/amazonas">Amazonas</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/bahia">Bahia</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/ceara">Ceará</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/distrito-federal">Distrito Federal</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/espirito-santo">Espírito Santo</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/goias">Goiás</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/maranhao">Maranhão</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/mato-grosso-do-sul">Mato Grosso do Sul</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/mato-grosso">Mato Grosso</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/minas-gerais">Minas Gerais</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/para">Pará</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/paraiba">Paraíba</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/parana">Paraná</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/pernambuco">Pernambuco</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/piaui">Piauí</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/rio-de-janeiro">Rio de Janeiro</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/rio-grande-do-norte">Rio Grande do Norte</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/rio-grande-do-sul">Rio Grande do Sul</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/rondonia">Rondônia</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/roraima">Roraima</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/santa-catarina">Santa Catarina</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/sao-paulo">São Paulo</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/sergipe">Sergipe</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/tocantins">Tocantins</a></div>
+  </div>
+  <h3>Principais Cidades</h3>
+  <div class="cities-grid">
+    <div class="city-card">🚨 <a href="/acidentes/blumenau">Blumenau</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/buzios">Búzios</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/cabo-frio">Cabo Frio</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/campinas">Campinas</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/caxias-do-sul">Caxias do Sul</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/feira-de-santana">Feira de Santana</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/foz-do-iguacu">Foz do Iguaçu</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/gramado">Gramado</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/joinville">Joinville</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/londrina">Londrina</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/maringa">Maringá</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/niteroi">Niterói</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/porto-seguro">Porto Seguro</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/ribeirao-preto">Ribeirão Preto</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/santos">Santos</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/sao-jose-dos-campos">São José dos Campos</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/sorocaba">Sorocaba</a></div>
+    <div class="city-card">🚨 <a href="/acidentes/uberlandia">Uberlândia</a></div>
+  </div>
 </section>
 
 <!-- AD 3 -->

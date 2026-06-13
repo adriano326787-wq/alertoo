@@ -55,7 +55,7 @@ export function LeaderboardScreen() {
     try {
       const snap = await getDocs(
         query(
-          collection(db, 'users'),
+          collection(db, 'leaderboard_public'),
           orderBy('points', 'desc'),
           limit(TOP_COUNT)
         )

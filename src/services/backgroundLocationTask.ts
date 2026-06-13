@@ -38,6 +38,23 @@ const SLOW_DURATION_MS      = 30_000;
 const STOPPED_DURATION_MS   = 60_000;
 const COOLDOWN_MS           = 5 * 60_000;
 
+// Opções compartilhadas por enableBackgroundTrafficAlerts e
+// resumeBackgroundTrafficAlertsIfEnabled — devem ficar em sincronia
+function getLocationUpdateOptions(): Location.LocationTaskOptions {
+  return {
+    accuracy: Location.Accuracy.Balanced,
+    timeInterval: 15_000,
+    distanceInterval: 50,
+    pausesUpdatesAutomatically: false,
+    showsBackgroundLocationIndicator: true,
+    foregroundService: {
+      notificationTitle: t('bg_traffic_notif_title'),
+      notificationBody: t('bg_traffic_notif_body'),
+      notificationColor: '#FF5722',
+    },
+  };
+}
+
 // Contexto de veículo — mesmos valores de useTrafficSpeedDetection.
 // Só alerta se o usuário esteve a velocidade de veículo recentemente
 // (evita spam para pedestres parados em bar/casa/fila).
@@ -224,18 +241,7 @@ export async function enableBackgroundTrafficAlerts(): Promise<BackgroundTraffic
 
   const alreadyStarted = await isBackgroundTrackingActive();
   if (!alreadyStarted) {
-    await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-      accuracy: Location.Accuracy.Balanced,
-      timeInterval: 15_000,
-      distanceInterval: 50,
-      pausesUpdatesAutomatically: false,
-      showsBackgroundLocationIndicator: true,
-      foregroundService: {
-        notificationTitle: t('bg_traffic_notif_title'),
-        notificationBody: t('bg_traffic_notif_body'),
-        notificationColor: '#FF5722',
-      },
-    });
+    await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, getLocationUpdateOptions());
   }
 
   await AsyncStorage.setItem(ENABLED_KEY, '1');
@@ -269,18 +275,7 @@ export async function resumeBackgroundTrafficAlertsIfEnabled(): Promise<void> {
     await setupNotificationChannels().catch(() => {});
 
     if (!(await isBackgroundTrackingActive())) {
-      await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 15_000,
-        distanceInterval: 50,
-        pausesUpdatesAutomatically: false,
-        showsBackgroundLocationIndicator: true,
-        foregroundService: {
-          notificationTitle: t('bg_traffic_notif_title'),
-          notificationBody: t('bg_traffic_notif_body'),
-          notificationColor: '#FF5722',
-        },
-      });
+      await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, getLocationUpdateOptions());
     }
   } catch (_) {}
 }

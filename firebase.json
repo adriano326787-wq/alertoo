@@ -3,7 +3,8 @@
     "rules": "storage.rules"
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "functions": [
     {
@@ -112,7 +113,10 @@
       },
       {
         "source": "/evento/**",
-        "destination": "/evento/index.html"
+        "function": {
+          "functionId": "eventPage",
+          "region": "us-central1"
+        }
       },
       {
         "source": "/privacidade",

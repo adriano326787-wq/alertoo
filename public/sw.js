@@ -1,7 +1,7 @@
 /**
  * Alertoo Service Worker — Cache-first para assets estáticos
  */
-const CACHE_NAME = 'alertoo-v1';
+const CACHE_NAME = 'alertoo-v2';
 const STATIC_ASSETS = [
   '/',
   '/main.css',

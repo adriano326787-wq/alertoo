@@ -101,6 +101,14 @@
     #payment-element { margin: 16px 0; }
     .credits-badge { font-size: 26px; font-weight: 900; color: var(--brand); }
 
+    .method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0; }
+    .method { border: 2px solid #eef; border-radius: 14px; padding: 14px; text-align: center; cursor: pointer; background: #fff; font-weight: 700; }
+    .method:hover, .method.selected { border-color: var(--brand); }
+    #pixBox { text-align: center; margin: 16px 0; }
+    #pixBox img { width: 220px; height: 220px; border: 1px solid #eef; border-radius: 12px; padding: 8px; background: #fff; }
+    #pixCodeText { word-break: break-all; font-size: 11px; background: #f6f7f9; border: 1px solid #eef; border-radius: 10px; padding: 10px; margin: 12px 0; text-align: left; }
+    #pixTimer { font-weight: 800; color: var(--brand); }
+
     /* ── Mapa de criação ──────────────────── */
     #pickMap { height: 280px; border-radius: 12px; margin-bottom: 12px; }
     .loading { text-align: center; padding: 50px 0; color: var(--muted); }
@@ -241,9 +249,20 @@
           <h2>Comprar créditos</h2>
           <div id="payMsg" class="msg"></div>
           <div class="pkg-grid" id="pkgGrid"></div>
+          <div class="method-grid" id="methodGrid" style="display:none">
+            <div class="method" id="methodCard">💳 Cartão</div>
+            <div class="method" id="methodPix">⚡ Pix</div>
+          </div>
           <div id="payment-element"></div>
           <button class="btn" id="btnPay" style="display:none">Pagar</button>
-          <p class="muted" style="margin-top:10px">Pagamento seguro via Stripe. Os créditos caem na sua conta na hora e funcionam também no aplicativo.</p>
+          <div id="pixBox" style="display:none">
+            <p class="muted">Escaneie o QR Code com o app do seu banco ou copie o código abaixo:</p>
+            <div><img id="pixQrImg" alt="QR Code Pix" /></div>
+            <div id="pixCodeText"></div>
+            <button class="btn secondary" id="btnPixCopy">Copiar código Pix</button>
+            <p class="muted" style="margin-top:10px">Expira em <span id="pixTimer">30:00</span> · Verificando pagamento automaticamente…</p>
+          </div>
+          <p class="muted" style="margin-top:10px">Pagamento seguro via Stripe ou Pix (Mercado Pago). Os créditos caem na sua conta na hora e funcionam também no aplicativo.</p>
         </div>
       </section>
     </div>
@@ -593,6 +612,18 @@
 
     // ═══ CRÉDITOS / STRIPE ══════════════════════════════════════════════════
     let elements = null, selectedPkg = null, currentPiId = null;
+    let payMethod = 'card';
+    let pixPollInterval = null, pixCountdownInterval = null;
+
+    // Pix é um método de pagamento exclusivo do Brasil (Mercado Pago/Pix nacional)
+    function isBrazil() {
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        if (/^America\/(Sao_Paulo|Bahia|Fortaleza|Recife|Manaus|Belem|Maceio|Araguaina|Campo_Grande|Cuiaba|Porto_Velho|Boa_Vista|Rio_Branco|Noronha|Santarem|Eirunepe)$/.test(tz)) return true;
+        const langs = [navigator.language, ...(navigator.languages || [])].map((l) => (l || '').toLowerCase());
+        return langs.includes('pt-br');
+      } catch { return false; }
+    }
 
     function renderPackages() {
       const grid = $('pkgGrid');
@@ -604,12 +635,44 @@
         d.onclick = () => selectPackage(p, d);
         grid.appendChild(d);
       });
+      if (isBrazil()) {
+        $('methodGrid').style.display = 'grid';
+        $('methodCard').classList.add('selected');
+      }
     }
+
+    $('methodCard').onclick = () => {
+      if (payMethod === 'card') return;
+      payMethod = 'card';
+      $('methodCard').classList.add('selected');
+      $('methodPix').classList.remove('selected');
+      stopPixPolling();
+      $('pixBox').style.display = 'none';
+      if (selectedPkg) selectPackage(selectedPkg, document.querySelector('.pkg.selected'));
+    };
+    $('methodPix').onclick = () => {
+      if (payMethod === 'pix') return;
+      payMethod = 'pix';
+      $('methodPix').classList.add('selected');
+      $('methodCard').classList.remove('selected');
+      if (selectedPkg) selectPackage(selectedPkg, document.querySelector('.pkg.selected'));
+    };
 
     async function selectPackage(pkg, el) {
       document.querySelectorAll('.pkg').forEach((x) => x.classList.remove('selected'));
       el.classList.add('selected');
       selectedPkg = pkg;
+      stopPixPolling();
+      clearInterval(pixCountdownInterval);
+      $('pixBox').style.display = 'none';
+      if (payMethod === 'pix') {
+        await startPixPayment(pkg);
+      } else {
+        await startCardPayment(pkg);
+      }
+    }
+
+    async function startCardPayment(pkg) {
       const msg = $('payMsg'); msg.className = 'msg';
       $('btnPay').style.display = 'none';
       $('payment-element').innerHTML = '<p class="muted">Preparando pagamento…</p>';
@@ -628,6 +691,85 @@
         msg.className = 'msg err';
         msg.textContent = 'Não foi possível iniciar o pagamento. Tente novamente.';
       }
+    }
+
+    async function startPixPayment(pkg) {
+      const msg = $('payMsg'); msg.className = 'msg';
+      $('payment-element').innerHTML = '';
+      $('btnPay').style.display = 'none';
+      $('pixBox').style.display = 'block';
+      $('pixQrImg').removeAttribute('src');
+      $('pixCodeText').textContent = 'Gerando código Pix…';
+      $('pixTimer').textContent = '--:--';
+      try {
+        const create = httpsCallable(functions, 'createPixPayment');
+        const { data } = await create({ packageId: pkg.id, payerEmail: currentUser?.email || undefined });
+        $('pixCodeText').textContent = data.pixCode;
+        if (data.pixQrBase64) $('pixQrImg').src = `data:image/png;base64,${data.pixQrBase64}`;
+        startPixCountdown(data.expiresAt);
+        startPixPolling(data.paymentId, pkg);
+      } catch (e) {
+        $('pixBox').style.display = 'none';
+        msg.className = 'msg err';
+        msg.textContent = 'Não foi possível gerar o Pix. Tente novamente.';
+      }
+    }
+
+    $('btnPixCopy').onclick = async () => {
+      const code = $('pixCodeText').textContent;
+      try {
+        await navigator.clipboard.writeText(code);
+        $('btnPixCopy').textContent = 'Copiado! ✅';
+        setTimeout(() => { $('btnPixCopy').textContent = 'Copiar código Pix'; }, 2000);
+      } catch {}
+    };
+
+    function startPixCountdown(expiresAt) {
+      clearInterval(pixCountdownInterval);
+      const tick = () => {
+        const remaining = Math.max(0, expiresAt - Date.now());
+        const m = Math.floor(remaining / 60000), s = Math.floor((remaining % 60000) / 1000);
+        $('pixTimer').textContent = `${m}:${String(s).padStart(2, '0')}`;
+        if (remaining <= 0) {
+          clearInterval(pixCountdownInterval);
+          stopPixPolling();
+          $('pixBox').style.display = 'none';
+          $('payMsg').className = 'msg err';
+          $('payMsg').textContent = 'O código Pix expirou. Selecione o pacote novamente para gerar um novo.';
+        }
+      };
+      tick();
+      pixCountdownInterval = setInterval(tick, 1000);
+    }
+
+    function startPixPolling(paymentId, pkg) {
+      stopPixPolling();
+      pixPollInterval = setInterval(async () => {
+        try {
+          const verify = httpsCallable(functions, 'verifyPixPayment');
+          const { data } = await verify({ paymentId });
+          if (data.status === 'approved') {
+            stopPixPolling();
+            clearInterval(pixCountdownInterval);
+            $('pixBox').style.display = 'none';
+            const msg = $('payMsg');
+            msg.className = 'msg ok';
+            msg.textContent = `✅ Pagamento aprovado! ${data.credits ?? pkg.credits} crédito(s) adicionados à sua conta.`;
+            loadPurchases(currentUser.uid);
+          } else if (data.status === 'rejected') {
+            stopPixPolling();
+            clearInterval(pixCountdownInterval);
+            $('pixBox').style.display = 'none';
+            $('payMsg').className = 'msg err';
+            $('payMsg').textContent = 'Pagamento Pix não aprovado. Tente novamente.';
+          }
+        } catch {}
+      }, 5000);
+    }
+
+    function stopPixPolling() {
+      if (pixPollInterval) clearInterval(pixPollInterval);
+      pixPollInterval = null;
     }
 
     $('btnPay').onclick = async () => {

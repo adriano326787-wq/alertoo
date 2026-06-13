@@ -11,7 +11,17 @@ service cloud.firestore {
         && !hasPrivilegedFieldChange(request.resource.data, resource.data)
         // Valida tamanho dos campos editáveis pelo usuário
         && isValidUserProfile(request.resource.data);
+      // Perfil completo (email, telefone, etc.) só é legível pelo próprio
+      // usuário ou admin. Dados públicos (nome, foto, pontos) ficam em
+      // /leaderboard_public/{uid}, espelhados por Cloud Function.
+      allow read: if request.auth != null
+        && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ── Ranking público (espelho somente-leitura de campos não sensíveis) ───
+    match /leaderboard_public/{userId} {
       allow read: if request.auth != null;
+      allow write: if false; // escrito apenas pela Cloud Function (admin SDK)
     }
 
     // ── Eventos de estrada ─────────────────────────────────────────────────
@@ -29,10 +39,10 @@ service cloud.firestore {
         );
       allow delete: if request.auth != null
         && (request.auth.uid == resource.data.userId
-            || isAdmin()
             // 10ª negação deleta via transação no cliente (denyEvent) —
             // o deletante não é o dono, então precisa desta exceção
-            || resource.data.denials >= 9);
+            || resource.data.denials >= 9
+            || isAdmin());
     }
 
     // ── Radares (base colaborativa — não expiram por TTL, expiram por confiança)
@@ -51,9 +61,9 @@ service cloud.firestore {
         && isRadarVoteChange(request.resource.data, resource.data);
       allow delete: if request.auth != null
         && (request.auth.uid == resource.data.createdBy
-            || isAdmin()
             // 5ª negação deleta via transação no cliente (denyRadar)
-            || resource.data.denials >= 4);
+            || resource.data.denials >= 4
+            || isAdmin());
     }
 
     // ── Eventos de entretenimento ──────────────────────────────────────────
@@ -91,9 +101,13 @@ service cloud.firestore {
     match /promotions/{promotionId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.userId == request.auth.uid
+        && isValidPromotion(request.resource.data);
+      // Cliente só pode cancelar (status -> 'expired'); demais campos são imutáveis.
       allow update: if request.auth != null
-        && request.auth.uid == resource.data.userId;
+        && request.auth.uid == resource.data.userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'expired';
       allow delete: if request.auth != null
         && request.auth.uid == resource.data.userId;
     }
@@ -208,6 +222,21 @@ service cloud.firestore {
         && (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 1000))
         && (!('address' in data) || data.address == null || (data.address is string && data.address.size() <= 200))
         && (!('locationName' in data) || data.locationName == null || (data.locationName is string && data.locationName.size() <= 150));
+  }
+
+  // ── Validação de promoção ───────────────────────────────────────────────────
+  function isValidPromotion(data) {
+    return data.eventId is string && data.eventId.size() <= 128
+        && data.tier in ['bronze', 'prata', 'ouro']
+        && data.status == 'active'
+        && data.startDate is timestamp
+        && data.endDate is timestamp
+        && data.endDate > data.startDate
+        && data.creditsUsed is number && data.creditsUsed > 0 && data.creditsUsed <= 100
+        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 500))
+        && (!('packageId' in data) || data.packageId == null || data.packageId in ['full', 'weekend', 'weekdays', 'single'])
+        && (!('weeks' in data) || data.weeks == null || (data.weeks is number && data.weeks >= 1 && data.weeks <= 8))
+        && (!('activeDays' in data) || data.activeDays == null || data.activeDays is list);
   }
 
   // ── Validação de perfil de usuário ─────────────────────────────────────────

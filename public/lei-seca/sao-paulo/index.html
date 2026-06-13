@@ -291,6 +291,42 @@
       margin-top: 10px;
     }
 
+    /* RECENT EVENTS LIST */
+    .recent-section {
+      max-width: 860px;
+      margin: 0 auto 56px;
+      padding: 0 24px;
+    }
+    .recent-section h2 {
+      font-size: 22px; font-weight: 700; margin-bottom: 16px; text-align: center;
+    }
+    .recent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .recent-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .recent-emoji { font-size: 22px; flex-shrink: 0; }
+    .recent-text { flex: 1; min-width: 0; }
+    .recent-desc { font-size: 14px; font-weight: 600; color: var(--text); }
+    .recent-city { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .recent-time {
+      font-size: 12px; font-weight: 700; color: var(--brand);
+      flex-shrink: 0; white-space: nowrap;
+    }
+    .recent-empty {
+      text-align: center; color: var(--muted); font-size: 14px;
+      padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    }
+
     /* STATS */
     .stats {
       display: flex;
@@ -490,6 +526,14 @@
     </iframe>
   </div>
   <p class="map-caption"><span data-i18n="seo.map.caption">Dados reportados pela comunidade em tempo real. Atualizados continuamente.</span></p>
+</section>
+
+<!-- ÚLTIMAS BLITZ REPORTADAS (conteúdo dinâmico para SEO) -->
+<section class="recent-section">
+  <h2>Últimas Blitz de Lei Seca Reportadas em São Paulo</h2>
+  <div class="recent-list" id="recentList">
+    <div class="recent-empty">Carregando reportes recentes...</div>
+  </div>
 </section>
 
 <!-- STATS -->
@@ -779,5 +823,72 @@
     document.getElementById('cookieBanner').style.display = 'none';
   }
 </script>
+<!-- ÚLTIMAS BLITZ — busca eventos reais do Firestore -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+  import { getFirestore, collection, query, where, orderBy, limit, getDocs, Timestamp }
+    from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+  const app = initializeApp({
+    apiKey:            'AIzaSyCoI9rNBK07vGZBuygprq4PkDKGT0iZkYU',
+    authDomain:        'lei-seca---eventos.firebaseapp.com',
+    projectId:         'lei-seca---eventos',
+    storageBucket:     'lei-seca---eventos.firebasestorage.app',
+    messagingSenderId: '657066902706',
+    appId:             '1:657066902706:web:3e3d49f23a819c5ce1b5ab',
+  });
+  const db = getFirestore(app);
+
+  function timeAgo(ms) {
+    const d = Date.now() - ms, m = Math.floor(d / 60000);
+    if (m < 1) return 'agora';
+    if (m < 60) return `há ${m} min`;
+    const h = Math.floor(m / 60);
+    return `há ${h}h${m % 60 ? (m % 60) + 'min' : ''}`;
+  }
+
+  async function loadRecent() {
+    const el = document.getElementById('recentList');
+    try {
+      const q = query(
+        collection(db, 'events'),
+        where('expiresAt', '>', Timestamp.now()),
+        orderBy('expiresAt', 'desc'),
+        limit(50)
+      );
+      const snap = await getDocs(q);
+      const docs = snap.docs
+        .filter(d => d.data().category === 'drunkcheck' && d.data().stateUF === 'SP')
+        .slice(0, 8);
+      if (docs.length === 0) {
+        el.innerHTML = '<div class="recent-empty">Nenhuma blitz de lei seca ativa no momento. Abra o mapa ao vivo ou o app para acompanhar novos reportes.</div>';
+        return;
+      }
+      el.innerHTML = docs.map(d => {
+        const data = d.data();
+        const created = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
+        const desc = (data.description || data.title || 'Lei Seca').toString();
+        const city = data.cityName || 'São Paulo';
+        return `<div class="recent-item">
+          <div class="recent-emoji">🍺</div>
+          <div class="recent-text">
+            <div class="recent-desc">${escapeHtml(desc)}</div>
+            <div class="recent-city">${escapeHtml(city)} — SP</div>
+          </div>
+          <div class="recent-time">${timeAgo(created)}</div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      el.innerHTML = '<div class="recent-empty">Não foi possível carregar os reportes agora. Veja o mapa ao vivo acima.</div>';
+    }
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  loadRecent();
+</script>
+
 </body>
 </html>

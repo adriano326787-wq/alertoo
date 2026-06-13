@@ -16,7 +16,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dailySecurityReport = exports.monitorPaymentAttempts = exports.monitorEventVolume = exports.notifyOnRoadEvent = exports.registerFcmToken = exports.onEntertainmentEventCreated = exports.onRoadEventCreated = exports.cleanupExpiredEvents = exports.createDonationPreference = exports.moderatePhoto = exports.verifyStripePayment = exports.createStripePaymentIntent = exports.awardAdCredit = exports.verifyPixPayment = exports.createPixPayment = exports.verifyMPPayment = exports.createMPPreference = void 0;
+exports.eventPage = exports.onUserProfileWritten = exports.dailySecurityReport = exports.monitorPaymentAttempts = exports.monitorEventVolume = exports.notifyOnRoadEvent = exports.registerFcmToken = exports.onEntertainmentEventCreated = exports.onRoadEventCreated = exports.reconcilePendingPayments = exports.cleanupExpiredEvents = exports.createDonationPreference = exports.moderatePhoto = exports.verifyStripePayment = exports.createStripePaymentIntent = exports.awardAdCredit = exports.verifyPixPayment = exports.createPixPayment = exports.verifyMPPayment = exports.createMPPreference = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const storage_1 = require("firebase-functions/v2/storage");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -272,6 +272,7 @@ exports.createPixPayment = (0, https_1.onCall)({ secrets: [MP_ACCESS_TOKEN, ALER
     const mpData = await mpResp.json();
     const paymentId = String(mpData.id ?? '');
     const pixCode = mpData.point_of_interaction?.transaction_data?.qr_code ?? '';
+    const pixQrBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64 ?? null;
     if (!pixCode) {
         console.error('MP PIX: qr_code ausente na resposta', JSON.stringify(mpData));
         throw new https_1.HttpsError('internal', 'QR Code PIX nao retornado pela MP.');
@@ -291,7 +292,7 @@ exports.createPixPayment = (0, https_1.onCall)({ secrets: [MP_ACCESS_TOKEN, ALER
     return {
         paymentId,
         pixCode,
-        pixQrBase64: null,
+        pixQrBase64,
         expiresAt: expiresAt.getTime(),
     };
 });
@@ -661,6 +662,121 @@ exports.cleanupExpiredEvents = (0, scheduler_1.onSchedule)({ schedule: 'every 24
         `${expiredRoad.size} road events expirados + ` +
         `${expiredRadars.size} radares expirados + ${staleRadars.size} radares frios removidos.`);
 });
+// ─── Reconciliação de pagamentos pendentes ───────────────────────────────────
+// Pagamentos podem ficar "pending" para sempre se o usuário fechar o app antes
+// de chamar verify*Payment (ex.: aprovou no banco mas o app já tinha sido
+// minimizado). Esta rotina credita os pagamentos aprovados que ficaram sem
+// crédito, e expira os pendentes muito antigos.
+const RECONCILE_MIN_AGE_MS = 10 * 60 * 1000; // não toca em pagamentos com < 10min (verify* pode estar em andamento)
+const RECONCILE_EXPIRE_AGE_MS = 24 * 60 * 60 * 1000; // pendentes não aprovados há +24h são marcados 'expired'
+async function creditApprovedPayment(pendingDoc, paymentRef, paymentMethod) {
+    const data = pendingDoc.data();
+    const uid = data.userId;
+    const packageId = data.packageId;
+    const pkg = CREDIT_PACKAGES[packageId];
+    if (!pkg) {
+        console.error(`[reconcile] pending_payment ${pendingDoc.id} com packageId invalido: ${packageId}`);
+        return;
+    }
+    const existing = await db.collection('credit_purchases')
+        .where('paymentRef', '==', paymentRef)
+        .limit(1)
+        .get();
+    if (existing.empty) {
+        await db.runTransaction(async (tx) => {
+            const userRef = db.collection('users').doc(uid);
+            tx.update(userRef, { promotionCredits: firestore_2.FieldValue.increment(pkg.credits) });
+            const purchaseRef = db.collection('credit_purchases').doc();
+            tx.set(purchaseRef, {
+                userId: uid,
+                packageId,
+                credits: pkg.credits,
+                price: pkg.price,
+                paymentMethod,
+                paymentRef,
+                createdAt: Date.now(),
+                reconciledAt: Date.now(),
+            });
+        });
+        console.log(`[reconcile] creditou ${pkg.credits} credito(s) para ${uid} (pendingId=${pendingDoc.id}, ref=${paymentRef})`);
+    }
+    await pendingDoc.ref.update({ status: 'completed', completedAt: Date.now(), reconciled: true });
+}
+exports.reconcilePendingPayments = (0, scheduler_1.onSchedule)({ schedule: 'every 60 minutes', region: 'us-central1', secrets: [MP_ACCESS_TOKEN, STRIPE_SECRET_KEY] }, async () => {
+    const cutoff = Date.now() - RECONCILE_MIN_AGE_MS;
+    const expireCutoff = Date.now() - RECONCILE_EXPIRE_AGE_MS;
+    const pendingSnap = await db.collection('pending_payments')
+        .where('status', '==', 'pending')
+        .where('createdAt', '<', cutoff)
+        .limit(100)
+        .get();
+    let credited = 0;
+    let expired = 0;
+    for (const doc of pendingSnap.docs) {
+        const data = doc.data();
+        const createdAt = Number(data.createdAt ?? 0);
+        try {
+            if (data.paymentMethod === 'stripe' && data.stripePaymentIntentId) {
+                const stripe = new stripe_1.default(readSecret(STRIPE_SECRET_KEY), { apiVersion: '2026-04-22.dahlia' });
+                const pi = await stripe.paymentIntents.retrieve(data.stripePaymentIntentId);
+                if (pi.status === 'succeeded') {
+                    await creditApprovedPayment(doc, pi.id, 'stripe');
+                    credited++;
+                    continue;
+                }
+                if (['canceled', 'requires_payment_method'].includes(pi.status) && createdAt < expireCutoff) {
+                    await doc.ref.update({ status: 'expired', expiredAt: Date.now() });
+                    expired++;
+                }
+                continue;
+            }
+            if (data.paymentMethod === 'pix' && data.paymentId) {
+                const resp = await fetch(`https://api.mercadopago.com/v1/payments/${data.paymentId}`, {
+                    headers: { Authorization: `Bearer ${readSecret(MP_ACCESS_TOKEN)}` },
+                });
+                if (!resp.ok)
+                    continue;
+                const payment = await resp.json();
+                if (payment.status === 'approved') {
+                    await creditApprovedPayment(doc, String(payment.id), 'pix');
+                    credited++;
+                    continue;
+                }
+                if (!['in_process', 'authorized', 'pending'].includes(payment.status ?? '') && createdAt < expireCutoff) {
+                    await doc.ref.update({ status: 'expired', expiredAt: Date.now() });
+                    expired++;
+                }
+                continue;
+            }
+            // Cartão via Checkout Pro (createMPPreference) — busca por external_reference
+            if (data.externalReference && data.preferenceId) {
+                const searchUrl = `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(data.externalReference)}&sort=date_created&criteria=desc`;
+                const resp = await fetch(searchUrl, {
+                    headers: { Authorization: `Bearer ${readSecret(MP_ACCESS_TOKEN)}` },
+                });
+                if (!resp.ok)
+                    continue;
+                const result = await resp.json();
+                const payment = result.results?.[0];
+                if (!payment)
+                    continue;
+                if (payment.status === 'approved') {
+                    await creditApprovedPayment(doc, String(payment.id), 'mercadopago');
+                    credited++;
+                    continue;
+                }
+                if (!['in_process', 'authorized', 'pending'].includes(payment.status ?? '') && createdAt < expireCutoff) {
+                    await doc.ref.update({ status: 'expired', expiredAt: Date.now() });
+                    expired++;
+                }
+            }
+        }
+        catch (err) {
+            console.error(`[reconcile] erro ao processar pending_payment ${doc.id}:`, err?.message ?? err);
+        }
+    }
+    console.log(`[reconcile] ${pendingSnap.size} pendentes verificados — ${credited} creditados, ${expired} expirados.`);
+});
 // ─── Rate limiting server-side: road events (#13) ────────────────────────────
 // Ao criar um road event, registra timestamp no documento do usuário.
 // Permite auditoria e validação futura via Security Rules.
@@ -887,5 +1003,291 @@ exports.dailySecurityReport = (0, scheduler_1.onSchedule)({ schedule: '0 8 * * *
             count: appCheckSnap.data().count,
         });
     }
+});
+// ─── Espelho público do ranking (#leaderboard) ────────────────────────────────
+// /users/{uid} contém dados sensíveis (email, telefone) — não pode ser lido
+// por outros usuários. O Leaderboard precisa de displayName/photoURL/points
+// públicos, então espelhamos esses campos em /leaderboard_public/{uid},
+// que tem regra "allow read: if request.auth != null; allow write: if false".
+exports.onUserProfileWritten = (0, firestore_1.onDocumentWritten)({ document: 'users/{userId}', region: 'us-central1' }, async (event) => {
+    const userId = event.params.userId;
+    const after = event.data?.after?.data();
+    if (!after) {
+        // Usuário deletado — remove do ranking público também
+        await db.collection('leaderboard_public').doc(userId).delete().catch(() => { });
+        return;
+    }
+    const before = event.data?.before?.data();
+    const fields = ['displayName', 'photoURL', 'points'];
+    const changed = !before || fields.some((f) => before[f] !== after[f]);
+    if (!changed)
+        return;
+    await db.collection('leaderboard_public').doc(userId).set({
+        displayName: after.displayName ?? 'Usuário',
+        photoURL: after.photoURL ?? null,
+        points: after.points ?? 0,
+    }).catch(() => { });
+});
+// ─── Página SSR de evento de entretenimento (SEO + deep link) ────────────────
+// Atende /evento/{type}/{id}. Para eventos de entretenimento ativos, renderiza
+// HTML com meta tags OG/Twitter, JSON-LD (Event) e conteúdo indexável com os
+// dados reais do evento — útil para divulgação (compartilhar link no
+// WhatsApp/Instagram mostra foto+título do evento) e para SEO. Para eventos
+// expirados/inexistentes, cai no fallback de "abrir no app" com noindex.
+const EVENT_PAGE_CATEGORY_LABELS = {
+    bar: { label: 'Bar', emoji: '🍻' },
+    restaurant: { label: 'Restaurante', emoji: '🍽️' },
+    party: { label: 'Festa', emoji: '🎉' },
+    show: { label: 'Show', emoji: '🎸' },
+    festival: { label: 'Festival', emoji: '🎪' },
+    club: { label: 'Balada', emoji: '🪩' },
+};
+function escapeHtmlSSR(s) {
+    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function eventPageFallback(type, id, noindex) {
+    const robots = noindex ? '<meta name="robots" content="noindex, nofollow" />' : '';
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alertoo — Abrindo evento...</title>
+  <meta name="description" content="Alertoo — eventos de trânsito e entretenimento em tempo real." />
+  ${robots}
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+    .card { background: #fff; border-radius: 20px; padding: 40px 32px; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    .logo { font-size: 56px; margin-bottom: 16px; }
+    h1 { font-size: 22px; font-weight: 800; color: #1a1a1a; margin-bottom: 8px; }
+    .sub { font-size: 15px; color: #666; line-height: 1.5; margin-bottom: 32px; }
+    .btn { display: block; width: 100%; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 700; text-decoration: none; margin-bottom: 12px; cursor: pointer; border: none; }
+    .btn-primary { background: #E53935; color: #fff; }
+    .btn-secondary { background: transparent; border: 2px solid #E53935; color: #E53935; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #f0f0f0; border-top-color: #E53935; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status { font-size: 13px; color: #aaa; margin-top: 8px; }
+    #open-section { display: none; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🚀</div>
+  <h1>Alertoo</h1>
+  <div id="loading-section">
+    <div class="spinner"></div>
+    <p class="sub">Abrindo evento no Alertoo...</p>
+  </div>
+  <div id="open-section">
+    <p class="sub">Este evento não está mais disponível, mas você pode ver tudo que está acontecendo agora no mapa do Alertoo.</p>
+    <a id="play-btn" href="#" class="btn btn-primary">📲 Baixar Alertoo</a>
+    <a href="/eventos" class="btn btn-secondary">Ver mapa ao vivo</a>
+    <p class="status" id="status-msg"></p>
+  </div>
+</div>
+<script>
+  (function () {
+    var type = ${JSON.stringify(type)};
+    var id   = ${JSON.stringify(id)};
+    var PACKAGE   = 'com.alertoo.app';
+    var deepLink  = 'alertoo://evento/' + type + '/' + id;
+    var storeLink = 'https://play.google.com/store/apps/details?id=' + PACKAGE
+                  + '&referrer=' + encodeURIComponent('evento_' + type + '_' + id);
+    document.getElementById('play-btn').href = storeLink;
+
+    function showInstallFallback() {
+      document.getElementById('loading-section').style.display = 'none';
+      document.getElementById('open-section').style.display = 'block';
+    }
+
+    function tryOpenApp() {
+      var intentUrl = 'intent://evento/' + type + '/' + id
+        + '#Intent;scheme=alertoo;package=' + PACKAGE
+        + ';S.browser_fallback_url=' + encodeURIComponent(storeLink)
+        + ';end';
+      var a = document.createElement('a');
+      a.href = intentUrl;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () {
+        if (!document.hidden) showInstallFallback();
+      }, 2000);
+    }
+
+    if (type && id) {
+      tryOpenApp();
+    } else {
+      showInstallFallback();
+      document.getElementById('status-msg').textContent = 'Link inválido.';
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) showInstallFallback();
+    });
+  })();
+</script>
+<script src="/i18n.js"></script>
+</body>
+</html>`;
+}
+function eventPageRender(data, id, pageUrl) {
+    const title = String(data.title || 'Evento');
+    const description = String(data.description || '').trim();
+    const address = String(data.address || '');
+    const cityName = String(data.cityName || '');
+    const stateUF = String(data.stateUF || '');
+    const category = String(data.category || '');
+    const meta = EVENT_PAGE_CATEGORY_LABELS[category] || { label: 'Evento', emoji: '🎉' };
+    const locationLabel = [address, [cityName, stateUF].filter(Boolean).join(' - ')].filter(Boolean).join(', ');
+    const image = data.promotionPhotoUrl || data.photoUrl || 'https://alertoo.com.br/feature-graphic-1024x500.png';
+    const latitude = typeof data.latitude === 'number' ? data.latitude : null;
+    const longitude = typeof data.longitude === 'number' ? data.longitude : null;
+    const pageTitle = `${title}${cityName ? ` em ${cityName}` : ''} — Alertoo`;
+    const metaDescription = (description || `${meta.label} em ${cityName || 'sua região'}. Veja no mapa do Alertoo e descubra o que está acontecendo perto de você.`).slice(0, 160);
+    const createdAt = typeof data.createdAt === 'number' ? data.createdAt : Date.now();
+    const expiresAt = typeof data.expiresAt === 'number' ? data.expiresAt : Date.now();
+    const jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'Event',
+        name: title,
+        description: metaDescription,
+        startDate: new Date(createdAt).toISOString(),
+        endDate: new Date(expiresAt).toISOString(),
+        eventStatus: 'https://schema.org/EventScheduled',
+        eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+        image: [image],
+        url: pageUrl,
+        organizer: { '@type': 'Organization', name: 'Alertoo', url: 'https://alertoo.com.br' },
+    };
+    if (locationLabel || (latitude !== null && longitude !== null)) {
+        jsonLd.location = {
+            '@type': 'Place',
+            name: locationLabel || cityName || title,
+            ...(latitude !== null && longitude !== null
+                ? { geo: { '@type': 'GeoCoordinates', latitude, longitude } }
+                : {}),
+        };
+    }
+    const PACKAGE = 'com.alertoo.app';
+    const storeLink = `https://play.google.com/store/apps/details?id=${PACKAGE}&referrer=${encodeURIComponent(`evento_entertainment_${id}`)}`;
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="${escapeHtmlSSR(metaDescription)}" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="${pageUrl}" />
+  <meta property="og:title" content="${escapeHtmlSSR(pageTitle)}" />
+  <meta property="og:description" content="${escapeHtmlSSR(metaDescription)}" />
+  <meta property="og:image" content="${escapeHtmlSSR(image)}" />
+  <meta property="og:url" content="${pageUrl}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Alertoo" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${escapeHtmlSSR(pageTitle)}" />
+  <meta name="twitter:description" content="${escapeHtmlSSR(metaDescription)}" />
+  <meta name="twitter:image" content="${escapeHtmlSSR(image)}" />
+  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+  <title>${escapeHtmlSSR(pageTitle)}</title>
+  <link rel="icon" href="/icon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #0F172A; color: #F1F5F9; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .card { background: #1E293B; border-radius: 20px; padding: 0; max-width: 440px; width: 100%; overflow: hidden; border: 1px solid rgba(255,255,255,.08); }
+    .card img { width: 100%; height: 220px; object-fit: cover; display: block; background: #0F172A; }
+    .card-body { padding: 28px 24px; text-align: center; }
+    .badge { display: inline-block; background: rgba(255,87,34,.15); color: #FF5722; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 6px 14px; border-radius: 20px; margin-bottom: 14px; border: 1px solid rgba(255,87,34,.3); }
+    h1 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+    .location { font-size: 14px; color: #94A3B8; margin-bottom: 16px; }
+    .desc { font-size: 15px; color: #CBD5E1; line-height: 1.6; margin-bottom: 28px; }
+    .btn { display: block; width: 100%; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 700; text-decoration: none; margin-bottom: 12px; cursor: pointer; border: none; }
+    .btn-primary { background: #FF5722; color: #fff; }
+    .btn-secondary { background: transparent; border: 2px solid rgba(255,255,255,.15); color: #F1F5F9; }
+    .spinner { display: none; width: 28px; height: 28px; border: 3px solid rgba(255,255,255,.1); border-top-color: #FF5722; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    footer { text-align: center; padding: 16px; font-size: 12px; color: #64748B; }
+    footer a { color: #94A3B8; }
+  </style>
+</head>
+<body>
+<div>
+  <div class="card">
+    <img src="${escapeHtmlSSR(image)}" alt="${escapeHtmlSSR(title)}" loading="lazy" />
+    <div class="card-body">
+      <div class="badge">${meta.emoji} ${escapeHtmlSSR(meta.label)}</div>
+      <h1>${escapeHtmlSSR(title)}</h1>
+      ${locationLabel ? `<p class="location">📍 ${escapeHtmlSSR(locationLabel)}</p>` : ''}
+      ${description ? `<p class="desc">${escapeHtmlSSR(description)}</p>` : ''}
+      <div class="spinner" id="spinner"></div>
+      <a id="deep-btn" class="btn btn-primary" href="alertoo://evento/entertainment/${id}">📍 Ver no app Alertoo</a>
+      <a id="play-btn" class="btn btn-secondary" href="${storeLink}" target="_blank" rel="noopener">📲 Baixar Alertoo</a>
+    </div>
+  </div>
+  <footer>
+    <a href="/eventos">Ver mapa ao vivo</a> &bull; <a href="/">alertoo.com.br</a>
+  </footer>
+</div>
+<script>
+  // Em dispositivos móveis, tenta abrir o app automaticamente via intent.
+  (function () {
+    var ua = navigator.userAgent || '';
+    var isAndroid = /Android/i.test(ua);
+    if (!isAndroid) return;
+    document.getElementById('spinner').style.display = 'block';
+    var intentUrl = 'intent://evento/entertainment/${id}'
+      + '#Intent;scheme=alertoo;package=com.alertoo.app'
+      + ';S.browser_fallback_url=' + encodeURIComponent('${storeLink}')
+      + ';end';
+    var a = document.createElement('a');
+    a.href = intentUrl;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () {
+      document.getElementById('spinner').style.display = 'none';
+    }, 1500);
+  })();
+</script>
+<script src="/i18n.js"></script>
+</body>
+</html>`;
+}
+exports.eventPage = (0, https_1.onRequest)({ region: 'us-central1', cors: false }, async (req, res) => {
+    const parts = req.path.split('/').filter(Boolean); // ['evento','entertainment','abc123']
+    const type = parts[1] || '';
+    const id = parts[2] || '';
+    if (type !== 'entertainment' || !id) {
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.status(200).send(eventPageFallback(type, id, true));
+        return;
+    }
+    let data;
+    try {
+        const snap = await db.collection('entertainment_events').doc(id).get();
+        if (snap.exists)
+            data = snap.data();
+    }
+    catch (err) {
+        console.error('[eventPage] erro ao buscar evento', err);
+    }
+    const pageUrl = `https://alertoo.com.br/evento/entertainment/${id}`;
+    const now = Date.now();
+    const expiresAt = data && typeof data.expiresAt === 'number' ? data.expiresAt : 0;
+    const isExpired = !data || expiresAt < now;
+    if (isExpired || !data) {
+        res.set('X-Robots-Tag', 'noindex');
+        res.set('Cache-Control', data ? 'public, max-age=60' : 'no-cache, no-store, must-revalidate');
+        res.status(data ? 200 : 404).send(eventPageFallback(type, id, true));
+        return;
+    }
+    res.set('Cache-Control', 'public, max-age=120, s-maxage=600');
+    res.status(200).send(eventPageRender(data, id, pageUrl));
 });
 //# sourceMappingURL=index.js.map

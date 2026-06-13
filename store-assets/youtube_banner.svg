@@ -1,0 +1,41 @@
+<svg width="2048" height="1152" viewBox="0 0 2048 1152" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF7A45"/>
+      <stop offset="55%" stop-color="#FF5722"/>
+      <stop offset="100%" stop-color="#E64A19"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="2048" height="1152" fill="url(#bg)"/>
+
+  <!-- Decorative circles (outside / edges of safe area) -->
+  <circle cx="120" cy="120" r="260" fill="#FFFFFF" opacity="0.06"/>
+  <circle cx="1950" cy="1050" r="340" fill="#FFFFFF" opacity="0.06"/>
+  <circle cx="1900" cy="160" r="180" fill="#FFFFFF" opacity="0.05"/>
+  <circle cx="160" cy="1020" r="220" fill="#FFFFFF" opacity="0.05"/>
+
+  <!-- Safe area: x 251-1797, y 365-788 -->
+
+  <!-- Logo: bell in circle -->
+  <g transform="translate(251, 365)">
+    <circle cx="95" cy="95" r="95" fill="#FFFFFF" opacity="0.18"/>
+    <circle cx="95" cy="95" r="68" fill="#FFFFFF"/>
+    <g transform="translate(95,95)" fill="#FF5722">
+      <path d="M0,-32 C-19,-32 -32,-17 -32,2 L-32,15 C-32,22 -36,28 -41,32 L41,32 C36,28 32,22 32,15 L32,2 C32,-17 19,-32 0,-32 Z"/>
+      <circle cx="0" cy="42" r="8"/>
+    </g>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="475" y="450" font-family="Arial, Helvetica, sans-serif" font-size="100" font-weight="800" fill="#FFFFFF">Alertoo</text>
+  <text x="478" y="500" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" letter-spacing="5" fill="#FFE8DD">AVISOS · EVENTOS · COMUNIDADE</text>
+
+  <!-- Tagline -->
+  <text x="251" y="640" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="700" fill="#FFFFFF">Trânsito sem surpresa.</text>
+  <text x="251" y="710" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="700" fill="#FFFFFF">Diversão sem perder hora.</text>
+
+  <!-- Categories -->
+  <text x="251" y="775" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="500" fill="#FFE8DD">Blitz · Acidentes · Alagamentos · Shows · Bares</text>
+</svg>
