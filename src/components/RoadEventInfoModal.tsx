@@ -187,6 +187,7 @@ export function RoadEventInfoModal({ event, onConfirm, onDeny, onClose }: Props)
             title={event.title}
             description={event.description}
             category={`${meta.emoji} ${tRoadCat(event.category)}`}
+            categoryColor={meta.color}
             location={location}
             eventId={event.id}
             eventType="road"

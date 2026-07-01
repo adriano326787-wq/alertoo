@@ -7,16 +7,19 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "credentialsSource": "local",
       "android": {
         "buildType": "apk"
       },
       "ios": {
         "simulator": true
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "credentialsSource": "local",
       "android": {
         "buildType": "apk"
       },
@@ -31,7 +34,8 @@
       "extends": "preview",
       "ios": {
         "simulator": true
-      }
+      },
+      "channel": "preview-ios-simulator"
     },
     "production": {
       "autoIncrement": false,

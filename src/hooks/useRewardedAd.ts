@@ -23,6 +23,7 @@ import {
   markRewardedShown,
   initializeAds,
 } from '../services/adsService';
+import { captureMessage } from '../services/sentry';
 
 interface UseRewardedAdResult {
   /** Anúncio carregado e pronto para exibir */
@@ -75,10 +76,15 @@ export function useRewardedAd(): UseRewardedAdResult {
         setUnavailable(false);
       });
 
-      const unsubError = ad.addAdEventListener(AdEventType.ERROR, () => {
+      const unsubError = ad.addAdEventListener(AdEventType.ERROR, (error: any) => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         setReady(false);
         setUnavailable(true);
+        // Loga o código/motivo real do erro do AdMob (ex: no-fill, app-id ausente,
+        // rede) — sem isso "indisponível" não dá pista do que checar no console AdMob.
+        const reason = error?.code ?? error?.message ?? String(error);
+        if (__DEV__) console.warn('[RewardedAd] erro ao carregar:', reason);
+        captureMessage(`RewardedAd load error: ${reason}`, 'warning');
         // Tenta recarregar após 60s em caso de erro
         setTimeout(loadAd, 60_000);
       });

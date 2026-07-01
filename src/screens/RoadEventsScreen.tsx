@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEventsStore } from '../store/eventsStore';
-import { RoadEvent, EVENT_CATEGORIES } from '../types';
+import { RoadEvent, EVENT_CATEGORIES, FALLBACK_EVENT_META } from '../types';
 import { getCurrentUserId } from '../services/authService';
 import { timeAgo, timeLeft } from '../utils/time';
 import { tRoadCat, tf } from '../utils/i18n';
@@ -17,23 +17,31 @@ import { AdBanner } from '../components/AdBanner';
 import { BannerAdSize } from '../components/AdBanner';
 import { useNavigation } from '@react-navigation/native';
 import { ShareSheet } from '../components/ShareSheet';
+import { haversineDistance } from '../utils/geo';
+import { formatDistance } from '../utils/distance';
+import { SkeletonList } from '../components/SkeletonCard';
 
-function RoadEventCard({ event, currentUid, onConfirm, onDeny, onGoToMap, onShare }: {
+function RoadEventCard({ event, currentUid, onConfirm, onDeny, onGoToMap, onShare, userLat, userLon }: {
   event: RoadEvent;
   currentUid: string;
   onConfirm: (id: string) => Promise<void>;
   onDeny: (id: string) => Promise<void>;
   onGoToMap: (event: RoadEvent) => void;
   onShare: (event: RoadEvent) => void; // #24
+  userLat: number | null;
+  userLon: number | null;
 }) {
   const t = useT();
   useTick(); // #14 — re-renders every 60s so timeAgo/timeLeft stay fresh
   const [voting, setVoting] = useState<'confirm' | 'deny' | null>(null);
-  const meta = EVENT_CATEGORIES[event.category];
+  const meta = EVENT_CATEGORIES[event.category] ?? FALLBACK_EVENT_META;
   const myUid = currentUid;
   const alreadyVoted = myUid !== 'anonymous' && event.voters.includes(myUid);
   const isOwner = event.userId === myUid;
   const blocked = alreadyVoted || isOwner || voting !== null;
+  const distanceKm = (userLat != null && userLon != null)
+    ? haversineDistance(userLat, userLon, event.latitude, event.longitude)
+    : null;
 
   const handleConfirm = useCallback(async () => {
     if (blocked) return;
@@ -59,6 +67,7 @@ function RoadEventCard({ event, currentUid, onConfirm, onDeny, onGoToMap, onShar
             {tRoadCat(event.category)}
             {event.cityName ? ` · ${event.cityName}` : ''}
             {event.stateUF ? ` — ${event.stateUF}` : ''}
+            {distanceKm != null ? ` · 📍 ${formatDistance(distanceKm)}` : ''}
           </Text>
         </View>
       </View>
@@ -152,8 +161,13 @@ export function RoadEventsScreen() {
     try { await denyEvent(id); } catch { /* erro de rede — não há rollback necessário */ }
   }, [denyEvent]);
   const userStateUF  = useAppStore((s) => s.userStateUF);
+  const exploreStateUF = useAppStore((s) => s.exploreStateUF);
   const filterStateUF = useEventsStore((s) => s.filterStateUF);
   const setPendingDeepLink = useAppStore((s) => s.setPendingDeepLink);
+  // #31 — coordenadas cacheadas (preenchidas quando o usuário visita o mapa) para
+  // exibir distância nos cards sem pedir permissão de GPS de novo nesta tela
+  const userLat = useAppStore((s) => s.userLat);
+  const userLon = useAppStore((s) => s.userLon);
 
   // Detecta estado do usuário automaticamente ao montar
   const { detecting, locationDenied } = useUserLocation();
@@ -163,18 +177,19 @@ export function RoadEventsScreen() {
   const events = useMemo(() => {
     return getFilteredEvents()
       .filter((e) => {
+        if (exploreStateUF) return e.stateUF === exploreStateUF;
         if (filterStateUF) return e.stateUF === filterStateUF;
         if (locationDenied || !userStateUF) return true;
         return e.stateUF === userStateUF;
       })
       .filter((e) => !selectedCategory || e.category === selectedCategory)
       .sort((a, b) => b.createdAt - a.createdAt);
-  }, [allEvents, filterStateUF, locationDenied, userStateUF, selectedCategory]);
+  }, [allEvents, exploreStateUF, filterStateUF, locationDenied, userStateUF, selectedCategory]);
 
   useEffect(() => {
-    const unsub = subscribeToEvents();
+    const unsub = subscribeToEvents(exploreStateUF ?? (locationDenied ? null : userStateUF));
     return unsub;
-  }, []);
+  }, [userStateUF, locationDenied, exploreStateUF]);
 
   // #4 — handleRefresh real: força re-subscribe para buscar dados frescos do Firestore
   const handleRefresh = useCallback(async () => {
@@ -213,12 +228,10 @@ export function RoadEventsScreen() {
         <Text style={[styles.headerTitle, { color: textColor }]}>🚗 {t('road_title')}</Text>
         <View style={styles.headerRight}>
               {/* #30 — only show state badge when there is actually a state to display */}
-          {(filterStateUF || userStateUF) && (
+          {(exploreStateUF || filterStateUF || userStateUF) && (
             <View style={styles.stateBadge}>
               <Text style={styles.stateBadgeText}>
-                {filterStateUF
-                  ? tf('filter_state_badge', { state: filterStateUF })
-                  : tf('filter_state_badge', { state: userStateUF! })}
+                {tf('filter_state_badge', { state: exploreStateUF ?? filterStateUF ?? userStateUF! })}
               </Text>
             </View>
           )}
@@ -272,10 +285,7 @@ export function RoadEventsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.loaderWrap}>
-          <ActivityIndicator color="#E53935" />
-          <Text style={styles.loaderText}>{t('map_checking')}</Text>
-        </View>
+        <SkeletonList count={5} />
       ) : (
         <FlatList
           data={listData}
@@ -283,6 +293,14 @@ export function RoadEventsScreen() {
           contentContainerStyle={styles.list}
           refreshing={refreshing}
           onRefresh={handleRefresh}
+          // #32 — virtualização: itens têm altura variável (descrição opcional),
+          // então não dá pra usar getItemLayout; estes parâmetros ainda reduzem
+          // o trabalho de render quando há muitos eventos na lista (até 150+anúncios)
+          windowSize={9}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews
           renderItem={({ item }) => {
             if ('__ad' in item) {
               return (
@@ -292,7 +310,18 @@ export function RoadEventsScreen() {
                 </View>
               );
             }
-            return <RoadEventCard event={item} currentUid={currentUid} onConfirm={handleConfirm} onDeny={handleDeny} onGoToMap={handleGoToMap} onShare={setShareTarget} />;
+            return (
+              <RoadEventCard
+                event={item}
+                currentUid={currentUid}
+                onConfirm={handleConfirm}
+                onDeny={handleDeny}
+                onGoToMap={handleGoToMap}
+                onShare={setShareTarget}
+                userLat={userLat}
+                userLon={userLon}
+              />
+            );
           }}
           ListEmptyComponent={
             <View style={styles.empty}>
@@ -316,7 +345,8 @@ export function RoadEventsScreen() {
           visible={!!shareTarget}
           onClose={() => setShareTarget(null)}
           title={shareTarget.title}
-          category={`${EVENT_CATEGORIES[shareTarget.category]?.emoji} ${tRoadCat(shareTarget.category)}`}
+          category={`${EVENT_CATEGORIES[shareTarget.category]?.emoji ?? FALLBACK_EVENT_META.emoji} ${tRoadCat(shareTarget.category)}`}
+          categoryColor={EVENT_CATEGORIES[shareTarget.category]?.color ?? FALLBACK_EVENT_META.color}
           location={[shareTarget.cityName, shareTarget.stateUF].filter(Boolean).join(' — ')}
           eventId={shareTarget.id}
           eventType="road"

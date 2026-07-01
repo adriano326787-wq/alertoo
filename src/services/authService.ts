@@ -7,11 +7,20 @@ import {
   onAuthStateChanged,
   signOut as firebaseSignOut,
   updateProfile,
-  sendEmailVerification,
   reload,
   User,
 } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { auth } from './firebase';
+
+const functions = getFunctions(undefined, 'us-central1');
+
+// Envia o e-mail de verificacao via Cloud Function + Resend (melhor
+// deliverability que o e-mail padrao do Firebase, que costuma cair em spam).
+async function sendVerificationEmailCloud(): Promise<void> {
+  const call = httpsCallable(functions, 'sendVerificationEmail');
+  await call({});
+}
 
 // ─── Configure your Google OAuth Client IDs here ──────────────────────────────
 // Get them from: https://console.cloud.google.com → APIs & Services → Credentials
@@ -81,7 +90,7 @@ export async function registerWithEmail(
   await updateProfile(cred.user, { displayName });
   // Envia e-mail de verificação automaticamente após o cadastro
   try {
-    await sendEmailVerification(cred.user);
+    await sendVerificationEmailCloud();
   } catch (_) {
     // Falha silenciosa — não bloqueia o cadastro
   }
@@ -92,7 +101,7 @@ export async function registerWithEmail(
 // Reenvia o e-mail de verificação
 export async function resendVerificationEmail(): Promise<void> {
   if (currentUser && !currentUser.emailVerified) {
-    await sendEmailVerification(currentUser);
+    await sendVerificationEmailCloud();
   }
 }
 
@@ -153,4 +162,15 @@ export async function signInAnon(): Promise<User> {
 export async function signOut(): Promise<void> {
   await firebaseSignOut(auth);
   currentUser = null;
+}
+
+export function requireAuthenticatedUser(): string {
+  const uid = getCurrentUserId();
+  if (!uid || uid === 'anonymous') {
+    // Import t lazily to avoid circular dependency (authService ← i18n ← authService)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { t } = require('../utils/i18n') as { t: (k: string) => string };
+    throw new Error(t('login_required'));
+  }
+  return uid;
 }

@@ -25,6 +25,11 @@ import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sendLocalNotification, setupNotificationChannels } from './notificationService';
 import { t } from '../utils/i18n';
+import {
+  checkRadarProximity,
+  getRadarProximityAlertsPreference,
+  setRadarProximityAlertsPreference,
+} from './radarProximityAlert';
 
 export const BACKGROUND_LOCATION_TASK = 'alertoo-background-traffic-task';
 
@@ -122,6 +127,15 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   const speed = last.coords.speed;
   const speedKmh = speed != null && speed >= 0 ? speed * 3.6 : null;
   if (speedKmh === null) return; // sem velocidade — ignora amostra
+
+  // Aviso de proximidade de radar — independente do fluxo de alerta de
+  // trânsito abaixo (própria preferência, próprio throttle por radar).
+  checkRadarProximity(
+    last.coords.latitude,
+    last.coords.longitude,
+    speedKmh,
+    last.coords.heading ?? null,
+  ).catch(() => {});
 
   const state = await loadState();
   const now = Date.now();
@@ -248,15 +262,29 @@ export async function enableBackgroundTrafficAlerts(): Promise<BackgroundTraffic
   return 'granted';
 }
 
-export async function disableBackgroundTrafficAlerts(): Promise<void> {
+/**
+ * Para o rastreamento em segundo plano, exceto se a outra feature de
+ * localização (alerta de trânsito ou de proximidade de radar) ainda precisar
+ * dele — ambas compartilham a mesma task de localização.
+ */
+async function stopTrackingUnlessNeeded(): Promise<void> {
+  const [bgTrafficEnabled, radarEnabled] = await Promise.all([
+    getBackgroundTrafficAlertsPreference(),
+    getRadarProximityAlertsPreference(),
+  ]);
+  if (bgTrafficEnabled || radarEnabled) return;
   try {
     if (await isBackgroundTrackingActive()) {
       await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
     }
   } catch (_) {}
+}
+
+export async function disableBackgroundTrafficAlerts(): Promise<void> {
   try {
     await AsyncStorage.setItem(ENABLED_KEY, '0');
   } catch (_) {}
+  await stopTrackingUnlessNeeded();
 }
 
 /**
@@ -265,8 +293,11 @@ export async function disableBackgroundTrafficAlerts(): Promise<void> {
  * SO pode encerrar o registro da task em alguns cenários, ex.: app atualizado).
  */
 export async function resumeBackgroundTrafficAlertsIfEnabled(): Promise<void> {
-  const enabled = await getBackgroundTrafficAlertsPreference();
-  if (!enabled) return;
+  const [bgTrafficEnabled, radarEnabled] = await Promise.all([
+    getBackgroundTrafficAlertsPreference(),
+    getRadarProximityAlertsPreference(),
+  ]);
+  if (!bgTrafficEnabled && !radarEnabled) return;
 
   try {
     const bg = await Location.getBackgroundPermissionsAsync();
@@ -278,4 +309,37 @@ export async function resumeBackgroundTrafficAlertsIfEnabled(): Promise<void> {
       await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, getLocationUpdateOptions());
     }
   } catch (_) {}
+}
+
+// ─── Alerta de proximidade de radar (voz + beep) ───────────────────────────
+// Compartilha a mesma task de localização em segundo plano; ver
+// services/radarProximityAlert.ts para a lógica de detecção/aviso.
+
+export type RadarProximityAlertResult = 'granted' | 'denied' | 'foreground_only';
+
+export async function enableRadarProximityAlerts(): Promise<RadarProximityAlertResult> {
+  const fg = await Location.getForegroundPermissionsAsync();
+  if (fg.status !== 'granted') {
+    const req = await Location.requestForegroundPermissionsAsync();
+    if (req.status !== 'granted') return 'denied';
+  }
+
+  const bg = await Location.requestBackgroundPermissionsAsync();
+  if (bg.status !== 'granted') {
+    return 'foreground_only';
+  }
+
+  await setupNotificationChannels().catch(() => {});
+
+  if (!(await isBackgroundTrackingActive())) {
+    await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, getLocationUpdateOptions());
+  }
+
+  await setRadarProximityAlertsPreference(true);
+  return 'granted';
+}
+
+export async function disableRadarProximityAlerts(): Promise<void> {
+  await setRadarProximityAlertsPreference(false);
+  await stopTrackingUnlessNeeded();
 }

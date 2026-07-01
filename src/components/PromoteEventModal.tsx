@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '../services/safeImagePicker';
 import {
   PROMOTION_TIERS,
   PromotionTier,
@@ -57,6 +57,9 @@ const TIER_BORDER: Record<PromotionTier, string> = {
   ouro:   '#FFD700',
 };
 
+// Ranking de valor dos tiers — usado para detectar downgrades acidentais
+const TIER_RANK: Record<PromotionTier, number> = { bronze: 1, prata: 2, ouro: 3 };
+
 export function PromoteEventModal({
   visible, event, userCredits, isAdmin = false, onClose, onPromoted, onCreditsUpdated,
 }: Props) {
@@ -84,6 +87,26 @@ export function PromoteEventModal({
     return () => loop.stop();
   }, []);
 
+  // Ao abrir o modal para um evento que já tem promoção ativa, pré-seleciona
+  // o nível/pacote/semanas atuais — evita que o usuário downgrade por engano
+  // achando "bronze" (default) o estado atual.
+  useEffect(() => {
+    if (!visible || !event) return;
+    const isActive = !!event.promotionTier && !!event.promotionEndDate && event.promotionEndDate > Date.now();
+    if (!isActive) return;
+
+    setSelectedTier(event.promotionTier!);
+    if (event.promotionPackage) {
+      setSelectedPackage(event.promotionPackage);
+      if (event.promotionPackage === 'single' && event.promotionActiveDays?.length === 1) {
+        setSingleDayDow(event.promotionActiveDays[0]);
+      }
+    }
+    if (event.promotionWeeks) {
+      setSelectedWeeks(event.promotionWeeks);
+    }
+  }, [visible, event?.id]);
+
   const tierConfig  = PROMOTION_TIERS[selectedTier];
   const pkgConfig   = PROMOTION_PACKAGES[selectedPackage];
   const activeDays  = selectedPackage === 'single' ? [singleDayDow] : pkgConfig.defaultActiveDays;
@@ -98,12 +121,25 @@ export function PromoteEventModal({
     event.promotionEndDate > Date.now()
   );
 
+  // ── Dupla verificação: detecta downgrade de tier ou redução de validade ──
+  const currentTier      = alreadyPromoted ? event!.promotionTier! : null;
+  const currentEndDate   = alreadyPromoted ? event!.promotionEndDate! : null;
+  const newDurationMs    = selectedWeeks * 7 * 24 * 60 * 60 * 1000;
+  const newEndDate       = Date.now() + newDurationMs;
+  const isTierDowngrade  = !!currentTier && TIER_RANK[selectedTier] < TIER_RANK[currentTier];
+  const isShorterPeriod  = !!currentEndDate && newEndDate < currentEndDate;
+  const isDowngrade      = isTierDowngrade || isShorterPeriod;
+
   useEffect(() => {
     setPhotoUris((prev) => prev.slice(0, PROMOTION_TIERS[selectedTier].maxPhotos));
   }, [selectedTier]);
 
   async function handlePickPhoto(index: number) {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status === 'unavailable') {
+      Alert.alert('Indisponível nesta versão', 'A seleção de fotos não está disponível nesta versão do app. Atualize o Alertoo e tente novamente.');
+      return;
+    }
     if (status !== 'granted') {
       Alert.alert('Permissão necessária', 'Precisamos de acesso à sua galeria para escolher a foto.');
       return;
@@ -115,21 +151,76 @@ export function PromoteEventModal({
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setPhotoUris((prev) => {
-        const next = [...prev];
-        next[index] = result.assets[0].uri;
-        return next;
-      });
+      const asset = result.assets[0];
+      // #34 — allowsEditing+aspect já força o crop 16:9 no cropper nativo, mas
+      // alguns apps de galeria de fabricante (ex: alguns ROMs Android) ignoram
+      // esse parâmetro. Checagem defensiva: se a proporção retornada estiver
+      // muito longe de 16:9, avisa que a foto vai aparecer com tarja lateral
+      // no pin do mapa (em vez de simplesmente aceitar e surpreender o organizador).
+      if (asset.width && asset.height) {
+        const ratio = asset.width / asset.height;
+        const target = 16 / 9;
+        const deviation = Math.abs(ratio - target) / target;
+        if (deviation > 0.35) {
+          Alert.alert(
+            'Foto fora da proporção ideal',
+            'Essa foto está bem diferente do formato 16:9 recomendado. Ela ainda será usada, mas pode aparecer com faixas laterais/superiores no pin do mapa. Quer escolher outra foto mais "paisagem" (larga)?',
+            [
+              { text: 'Usar assim mesmo', onPress: () => acceptPhoto(index, asset.uri) },
+              { text: 'Escolher outra', style: 'cancel', onPress: () => handlePickPhoto(index) },
+            ],
+          );
+          return;
+        }
+      }
+      acceptPhoto(index, asset.uri);
     }
+  }
+
+  function acceptPhoto(index: number, uri: string) {
+    setPhotoUris((prev) => {
+      const next = [...prev];
+      next[index] = uri;
+      return next;
+    });
   }
 
   function handleRemovePhoto(index: number) {
     setPhotoUris((prev) => prev.filter((_, i) => i !== index));
   }
 
-  async function handlePromote() {
+  function handlePromote() {
     if (!event) return;
     if (!canAfford) { setShowBuyCredits(true); return; }
+
+    if (isDowngrade) {
+      const currentLabel = `${PROMOTION_TIERS[currentTier!].emoji} ${tTier(currentTier!)}`;
+      const newLabel = `${tierConfig.emoji} ${tTier(selectedTier)}`;
+      const messages: string[] = [];
+      if (isTierDowngrade) {
+        messages.push(`Você está trocando de ${currentLabel} para ${newLabel}, um nível inferior ao atual.`);
+      }
+      if (isShorterPeriod) {
+        messages.push(`A validade da promoção atual (${daysRemaining(currentEndDate!)} dias restantes) será reduzida para ${selectedWeeks * 7} dias a partir de agora.`);
+      }
+      messages.push('Os créditos já utilizados na promoção atual não são reembolsados. Deseja continuar?');
+
+      Alert.alert(
+        '⚠️ Confirmar alteração da promoção',
+        messages.join('\n\n'),
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Sim, confirmar', style: 'destructive', onPress: () => doPromote() },
+        ],
+      );
+      return;
+    }
+
+    doPromote();
+  }
+
+  async function doPromote() {
+    if (!event) return;
 
     setLoading(true);
     setUploadProgress(0);
@@ -152,7 +243,7 @@ export function PromoteEventModal({
         ? (eventLink.trim().startsWith('http') ? eventLink.trim() : `https://${eventLink.trim()}`)
         : null;
 
-      await createPromotion({
+      const result = await createPromotion({
         userId, eventId: event.id, tier: selectedTier,
         photoUrl: uploadedUrls[0] ?? null, photoUrls: uploadedUrls,
         skipCreditCheck: isAdmin,
@@ -160,8 +251,7 @@ export function PromoteEventModal({
         link: normalizedLink,
       });
       if (!isAdmin) {
-        const newCredits = await getUserCredits(userId);
-        onCreditsUpdated(newCredits);
+        onCreditsUpdated(result.newCredits);
       }
       Alert.alert(
         t('promo_success_title'),
@@ -502,9 +592,31 @@ export function PromoteEventModal({
             <View style={styles.summaryCard}>
               <Text style={styles.summaryTitle}>RESUMO DO PEDIDO</Text>
 
+              {/* Comparação com a promoção atual — evita downgrade acidental */}
+              {alreadyPromoted && (
+                <View style={styles.compareBox}>
+                  <Text style={styles.compareTitle}>Promoção atual</Text>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryRowLabel}>Nível atual</Text>
+                    <Text style={styles.summaryRowValue}>
+                      {PROMOTION_TIERS[currentTier!].emoji} {tTier(currentTier!)} · {daysRemaining(currentEndDate!)} dias restantes
+                    </Text>
+                  </View>
+                  {isDowngrade && (
+                    <View style={styles.downgradeWarning}>
+                      <Text style={styles.downgradeWarningText}>
+                        ⚠️ {isTierDowngrade && 'A nova seleção é um nível inferior ao atual. '}
+                        {isShorterPeriod && 'A validade será reduzida em relação à promoção atual. '}
+                        Confirme antes de prosseguir.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
               {/* Configuração escolhida */}
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryRowLabel}>Nível</Text>
+                <Text style={styles.summaryRowLabel}>{alreadyPromoted ? 'Novo nível' : 'Nível'}</Text>
                 <Text style={styles.summaryRowValue}>{tierConfig.emoji} {tTier(selectedTier)}</Text>
               </View>
               <View style={styles.summaryRow}>
@@ -813,6 +925,18 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 10, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.8, marginBottom: 12,
   },
+  // ─── Comparação com promoção atual ───────────────────────────────────────────
+  compareBox: {
+    backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginBottom: 10,
+    borderWidth: 1, borderColor: '#E2E8F0',
+  },
+  compareTitle: { fontSize: 10, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.6, marginBottom: 4 },
+  downgradeWarning: {
+    marginTop: 6, backgroundColor: '#FEF2F2', borderRadius: 8,
+    borderWidth: 1, borderColor: '#FECACA', padding: 8,
+  },
+  downgradeWarningText: { fontSize: 12, color: '#B91C1C', fontWeight: '700', lineHeight: 17 },
+
   summaryRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#F1F5F9',

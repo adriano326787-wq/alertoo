@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useT } from '../hooks/useT';
 import {
   Modal,
@@ -12,7 +12,10 @@ import {
   Clipboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import RNShare, { Social } from 'react-native-share';
 import { buildShareLinks } from '../utils/deepLinks';
+import { EventStoryCard, STORY_CARD_WIDTH, STORY_CARD_HEIGHT } from './EventStoryCard';
+import { captureEventStoryImage } from '../utils/storyImage';
 
 interface Props {
   visible: boolean;
@@ -20,9 +23,11 @@ interface Props {
   title: string;
   description?: string;
   category: string;
+  categoryColor: string;
   location?: string;
   eventId: string;
   eventType: 'road' | 'entertainment';
+  photoUrl?: string | null;
 }
 
 export function ShareSheet({
@@ -31,13 +36,16 @@ export function ShareSheet({
   title,
   description,
   category,
+  categoryColor,
   location,
   eventId,
   eventType,
+  photoUrl,
 }: Props) {
   const t = useT();
   const { bottom: bottomInset } = useSafeAreaInsets();
   const links = buildShareLinks(eventType, eventId);
+  const storyCardRef = useRef<View>(null);
 
   // #17 — sanitize user-generated strings: strip carriage returns / leading+trailing whitespace
   const safeTitle = title.replace(/\r/g, '').trim();
@@ -61,6 +69,18 @@ export function ShareSheet({
   const copyableLink = links.webLink;
 
   const handleWhatsApp = async () => {
+    // Tenta anexar a imagem do story (foto + título) à mensagem do WhatsApp
+    const imageUri = await captureEventStoryImage(storyCardRef);
+    if (imageUri) {
+      try {
+        await RNShare.shareSingle({ social: Social.Whatsapp, url: imageUri, message });
+        onClose();
+        return;
+      } catch {
+        // segue pro fallback texto-only abaixo
+      }
+    }
+
     const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
     try {
       const supported = await Linking.canOpenURL(url);
@@ -71,6 +91,35 @@ export function ShareSheet({
       }
     } catch {
       Alert.alert('WhatsApp não encontrado neste dispositivo');
+    }
+    onClose();
+  };
+
+  const handleInstagramStory = async () => {
+    const imageUri = await captureEventStoryImage(storyCardRef);
+    if (!imageUri) {
+      Alert.alert(
+        t('story_unavailable_title') || 'Não foi possível gerar o story',
+        t('story_unavailable_msg') || 'Tente novamente em alguns segundos.',
+      );
+      onClose();
+      return;
+    }
+    try {
+      await RNShare.shareSingle({
+        social: Social.InstagramStories,
+        backgroundImage: imageUri,
+        attributionURL: links.webLink,
+        // appId vazio — Instagram aceita o compartilhamento da imagem normalmente;
+        // sem um Facebook App ID registrado, apenas o botão de "voltar pro app" no
+        // story não aparece (recurso opcional de atribuição).
+        appId: '',
+      });
+    } catch {
+      Alert.alert(
+        t('instagram_not_found') || 'Instagram não encontrado',
+        t('instagram_not_found_msg') || 'Instale o Instagram para compartilhar nos Stories.',
+      );
     }
     onClose();
   };
@@ -121,6 +170,18 @@ export function ShareSheet({
   };
 
   const handleNativeShare = async () => {
+    // Anexa a imagem do story (foto + título do evento) ao share sheet nativo
+    const imageUri = await captureEventStoryImage(storyCardRef);
+    if (imageUri) {
+      try {
+        await RNShare.open({ url: imageUri, message, failOnCancel: false });
+        onClose();
+        return;
+      } catch {
+        // segue pro fallback texto-only abaixo
+      }
+    }
+
     try {
       await Share.share({ message });
     } catch {
@@ -154,6 +215,7 @@ export function ShareSheet({
     color: string;
     onPress: () => void;
   }[] = [
+    { label: t('share_instagram_story') || 'Story do Instagram', icon: '🎬', color: '#E1306C', onPress: handleInstagramStory },
     { label: 'WhatsApp',       icon: '💬', color: '#25D366', onPress: handleWhatsApp },
     { label: 'Telegram',       icon: '✈️',  color: '#2AABEE', onPress: handleTelegram },
     { label: 'Facebook',       icon: '📘', color: '#1877F2', onPress: handleFacebook },
@@ -175,6 +237,20 @@ export function ShareSheet({
         activeOpacity={1}
         onPress={onClose}
       />
+
+      {/* Card do Instagram Story renderizado fora da tela — usado pelo view-shot pra gerar a imagem */}
+      <View style={styles.storyCardWrapper} pointerEvents="none">
+        <EventStoryCard
+          ref={storyCardRef}
+          title={safeTitle}
+          description={safeDescription}
+          category={category}
+          categoryColor={categoryColor}
+          location={location}
+          photoUrl={photoUrl}
+          ctaLabel={t('see_event') || 'Ver evento'}
+        />
+      </View>
 
       <View style={[styles.sheet, { paddingBottom: Math.max(32, bottomInset + 16) }]}>
         <View style={styles.handleBar} />
@@ -217,6 +293,13 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  storyCardWrapper: {
+    position: 'absolute',
+    top: -9999,
+    left: -9999,
+    width: STORY_CARD_WIDTH,
+    height: STORY_CARD_HEIGHT,
   },
   sheet: {
     backgroundColor: '#FFFFFF',

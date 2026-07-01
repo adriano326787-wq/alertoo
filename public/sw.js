@@ -1,9 +1,8 @@
 /**
  * Alertoo Service Worker — Cache-first para assets estáticos
  */
-const CACHE_NAME = 'alertoo-v2';
+const CACHE_NAME = 'alertoo-v20260628-audit';
 const STATIC_ASSETS = [
-  '/',
   '/main.css',
   '/i18n.js',
   '/lib/leaflet.css',
@@ -49,7 +48,7 @@ self.addEventListener('fetch', event => {
   // HTML: network-first (sempre conteúdo fresco)
   if (request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'reload' })
         .then(res => {
           const clone = res.clone();
           caches.open(CACHE_NAME).then(c => c.put(request, clone));
@@ -64,4 +63,9 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(request).then(cached => cached || fetch(request))
   );
+});
+
+
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });

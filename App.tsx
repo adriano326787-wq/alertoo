@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { rf } from './src/utils/responsive';
-import { View, ActivityIndicator, Text, StyleSheet, Linking, Animated, TouchableOpacity, NativeModules } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, Linking, Animated, TouchableOpacity, NativeModules, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import * as Notifications from 'expo-notifications';
 import { setCurrentUser } from './src/services/authService';
 import { useUserStore } from './src/store/userStore';
 import { useEventsStore } from './src/store/eventsStore';
+import { useEntertainmentStore } from './src/store/entertainmentStore';
 import { RoadEventsScreen } from './src/screens/RoadEventsScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { EntertainmentScreen } from './src/screens/EntertainmentScreen';
@@ -208,6 +209,24 @@ function AppRoot() {
   // Zera contador de crashes — app carregou com sucesso
   useEffect(() => { clearCrashCounter(); }, []);
 
+  // Refresh garantido ao abrir/retornar o app — força um novo snapshot do
+  // Firestore (em vez de confiar só no listener em tempo real, que pode ter
+  // ficado parado enquanto o app esteve em background por muito tempo, ou
+  // perdido updates durante instabilidade de rede). Cobre tanto a abertura
+  // a frio (next === 'active' direto) quanto o retorno do background.
+  useEffect(() => {
+    const refreshActiveSubscriptions = () => {
+      useEventsStore.getState().reloadEvents();
+      useEntertainmentStore.getState().forceRefresh();
+    };
+    refreshActiveSubscriptions(); // abertura a frio
+
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') refreshActiveSubscriptions();
+    });
+    return () => sub.remove();
+  }, []);
+
   // Carrega filtro persistido, idioma salvo e permissão de notificação
   useEffect(() => {
     useEventsStore.getState().loadFilter();
@@ -259,6 +278,8 @@ function AppRoot() {
       const { eventId, eventType } = data ?? {};
       if (eventId && (eventType === 'road' || eventType === 'entertainment')) {
         useAppStore.getState().setPendingDeepLink({ type: eventType, id: eventId });
+      } else if (data?.action === 'open_add_road_event') {
+        useAppStore.getState().setPendingAddCategory(data.category ?? 'drunkcheck');
       }
     });
 

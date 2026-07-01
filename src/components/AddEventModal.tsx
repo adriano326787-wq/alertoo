@@ -35,9 +35,11 @@ interface Props {
   onClose: () => void;
   /** Chamado APÓS o evento ser criado com sucesso (antes de onClose) */
   onEventCreated?: () => void;
+  /** Categoria pré-selecionada ao abrir (ex.: deep link do lembrete de blitz/lei seca) */
+  initialCategory?: EventCategory;
 }
 
-export function AddEventModal({ visible, coordinate, stateUF, cityName, countryCode, onClose, onEventCreated }: Props) {
+export function AddEventModal({ visible, coordinate, stateUF, cityName, countryCode, onClose, onEventCreated, initialCategory }: Props) {
   const t = useT();
   const { bottom: bottomInset } = useSafeAreaInsets();
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>('drunkcheck');
@@ -66,6 +68,13 @@ export function AddEventModal({ visible, coordinate, stateUF, cityName, countryC
       setDescription('');
     }
   }, [visible]);
+
+  // Aplica categoria pré-selecionada (deep link do lembrete de blitz/lei seca)
+  useEffect(() => {
+    if (visible && initialCategory) {
+      setSelectedCategory(initialCategory);
+    }
+  }, [visible, initialCategory]);
 
   // Confirma descarte se o usuário digitou algo na descrição (item 19)
   const handleRequestClose = () => {

@@ -23,7 +23,7 @@ import {
 import { db } from '../services/firebase';
 import { auth } from '../services/firebase';
 import { getCurrentUserId } from '../services/authService';
-import { awardPoints } from '../services/userService';
+import { awardPoints, recordDailyActivity } from '../services/userService';
 import {
   EntertainmentEvent,
   EntertainmentCategory,
@@ -36,11 +36,11 @@ import { useAppStore } from './appStore';
 import { ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { track } from '../services/analytics';
 import { t, tf } from '../utils/i18n';
+import { checkRateLimit, requireAuth } from '../utils/rateLimiter';
 import { trackEventCreated } from '../services/reviewService';
 
 const COLLECTION = 'entertainment_events';
 const PAGE_SIZE = 20;
-const RATE_LIMIT_MS = 30_000; // 30 segundos entre eventos
 
 // #5 — knownIds em nível de módulo para sobreviver a re-subscribe sem gerar
 // notificações duplicadas quando o snapshot reconecta após offline ou refresh.
@@ -60,8 +60,9 @@ interface EntertainmentState {
   _subscriberCount: number;   // #2 — ref-count para evitar fechar assinatura ativa
   _lastEventAt: number | null;
   _lastCommentAt: number | null; // rate limiting de comentários
+  _subscriptionStateUF: string | null;    // stateUF da query ativa
 
-  subscribe: () => () => void;
+  subscribe: (stateUF?: string | null) => () => void;
   forceRefresh: () => void;   // #2/#4 — reinicia subscription sem afetar ref-count
   loadMore: () => Promise<void>;
   addEvent: (params: {
@@ -154,13 +155,15 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
   _subscriberCount: 0,
   _lastEventAt: null,
   _lastCommentAt: null,
+  _subscriptionStateUF: null,
 
   // ─── Assinatura em tempo real com ref-count ───────────────────────────────
-  subscribe: () => {
+  subscribe: (stateUF = null) => {
     const state = get();
 
-    // #2 — ref-count: se já há assinatura ativa, só incrementa o contador
-    if (state._subscriberCount > 0 && state._unsub) {
+    // #2 — ref-count: se já há assinatura ativa para o mesmo stateUF, só incrementa o contador.
+    // Se o stateUF mudou (ex.: localização detectada após montagem), ignora o ref-count e reabre a query.
+    if (state._subscriberCount > 0 && state._unsub && state._subscriptionStateUF === (stateUF ?? null)) {
       set({ _subscriberCount: state._subscriberCount + 1 });
       return () => {
         set((s: EntertainmentState) => {
@@ -175,16 +178,34 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
       };
     }
 
-    // Primeira assinatura — fecha eventual assinatura órfã e abre nova
+    // Primeira assinatura ou stateUF diferente — fecha eventual assinatura anterior e abre nova
     if (state._expiryTimer) clearInterval(state._expiryTimer);
     state._unsub?.();
 
-    const q = query(
-      collection(db, COLLECTION),
-      where('expiresAt', '>', Timestamp.now()),
-      orderBy('expiresAt', 'desc'),
-      limit(PAGE_SIZE)
-    );
+    // #X — limpa os eventos do estado anterior imediatamente para não exibir
+    // pins "antigos" (de outro stateUF) enquanto o novo snapshot não chega.
+    if (state._subscriptionStateUF !== (stateUF ?? null)) {
+      set({ events: [], loading: true });
+    }
+
+    // Filtro geográfico quando stateUF é conhecido — reduz drasticamente o fan-out de leituras
+    // Ordenado por createdAt desc: eventos recém-criados aparecem imediatamente no topo.
+    const q = stateUF
+      ? query(
+          collection(db, COLLECTION),
+          where('stateUF', '==', stateUF),
+          where('expiresAt', '>', Timestamp.now()),
+          orderBy('expiresAt', 'asc'),
+          orderBy('createdAt', 'desc'),
+          limit(PAGE_SIZE)
+        )
+      : query(
+          collection(db, COLLECTION),
+          where('expiresAt', '>', Timestamp.now()),
+          orderBy('expiresAt', 'asc'),
+          orderBy('createdAt', 'desc'),
+          limit(PAGE_SIZE)
+        );
 
     set({ loading: true, events: [] });
     let isFirstLoad = true;
@@ -201,7 +222,7 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
         if (userLat != null && userLon != null) {
           events.forEach((e) => {
             if (!_knownEventIds.has(e.id)) {
-              const meta = ENTERTAINMENT_CATEGORIES[e.category];
+              const meta = ENTERTAINMENT_CATEGORIES[e.category] ?? { emoji: '🎉', color: '#6A1B9A', label: e.category };
               notifyIfNearby({
                 eventTitle: e.title, eventEmoji: meta.emoji,
                 eventType: 'entertainment', eventId: e.id,
@@ -232,7 +253,7 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
       });
     }, 60_000);
 
-    set({ _unsub: unsub, _expiryTimer: expiryTimer, _subscriberCount: 1 });
+    set({ _unsub: unsub, _expiryTimer: expiryTimer, _subscriberCount: 1, _subscriptionStateUF: stateUF ?? null });
 
     return () => {
       set((s: EntertainmentState) => {
@@ -247,28 +268,41 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
     };
   },
 
-  // #2/#4 — Reinicia subscription sem afetar ref-count (usado pelo handleRefresh)
+  // #2/#4 — Reinicia subscription sem afetar ref-count (usado pelo handleRefresh
+  // e pelo refresh automático ao voltar pro foreground em App.tsx).
+  // Não zera `events` aqui — mantém a lista atual visível até o novo snapshot
+  // chegar (evita "flash" de lista vazia a cada vez que o app volta do background).
   forceRefresh: () => {
     const s = get();
     if (s._expiryTimer) clearInterval(s._expiryTimer);
     s._unsub?.();
-    // Re-abre sem resetar _subscriberCount
-    set({ loading: true, events: [], _unsub: null, _expiryTimer: null });
-    get().subscribe();
+    set({ loading: true, _unsub: null, _expiryTimer: null });
+    get().subscribe(s._subscriptionStateUF);
   },
 
   // ─── Carregar mais eventos (paginação) ────────────────────────────────────
   loadMore: async () => {
-    const { _lastDoc, hasMore } = get();
+    const { _lastDoc, hasMore, _subscriptionStateUF } = get();
     if (!hasMore || !_lastDoc) return;
 
-    const q = query(
-      collection(db, COLLECTION),
-      where('expiresAt', '>', Timestamp.now()),
-      orderBy('expiresAt', 'desc'),
-      startAfter(_lastDoc),
-      limit(PAGE_SIZE)
-    );
+    const q = _subscriptionStateUF
+      ? query(
+          collection(db, COLLECTION),
+          where('stateUF', '==', _subscriptionStateUF),
+          where('expiresAt', '>', Timestamp.now()),
+          orderBy('expiresAt', 'asc'),
+          orderBy('createdAt', 'desc'),
+          startAfter(_lastDoc),
+          limit(PAGE_SIZE)
+        )
+      : query(
+          collection(db, COLLECTION),
+          where('expiresAt', '>', Timestamp.now()),
+          orderBy('expiresAt', 'asc'),
+          orderBy('createdAt', 'desc'),
+          startAfter(_lastDoc),
+          limit(PAGE_SIZE)
+        );
 
     try {
       const snapshot = await getDocs(q);
@@ -293,17 +327,10 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
   addEvent: async ({ category, title, description, address, latitude, longitude, stateUF, cityName, countryCode, photoUri }) => {
     const uid = getCurrentUserId();
 
-    // Bloqueia usuários anônimos (Firestore também bloqueia, mas falha mais cedo aqui)
-    if (!uid || uid === 'anonymous') {
-      throw new Error(t('login_required_ent')); // #5 Ciclo 8 — i18n
-    }
+    requireAuth(uid, 'login_required_ent');
+    checkRateLimit(get()._lastEventAt);
 
     const now = Date.now();
-    const { _lastEventAt } = get();
-    if (_lastEventAt && now - _lastEventAt < RATE_LIMIT_MS) {
-      const remaining = Math.ceil((RATE_LIMIT_MS - (now - _lastEventAt)) / 1000);
-      throw new Error(tf('rate_limit_wait', { remaining })); // #5 Ciclo 8 — i18n
-    }
 
     const ttlHours = ENTERTAINMENT_TTL_HOURS[category] ?? 36;
     const expiresAt = Timestamp.fromMillis(now + ttlHours * 60 * 60 * 1000);
@@ -363,6 +390,7 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
 
     if (uid !== 'anonymous') {
       awardPoints(uid, POINTS.ENTERTAINMENT_EVENT_CREATED, 'eventsReported').catch(() => {});
+      recordDailyActivity(uid).catch(() => {});
       trackEventCreated().catch(() => {});
     }
   },
@@ -407,8 +435,11 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
 
     track(hasLiked ? 'event_unliked' : 'event_liked', { eventId, category: event.category });
 
-    if (!hasLiked && event.userId && event.userId !== 'anonymous') {
-      awardPoints(event.userId, POINTS.LIKE_RECEIVED).catch(() => {});
+    if (!hasLiked) {
+      if (uid !== 'anonymous') recordDailyActivity(uid).catch(() => {});
+      if (event.userId && event.userId !== 'anonymous') {
+        awardPoints(event.userId, POINTS.LIKE_RECEIVED).catch(() => {});
+      }
     }
   },
 
@@ -433,14 +464,7 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
   addComment: async (eventId, text) => {
     const uid = getCurrentUserId();
 
-    // Rate limiting: 30s entre comentários (server-side também limita via Firestore rules)
-    const COMMENT_RATE_MS = 30_000;
-    const { _lastCommentAt } = get();
-    const now = Date.now();
-    if (_lastCommentAt && now - _lastCommentAt < COMMENT_RATE_MS) {
-      const remaining = Math.ceil((COMMENT_RATE_MS - (now - _lastCommentAt)) / 1000);
-      throw new Error(tf('rate_limit_comment', { remaining })); // #5 Ciclo 8 — i18n
-    }
+    checkRateLimit(get()._lastCommentAt, 30_000, 'rate_limit_comment');
 
     const displayName =
       auth.currentUser?.displayName ||
@@ -454,10 +478,11 @@ export const useEntertainmentStore = create<EntertainmentState>((set, get) => ({
       createdAt: Timestamp.now(),
     });
     await updateDoc(ref, { commentCount: increment(1) });
-    set({ _lastCommentAt: now });
+    set({ _lastCommentAt: Date.now() });
 
     if (uid !== 'anonymous') {
       awardPoints(uid, POINTS.COMMENT_POSTED, 'commentsPosted').catch(() => {});
+      recordDailyActivity(uid).catch(() => {});
     }
   },
 

@@ -19,20 +19,28 @@ interface Props {
   radar: Radar;
   onPress: (radar: Radar) => void;
   zoomTier?: ZoomTier;
+  /** Nível de zoom contínuo (0-20) — encolhe o pin gradualmente dentro do tier 'distant' */
+  zoomLevel?: number;
 }
 
-function pinSize(zoom: ZoomTier): number {
-  return zoom === 'distant' ? 26 : zoom === 'medium' ? 34 : 42;
+// Dentro do tier 'distant' (zoom < 12), o pin encolhe continuamente conforme o
+// usuário afasta o mapa — evita "spam" visual em visões de estado/região, onde
+// dezenas de radares ficam visualmente próximos.
+function pinSize(zoom: ZoomTier, zoomLevel: number): number {
+  if (zoom === 'medium') return 34;
+  if (zoom === 'close') return 42;
+  return Math.round(Math.min(10, Math.max(5, 5 + (zoomLevel - 6) * 1.0)));
 }
 
-export function RadarMarker({ radar, onPress, zoomTier = 'close' }: Props) {
+export function RadarMarker({ radar, onPress, zoomTier = 'close', zoomLevel = 12 }: Props) {
   const meta = RADAR_TYPES[radar.type] ?? RADAR_TYPES.fixed;
   const [tracks, setTracks] = useState(true);
   const layoutDoneRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const contentKey = [radar.type, radar.status, zoomTier].join('|');
+  const size = pinSize(zoomTier, zoomLevel);
+  const contentKey = [radar.type, radar.status, zoomTier, size].join('|');
 
   useEffect(() => {
     layoutDoneRef.current = false;
@@ -53,7 +61,6 @@ export function RadarMarker({ radar, onPress, zoomTier = 'close' }: Props) {
     timerRef.current = setTimeout(() => setTracks(false), 500);
   }, []);
 
-  const size = pinSize(zoomTier);
   const isPending = radar.status === 'pending';
 
   return (
@@ -62,7 +69,7 @@ export function RadarMarker({ radar, onPress, zoomTier = 'close' }: Props) {
       anchor={{ x: 0.5, y: 0.5 }}
       onPress={() => onPress(radar)}
       tracksViewChanges={tracks}
-      zIndex={2}
+      zIndex={1}
       opacity={isPending ? 0.55 : 1}
     >
       <View collapsable={false}>

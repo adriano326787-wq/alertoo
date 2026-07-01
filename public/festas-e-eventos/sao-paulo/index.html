@@ -2,12 +2,12 @@
 <html lang="pt-BR">
 <head>
   <!-- Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-TSS9J9VDTC"></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-52XN3QT3EQ"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-TSS9J9VDTC');
+    gtag('config', 'G-52XN3QT3EQ');
   </script>
 
   <!-- Google AdSense -->
@@ -154,12 +154,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
     "description": "App gratuito para descobrir festas, baladas, eventos e alertas de trânsito perto de você em tempo real.",
     "url": "https://alertoo.com.br",
-    "downloadUrl": "https://play.google.com/store/apps/details?id=com.alertoo.app",
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": "4.5",
-      "ratingCount": "120"
-    }
+    "downloadUrl": "https://play.google.com/store/apps/details?id=com.alertoo.app"
   }
   </script>
 
@@ -336,6 +331,18 @@
       color: rgba(255,255,255,.2); margin-bottom: 6px; text-align: center;
     }
     .adsbygoogle { display: block; min-height: 50px; }
+  
+    /* RECENT — eventos reais do Firestore (injetado por enrich-festas-pages.mjs) */
+    .recent-section { max-width: 860px; margin: 0 auto 56px; padding: 0 24px; }
+    .recent-section h2 { font-size: 22px; font-weight: 700; margin-bottom: 16px; text-align: center; }
+    .recent-list { display: flex; flex-direction: column; gap: 10px; }
+    .recent-item { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 14px; }
+    .recent-emoji { font-size: 22px; flex-shrink: 0; }
+    .recent-text { flex: 1; min-width: 0; }
+    .recent-desc { font-size: 14px; font-weight: 600; color: var(--text); }
+    .recent-city { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .recent-time { font-size: 12px; font-weight: 700; color: var(--brand); flex-shrink: 0; white-space: nowrap; }
+    .recent-empty { text-align: center; color: var(--muted); font-size: 14px; padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   </style>
 </head>
 <body>
@@ -345,7 +352,7 @@
   <div class="nav-links">
     <a href="/eventos" data-i18n="seo.nav.live2">🔴 Ao vivo</a>
     <a href="/lei-seca" data-i18n="seo.link.dui">🚔 Lei Seca</a>
-    <a href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" data-i18n="seo.nav.download">Baixar App</a>
+    <a href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" data-i18n="seo.nav.download" onclick="trackPlayStoreClick('seo_nav')">Baixar App</a>
   </div>
 </nav>
 
@@ -354,9 +361,10 @@
   <div class="hero-badge" data-i18n="fe.badge">🎉 Eventos ao Vivo</div>
   <h1>Festas e Baladas<br/><span>em São Paulo Agora</span></h1>
   <p>Veja em tempo real o que está rolando em São Paulo — festas, shows, baladas e eventos em Vila Madalena, Pinheiros e Itaim Bibi e muito mais. Reportados pela comunidade, grátis.</p>
+  <p id="statsLine" style="font-size:14px;color:var(--muted);margin:-8px 0 24px;font-weight:600;">⏳ Carregando dados em tempo real…</p>
   <div class="cta-group">
     <a class="btn-primary" href="/eventos" data-i18n="seo.btn.map">Ver Mapa Agora</a>
-    <a class="btn-secondary" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" data-i18n="seo.btn.free">Baixar Grátis</a>
+    <a class="btn-secondary" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" data-i18n="seo.btn.free" onclick="trackPlayStoreClick('seo_hero')">Baixar Grátis</a>
   </div>
 </section>
 
@@ -398,6 +406,15 @@
     </iframe>
   </div>
   <p class="map-caption" data-i18n="seo.map.caption2">Eventos reportados pela comunidade em tempo real. Atualizados continuamente.</p>
+</section>
+
+
+<!-- EVENTOS RECENTES — injetado por enrich-festas-pages.mjs -->
+<section class="recent-section">
+  <h2>Últimos Eventos Reportados em São Paulo</h2>
+  <div class="recent-list" id="recentList">
+    <div class="recent-empty">Carregando eventos recentes...</div>
+  </div>
 </section>
 
 <!-- COMO FUNCIONA -->
@@ -633,7 +650,7 @@
   <h2 data-i18n="fe.ctaH2">Não Perca Nenhuma Festa 🎉</h2>
   <p data-i18n="fe.ctaP">Baixe grátis e descubra festas, baladas, shows e eventos ao vivo perto de você agora mesmo.</p>
   <div class="store-badges">
-    <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" data-i18n="seo.btn.googlePlay">▶ Google Play</a>
+    <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" data-i18n="seo.btn.googlePlay" onclick="trackPlayStoreClick('seo_download_cta')">▶ Google Play</a>
     <a class="store-badge" href="https://apps.apple.com/br/app/alertoo/id6744862588" target="_blank" rel="noopener" data-i18n="seo.btn.appStore"> App Store</a>
   </div>
 </section>
@@ -714,5 +731,83 @@
     document.getElementById('cookieBanner').style.display = 'none';
   }
 </script>
+
+<!-- DADOS RECENTES — busca eventos reais do Firestore (entertainment_events) -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+  import { getFirestore, collection, query, where, orderBy, limit, getDocs, Timestamp }
+    from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+  const app = initializeApp({
+    apiKey:            'AIzaSyCoI9rNBK07vGZBuygprq4PkDKGT0iZkYU',
+    authDomain:        'lei-seca---eventos.firebaseapp.com',
+    projectId:         'lei-seca---eventos',
+    storageBucket:     'lei-seca---eventos.firebasestorage.app',
+    messagingSenderId: '657066902706',
+    appId:             '1:657066902706:web:3e3d49f23a819c5ce1b5ab',
+  });
+  const db = getFirestore(app);
+
+  function timeAgo(ms) {
+    const d = Date.now() - ms, m = Math.floor(d / 60000);
+    if (m < 1) return 'agora';
+    if (m < 60) return `há ${m} min`;
+    const h = Math.floor(m / 60);
+    return `há ${h}h${m % 60 ? (m % 60) + 'min' : ''}`;
+  }
+
+  function renderStatsLine(count) {
+    const el = document.getElementById('statsLine');
+    if (!el) return;
+    if (count === 0) {
+      el.textContent = '📍 Nenhum alerta de festas e eventos ativo agora em São Paulo — seja o primeiro a reportar no app.';
+    } else {
+      el.textContent = '🎉 ' + count + (count === 1 ? ' alerta ativo agora' : ' alertas ativos agora') + ' de festas e eventos em São Paulo.';
+    }
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  async function loadRecent() {
+    const el = document.getElementById('recentList');
+    try {
+      const q = query(
+        collection(db, 'entertainment_events'),
+        where('expiresAt', '>', Timestamp.now()),
+        orderBy('expiresAt', 'desc'),
+        limit(50)
+      );
+      const snap = await getDocs(q);
+      const matched = snap.docs.filter(d => d.data().stateUF === 'SP');
+      const docs = matched.slice(0, 8);
+      renderStatsLine(matched.length);
+      if (docs.length === 0) {
+        el.innerHTML = '<div class="recent-empty">Nenhum evento ativo reportado em São Paulo no momento. Abra o mapa ao vivo ou o app para acompanhar novos reportes.</div>';
+        return;
+      }
+      el.innerHTML = docs.map(d => {
+        const data = d.data();
+        const created = data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
+        const desc = (data.title || data.description || 'Evento').toString();
+        const city = data.cityName || 'São Paulo';
+        return `<div class="recent-item">
+          <div class="recent-emoji">🎉</div>
+          <div class="recent-text">
+            <div class="recent-desc">${escapeHtml(desc)}</div>
+            <div class="recent-city">${escapeHtml(city)} — SP</div>
+          </div>
+          <div class="recent-time">${timeAgo(created)}</div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      el.innerHTML = '<div class="recent-empty">Não foi possível carregar os eventos agora. Veja o mapa ao vivo acima.</div>';
+    }
+  }
+
+  loadRecent();
+</script>
+
 </body>
 </html>

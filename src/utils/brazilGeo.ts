@@ -86,7 +86,7 @@ const STATE_ALIASES: Record<string, string> = {
   'parana': 'PR',
 };
 
-/** Converte qualquer string retornada pelo geocoder para sigla UF */
+/** Converte qualquer string retornada pelo geocoder para sigla UF (apenas Brasil) */
 export function resolveStateUF(raw: string | null | undefined): string | undefined {
   if (!raw) return undefined;
   const normalized = raw.trim().toLowerCase();
@@ -95,6 +95,52 @@ export function resolveStateUF(raw: string | null | undefined): string | undefin
   return STATE_ALIASES[normalized] ?? STATE_NAME_TO_UF[normalized] ?? undefined;
 }
 
+/**
+ * Resolve a região (estado/província/departamento) de forma genérica por país.
+ *
+ * - Brasil (ou país desconhecido): mantém a semântica de UF de 2 letras via
+ *   resolveStateUF — preserva compatibilidade com os eventos brasileiros existentes
+ *   e com o recurso de pins de estado (específico do Brasil).
+ * - Outros países (AR/CL/CO/PE/UY etc.): usa o próprio nome da região como
+ *   identificador estável. Tanto a CRIAÇÃO do evento quanto a DETECÇÃO da
+ *   localização do usuário passam por esta função com o mesmo `countryCode`,
+ *   então o mesmo lugar físico sempre produz o mesmo identificador → o filtro
+ *   `event.stateUF === userStateUF` casa corretamente.
+ *
+ * Nota: confia na consistência de caixa do geocoder do SO para um dado país/região
+ * (determinístico por coordenada). Só normaliza espaços nas pontas e internos.
+ */
+export function resolveRegion(
+  raw: string | null | undefined,
+  countryCode?: string | null,
+): string | undefined {
+  if (!raw) return undefined;
+  const cc = (countryCode ?? '').trim().toUpperCase();
+  if (!cc || cc === 'BR') return resolveStateUF(raw);
+  const normalized = raw.trim().replace(/\s+/g, ' ');
+  return normalized.length >= 2 ? normalized : undefined;
+}
+
 export function getStateByUF(uf: string): BrazilState | undefined {
   return BRAZIL_STATES.find((s) => s.uf === uf);
+}
+
+/** Lista de siglas de todos os estados (usada para iterar agregações). */
+export const BRAZIL_UFS: string[] = BRAZIL_STATES.map((s) => s.uf);
+
+/**
+ * Centróide aproximado do estado — média das coordenadas das cidades cadastradas.
+ * Suficiente para posicionar um pin de resumo no mapa (não precisa de precisão geográfica).
+ */
+export function getStateCentroid(uf: string): { latitude: number; longitude: number } | undefined {
+  const state = getStateByUF(uf);
+  if (!state || state.cities.length === 0) return undefined;
+  const sum = state.cities.reduce(
+    (acc, c) => ({ latitude: acc.latitude + c.latitude, longitude: acc.longitude + c.longitude }),
+    { latitude: 0, longitude: 0 },
+  );
+  return {
+    latitude: sum.latitude / state.cities.length,
+    longitude: sum.longitude / state.cities.length,
+  };
 }

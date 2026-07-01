@@ -4,15 +4,28 @@ import {
   StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Image, Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '../services/safeImagePicker';
 import * as Location from 'expo-location';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../services/firebase';
 import { EntertainmentCategory, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { useEntertainmentStore } from '../store/entertainmentStore';
+import { useUserStore } from '../store/userStore';
+import { getCurrentUser } from '../services/authService';
 import { validateEventContent } from '../utils/contentFilter';
 import { useT } from '../hooks/useT';
-import { tEntCat } from '../utils/i18n';
+import { tEntCat, tf } from '../utils/i18n';
 import { useTick } from '../hooks/useTick';
 import { EntertainmentBenefitsBanner } from './EntertainmentBenefitsBanner';
+
+// Tutorial passo a passo de criação do primeiro evento
+const TOUR_STEPS: { key: string; target: 'category' | 'title' | 'address' | 'photo' | 'publish' }[] = [
+  { key: 'tour_step_category', target: 'category' },
+  { key: 'tour_step_title', target: 'title' },
+  { key: 'tour_step_address', target: 'address' },
+  { key: 'tour_step_photo', target: 'photo' },
+  { key: 'tour_step_publish', target: 'publish' },
+];
 
 interface Props {
   visible: boolean;
@@ -37,6 +50,13 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
   const [geocodedStreet, setGeocodedStreet] = useState<string | null>(null);
   const [geocoding, setGeocoding] = useState(false);
   const geocodedRef = useRef<string | null>(null);
+  const profile = useUserStore((s) => s.profile);
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionYRef = useRef<Record<string, number>>({});
+  const tourPromptedRef = useRef(false);
+  const [showTourIntro, setShowTourIntro] = useState(false);
+  const [tourActive, setTourActive] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
   const addEvent = useEntertainmentStore((s) => s.addEvent);
   const _lastEventAt = useEntertainmentStore((s) => s._lastEventAt);
   const RATE_LIMIT_MS = 30_000;
@@ -80,11 +100,67 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
         geocodedRef.current = suggested || null;
         setAddress(suggested);
       })
-      .catch(() => { /* sem internet ou permissão — campo fica livre */ })
+      .catch(() => { /* sem internet ou permissão — campo fica livre, não é bug (sem captureError de propósito) */ })
       // #32 — check `cancelled` in finally so unmounted component doesn't setState
       .finally(() => { if (!cancelled) setGeocoding(false); });
     return () => { cancelled = true; };
   }, [visible, coordinate.latitude, coordinate.longitude]);
+
+  // Tutorial — sugere o tour passo a passo para usuários cadastrados que nunca o viram
+  useEffect(() => {
+    if (!visible) {
+      tourPromptedRef.current = false;
+      setTourActive(false);
+      setShowTourIntro(false);
+      return;
+    }
+    if (tourPromptedRef.current) return;
+    if (!profile) return; // espera o perfil carregar
+    const user = getCurrentUser();
+    if (!user || user.isAnonymous) return;
+    if (profile.onboarding?.firstEventTourSeen) return;
+    tourPromptedRef.current = true;
+    const timer = setTimeout(() => setShowTourIntro(true), 500);
+    return () => clearTimeout(timer);
+  }, [visible, profile]);
+
+  // Rola o formulário para destacar o campo do passo atual do tour
+  useEffect(() => {
+    if (!tourActive) return;
+    const target = TOUR_STEPS[tourStep]?.target;
+    const y = target ? sectionYRef.current[target] : undefined;
+    if (y !== undefined) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    }
+  }, [tourActive, tourStep]);
+
+  const markTourSeen = () => {
+    const user = getCurrentUser();
+    if (!user || user.isAnonymous) return;
+    updateDoc(doc(db, 'users', user.uid), { 'onboarding.firstEventTourSeen': true }).catch(() => {});
+  };
+
+  const startTour = () => {
+    setShowTourIntro(false);
+    setTourStep(0);
+    setTourActive(true);
+  };
+  const skipTourIntro = () => {
+    setShowTourIntro(false);
+    markTourSeen();
+  };
+  const endTour = () => {
+    setTourActive(false);
+    markTourSeen();
+  };
+  const goNextStep = () => {
+    if (tourStep >= TOUR_STEPS.length - 1) { endTour(); return; }
+    setTourStep((s) => s + 1);
+  };
+  const goPrevStep = () => setTourStep((s) => Math.max(0, s - 1));
+  const handleSectionLayout = (key: string) => (e: { nativeEvent: { layout: { y: number } } }) => {
+    sectionYRef.current[key] = e.nativeEvent.layout.y;
+  };
 
   // Confirma descarte se o usuário preencheu algum campo (item 19)
   const handleRequestClose = () => {
@@ -105,6 +181,10 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
 
   const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status === 'unavailable') {
+      Alert.alert('Indisponível nesta versão', 'A seleção de fotos não está disponível nesta versão do app. Atualize o Alertoo e tente novamente.');
+      return;
+    }
     if (status !== 'granted') {
       Alert.alert(t('permission_required'), t('gallery_permission_msg'));
       return;
@@ -198,11 +278,24 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
         <View style={[styles.sheet, { paddingBottom: Math.max(bottomInset, 16) + 20 }]}>
           <View style={styles.handle} />
           <ScrollView
+            ref={scrollRef}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+            contentContainerStyle={tourActive ? styles.scrollContentTour : undefined}
           >
-            <Text style={styles.title}>{t('add_event_title')}</Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>{t('add_event_title')}</Text>
+              {(() => {
+                const user = getCurrentUser();
+                if (!user || user.isAnonymous) return null;
+                return (
+                  <TouchableOpacity onPress={startTour}>
+                    <Text style={styles.tourLink}>{t('tour_replay')}</Text>
+                  </TouchableOpacity>
+                );
+              })()}
+            </View>
 
             <EntertainmentBenefitsBanner />
 
@@ -212,90 +305,114 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
               </View>
             )}
 
-            <Text style={styles.label}>{t('add_category')}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-              {(Object.entries(ENTERTAINMENT_CATEGORIES) as [EntertainmentCategory, typeof ENTERTAINMENT_CATEGORIES[EntertainmentCategory]][]).map(([key, meta]) => (
-                <TouchableOpacity
-                  key={key}
-                  style={[styles.chip, { borderColor: meta.color }, category === key && { backgroundColor: meta.color }]}
-                  onPress={() => setCategory(key)}
-                >
-                  <Text style={styles.chipEmoji}>{meta.emoji}</Text>
-                  <Text style={[styles.chipLabel, category === key && styles.chipLabelSelected]}>{tEntCat(key)}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>{t('add_event_name')} *</Text>
-              <Text style={styles.charCount}>{title.length}/80</Text>
+            <View
+              onLayout={handleSectionLayout('category')}
+              style={[styles.tourSection, tourActive && tourStep === 0 && styles.tourHighlight]}
+            >
+              <Text style={styles.label}>{t('add_category')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                {(Object.entries(ENTERTAINMENT_CATEGORIES) as [EntertainmentCategory, typeof ENTERTAINMENT_CATEGORIES[EntertainmentCategory]][]).map(([key, meta]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.chip, { borderColor: meta.color }, category === key && { backgroundColor: meta.color }]}
+                    onPress={() => setCategory(key)}
+                  >
+                    <Text style={styles.chipEmoji}>{meta.emoji}</Text>
+                    <Text style={[styles.chipLabel, category === key && styles.chipLabelSelected]}>{tEntCat(key)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
-            <TextInput
-              style={styles.input}
-              placeholder={t('add_ent_name_ph')}
-              placeholderTextColor="#aaa"
-              value={title}
-              onChangeText={setTitle}
-              maxLength={80}
-            />
 
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>{t('add_description')}</Text>
-              <Text style={styles.charCount}>{description.length}/300</Text>
-            </View>
-            <TextInput
-              style={[styles.input, styles.multiline]}
-              placeholder={t('add_ent_desc_ph')}
-              placeholderTextColor="#aaa"
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              maxLength={300}
-            />
-
-            <Text style={styles.label}>
-              {t('add_address')} *{' '}
-              {geocoding && <Text style={styles.labelHint}>{t('geocoding_searching')}</Text>}
-            </Text>
-            {geocodedStreet && (
-              <View style={styles.geocodeBadge}>
-                <Text style={styles.geocodeBadgeText} numberOfLines={1}>
-                  📍 {t('geocode_suggestion')}: {geocodedStreet}
-                </Text>
+            <View
+              onLayout={handleSectionLayout('title')}
+              style={[styles.tourSection, tourActive && tourStep === 1 && styles.tourHighlight]}
+            >
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>{t('add_event_name')} *</Text>
+                <Text style={styles.charCount}>{title.length}/80</Text>
               </View>
-            )}
-            <TextInput
-              style={[styles.input, !address.trim() && styles.inputError]}
-              placeholder={geocoding ? t('geocoding_detecting') : t('address_placeholder')}
-              placeholderTextColor="#aaa"
-              value={address}
-              onChangeText={setAddress}
-              maxLength={150}
-              autoCorrect={false}
-            />
-            {!address.trim() && !geocoding && (
-              <Text style={styles.fieldRequired}>{t('field_required_address')}</Text>
-            )}
+              <TextInput
+                style={styles.input}
+                placeholder={t('add_ent_name_ph')}
+                placeholderTextColor="#aaa"
+                value={title}
+                onChangeText={setTitle}
+                maxLength={80}
+              />
+
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>{t('add_description')}</Text>
+                <Text style={styles.charCount}>{description.length}/300</Text>
+              </View>
+              <TextInput
+                style={[styles.input, styles.multiline]}
+                placeholder={t('add_ent_desc_ph')}
+                placeholderTextColor="#aaa"
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                maxLength={300}
+              />
+            </View>
+
+            <View
+              onLayout={handleSectionLayout('address')}
+              style={[styles.tourSection, tourActive && tourStep === 2 && styles.tourHighlight]}
+            >
+              <Text style={styles.label}>
+                {t('add_address')} *{' '}
+                {geocoding && <Text style={styles.labelHint}>{t('geocoding_searching')}</Text>}
+              </Text>
+              {geocodedStreet && (
+                <View style={styles.geocodeBadge}>
+                  <Text style={styles.geocodeBadgeText} numberOfLines={1}>
+                    📍 {t('geocode_suggestion')}: {geocodedStreet}
+                  </Text>
+                </View>
+              )}
+              <TextInput
+                style={[styles.input, !address.trim() && styles.inputError]}
+                placeholder={geocoding ? t('geocoding_detecting') : t('address_placeholder')}
+                placeholderTextColor="#aaa"
+                value={address}
+                onChangeText={setAddress}
+                maxLength={150}
+                autoCorrect={false}
+              />
+              {!address.trim() && !geocoding && (
+                <Text style={styles.fieldRequired}>{t('field_required_address')}</Text>
+              )}
+            </View>
 
             {/* Foto opcional */}
-            <Text style={styles.label}>{t('photo_optional')}</Text>
-            {photoUri ? (
-              <View style={styles.photoPreviewWrap}>
-                <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
-                <TouchableOpacity style={styles.photoRemove} onPress={() => setPhotoUri(null)}>
-                  <Text style={styles.photoRemoveText}>✕</Text>
+            <View
+              onLayout={handleSectionLayout('photo')}
+              style={[styles.tourSection, tourActive && tourStep === 3 && styles.tourHighlight]}
+            >
+              <Text style={styles.label}>{t('photo_optional')}</Text>
+              {photoUri ? (
+                <View style={styles.photoPreviewWrap}>
+                  <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
+                  <TouchableOpacity style={styles.photoRemove} onPress={() => setPhotoUri(null)}>
+                    <Text style={styles.photoRemoveText}>✕</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.photoChange} onPress={handlePickPhoto}>
+                    <Text style={styles.photoChangeText}>{t('change_photo') || 'Trocar foto'}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.photoPickBtn} onPress={handlePickPhoto}>
+                  <Text style={styles.photoPickIcon}>📷</Text>
+                  <Text style={styles.photoPickText}>{t('add_photo') || 'Adicionar foto'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.photoChange} onPress={handlePickPhoto}>
-                  <Text style={styles.photoChangeText}>{t('change_photo') || 'Trocar foto'}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.photoPickBtn} onPress={handlePickPhoto}>
-                <Text style={styles.photoPickIcon}>📷</Text>
-                <Text style={styles.photoPickText}>{t('add_photo') || 'Adicionar foto'}</Text>
-              </TouchableOpacity>
-            )}
+              )}
+            </View>
 
+            <View
+              onLayout={handleSectionLayout('publish')}
+              style={[styles.tourSection, tourActive && tourStep === 4 && styles.tourHighlight]}
+            >
             <View style={styles.footer}>
               <TouchableOpacity style={styles.cancelBtn} onPress={handleRequestClose}>
                 <Text style={styles.cancelText}>{t('filter_cancel')}</Text>
@@ -314,8 +431,52 @@ export function AddEntertainmentModal({ visible, coordinate, stateUF, cityName, 
                 )}
               </TouchableOpacity>
             </View>
+            </View>
           </ScrollView>
+
+          {tourActive && (
+            <View style={styles.tourBar}>
+              <Text style={styles.tourProgress}>
+                {tf('tour_progress', { current: tourStep + 1, total: TOUR_STEPS.length })}
+              </Text>
+              <Text style={styles.tourText}>{t(TOUR_STEPS[tourStep].key)}</Text>
+              <View style={styles.tourBarActions}>
+                <TouchableOpacity onPress={endTour}>
+                  <Text style={styles.tourSkip}>{t('tour_intro_skip')}</Text>
+                </TouchableOpacity>
+                <View style={styles.tourNavGroup}>
+                  {tourStep > 0 && (
+                    <TouchableOpacity style={styles.tourNavBtn} onPress={goPrevStep}>
+                      <Text style={styles.tourNavBtnText}>{t('tour_prev')}</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={[styles.tourNavBtn, styles.tourNavBtnPrimary]} onPress={goNextStep}>
+                    <Text style={styles.tourNavBtnTextPrimary}>
+                      {tourStep === TOUR_STEPS.length - 1 ? t('tour_finish') : t('tour_next')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
+
+        {showTourIntro && (
+          <View style={styles.tourIntroOverlay}>
+            <View style={styles.tourIntroCard}>
+              <Text style={styles.tourIntroTitle}>{t('tour_intro_title')}</Text>
+              <Text style={styles.tourIntroMsg}>{t('tour_intro_msg')}</Text>
+              <View style={styles.tourIntroActions}>
+                <TouchableOpacity style={styles.tourIntroSkipBtn} onPress={skipTourIntro}>
+                  <Text style={styles.tourIntroSkipText}>{t('tour_intro_skip')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.tourIntroStartBtn} onPress={startTour}>
+                  <Text style={styles.tourIntroStartText}>{t('tour_intro_start')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -330,6 +491,60 @@ const styles = StyleSheet.create({
   },
   handle: { width: 40, height: 4, backgroundColor: '#ddd', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   title: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tourLink: { fontSize: 13, fontWeight: '600', color: '#6A1B9A', textDecorationLine: 'underline' },
+
+  // Tutorial — destaque de seção e barra de passos
+  tourSection: { borderRadius: 12 },
+  tourHighlight: {
+    borderWidth: 2,
+    borderColor: '#6A1B9A',
+    backgroundColor: '#F3E5F5',
+    padding: 8,
+    marginHorizontal: -8,
+  },
+  scrollContentTour: { paddingBottom: 180 },
+  tourBar: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: 0,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    padding: 14,
+    gap: 8,
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: -2 },
+    elevation: 8,
+  },
+  tourProgress: { fontSize: 11, fontWeight: '700', color: '#6A1B9A', textTransform: 'uppercase', letterSpacing: 0.5 },
+  tourText: { fontSize: 14, color: '#333', lineHeight: 20 },
+  tourBarActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  tourSkip: { fontSize: 13, fontWeight: '600', color: '#999' },
+  tourNavGroup: { flexDirection: 'row', gap: 8 },
+  tourNavBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1, borderColor: '#ddd' },
+  tourNavBtnText: { fontSize: 13, fontWeight: '600', color: '#666' },
+  tourNavBtnPrimary: { backgroundColor: '#6A1B9A', borderColor: '#6A1B9A' },
+  tourNavBtnTextPrimary: { fontSize: 13, fontWeight: '700', color: '#fff' },
+
+  // Tutorial — modal de introdução
+  tourIntroOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center', justifyContent: 'center',
+    padding: 24,
+  },
+  tourIntroCard: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 24,
+    width: '100%', maxWidth: 360,
+  },
+  tourIntroTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginBottom: 8, textAlign: 'center' },
+  tourIntroMsg: { fontSize: 14, color: '#555', lineHeight: 20, textAlign: 'center', marginBottom: 20 },
+  tourIntroActions: { flexDirection: 'row', gap: 12 },
+  tourIntroSkipBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
+  tourIntroSkipText: { fontSize: 14, fontWeight: '600', color: '#666' },
+  tourIntroStartBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#6A1B9A', alignItems: 'center' },
+  tourIntroStartText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   locationBadge: { backgroundColor: '#F3E5F5', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginBottom: 16 },
   locationBadgeText: { fontSize: 13, color: '#6A1B9A', fontWeight: '600' },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },

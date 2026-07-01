@@ -21,6 +21,7 @@ import {
   Pressable,
   TouchableOpacity,
   Linking,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/useTheme';
@@ -148,6 +149,24 @@ export function BottomSheetCard({
     });
   };
 
+  // Permite fechar o sheet arrastando a barra superior (handle) para baixo
+  const dragPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        gesture.dy > 5 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderMove: (_, gesture) => {
+        if (gesture.dy > 0) translateY.setValue(gesture.dy);
+      },
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy > 100 || gesture.vy > 0.8) {
+          handleClose();
+        } else {
+          Animated.spring(translateY, { toValue: 0, ...motion.spring, useNativeDriver: true }).start();
+        }
+      },
+    })
+  ).current;
+
   return (
     <Modal
       visible={modalVisible}
@@ -173,7 +192,7 @@ export function BottomSheetCard({
           platformShadow(shadow.xl),
         ]}>
           {/* TOP BAR FIXA — handle centralizado + botão X no fluxo normal (sem absolute) */}
-          <View style={styles.topBar}>
+          <View style={styles.topBar} {...dragPanResponder.panHandlers}>
             {/* Espaçador esquerdo para simetria */}
             <View style={styles.topBarSpacer} />
             {/* Handle centralizado */}

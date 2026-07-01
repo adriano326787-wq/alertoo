@@ -28,19 +28,23 @@ import { FilterModal } from '../components/FilterModal';
 import { CommentsModal } from '../components/CommentsModal';
 import { RoadEventInfoModal } from '../components/RoadEventInfoModal';
 import { EntertainmentInfoModal } from '../components/EntertainmentInfoModal';
-import { RoadEvent } from '../types';
+import { RoadEvent, EventCategory } from '../types';
 import { EntertainmentEvent } from '../types/entertainment';
 import { haversineDistance } from '../utils/geo';
-import { resolveStateUF } from '../utils/brazilGeo';
+import { resolveRegion } from '../utils/brazilGeo';
+import { StatePin } from '../components/StatePin';
 import { useAppStore, restorePersistedLocation } from '../store/appStore';
 import { t, tf } from '../utils/i18n';
 import { useT } from '../hooks/useT';
+import { useStatePins } from '../hooks/useStatePins';
+import { useUserLocation } from '../hooks/useUserLocation';
 import { getCurrentUser, getCurrentUserId } from '../services/authService';
 import { AdBanner } from '../components/AdBanner';
 import { useInterstitialAd } from '../hooks/useInterstitialAd';
 import {
   ZoomTier,
   getZoomTier,
+  deltaToZoom,
   filterRoadEvents,
   filterEntEvents,
 } from '../utils/mapZoom';
@@ -48,19 +52,24 @@ import { requestNotificationPermission, sendLocalNotification } from '../service
 import { mapStyleLight, mapStyleDark } from '../theme/mapStyle';
 import { MapSearchBar, SearchResult } from '../components/ui/MapSearchBar';
 import { ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
-import { EVENT_CATEGORIES } from '../types';
+import { EVENT_CATEGORIES, FALLBACK_EVENT_META } from '../types';
 import { MapIntroModal, shouldShowMapIntro } from '../components/MapIntroModal';
 import { DriverModeOverlay } from '../components/DriverModeOverlay';
 import { SavedRouteModal } from '../components/SavedRouteModal';
 import { NavigationModal } from '../components/NavigationModal';
 import { NearbyEventPrompt } from '../components/NearbyEventPrompt';
-import { TrafficDetectionPrompt } from '../components/TrafficDetectionPrompt';
 import { useTrafficSpeedDetection, TrafficAlert } from '../hooks/useTrafficSpeedDetection';
+import { useAccelerometerBraking } from '../hooks/useAccelerometerBraking';
+import { TrafficDetectionPrompt, toQuickOptions, QuickOption } from '../components/TrafficDetectionPrompt';
+import { buildContextSignals, reportContextSignal } from '../services/contextSignalService';
+import { topCategories } from '../utils/contextScoring';
+import { getAdaptiveCooldownMs, recordPromptOutcome } from '../services/promptEngagement';
 import { useRadarsStore } from '../store/radarsStore';
 import { RadarMarker } from '../components/RadarMarker';
 import { RadarInfoModal } from '../components/RadarInfoModal';
 import { RadarConfirmBanner } from '../components/RadarConfirmBanner';
 import { Radar } from '../types/radar';
+import { captureError } from '../services/sentry';
 
 const MAX_REPORT_RADIUS_KM = 1;
 
@@ -180,6 +189,14 @@ function SmartCluster({ cluster, zoomTier, onPress }: SmartClusterProps) {
     return () => clearTimeout(timer);
   }, []);
 
+  // Cor por zoomTier (distant=roxo/visão ampla, medium=azul/bairro, close=laranja/rua) —
+  // CLUSTER_STYLE existia mas nunca era lido; cluster saía sempre laranja em qualquer zoom.
+  // Nota: o clustering nativo do react-native-maps não expõe o tipo dos markers agrupados
+  // (só point_count/cluster_id), então não dá pra colorir por "tipo predominante" (radar vs
+  // acidente vs show) sem trocar para uma lib de clustering em JS que preserve metadata —
+  // isso é uma mudança maior de arquitetura. O zoomTier já dá uma pista visual consistente.
+  const style = CLUSTER_STYLE[zoomTier];
+
   return (
     <Marker
       coordinate={{ latitude: lat, longitude: lon }}
@@ -199,15 +216,15 @@ function SmartCluster({ cluster, zoomTier, onPress }: SmartClusterProps) {
             width: size + 14,
             height: size + 14,
             borderRadius: (size + 14) / 2,
-            backgroundColor: 'rgba(255,107,53,0.18)',
+            backgroundColor: style.bg + '2E', // ~18% opacidade em hex
           }}
         />
         {/* Corpo sólido */}
         <View
           collapsable={false}
-          style={[clusterStyles.body, { width: size, height: size, borderRadius: size / 2 }]}
+          style={[clusterStyles.body, { width: size, height: size, borderRadius: size / 2, backgroundColor: style.bg, borderColor: style.border }]}
         >
-          <Text style={[clusterStyles.count, { fontSize }]}>
+          <Text style={[clusterStyles.count, { fontSize, color: style.text }]}>
             {clusterLabel(count)}
           </Text>
         </View>
@@ -219,13 +236,21 @@ function SmartCluster({ cluster, zoomTier, onPress }: SmartClusterProps) {
 const clusterStyles = StyleSheet.create({
   body: {
     alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#FF6B35',
     borderWidth: 2.5,
-    borderColor: '#ffffff',
     // Sem elevation/shadow: no Android, elevation desloca o bitmap do marker
   },
-  count: { fontWeight: '900', color: '#ffffff', includeFontPadding: false, letterSpacing: 0.3 },
+  count: { fontWeight: '900', includeFontPadding: false, letterSpacing: 0.3 },
 });
+
+// Mescla eventos live com cache local, preferindo dados live (mais frescos) em caso de conflito.
+function mergeEventsByIds(live: RoadEvent[], cache: RoadEvent[]): RoadEvent[] {
+  if (cache.length === 0) return live;
+  const map = new Map<string, RoadEvent>();
+  const now = Date.now();
+  cache.forEach((e) => { if (e.expiresAt > now) map.set(e.id, e); });
+  live.forEach((e) => map.set(e.id, e)); // live sobrescreve cache
+  return Array.from(map.values());
+}
 
 // ─── Tela ─────────────────────────────────────────────────────────────────────
 interface PendingCoord {
@@ -270,6 +295,7 @@ export function MapScreen() {
   const searchBarOpacity = useRef(new Animated.Value(0)).current;
   const [commentTarget, setCommentTarget] = useState<EntertainmentEvent | null>(null);
   const [pendingCoord, setPendingCoord] = useState<PendingCoord | null>(null);
+  const [addModalInitialCategory, setAddModalInitialCategory] = useState<EventCategory | undefined>(undefined);
   const [selectedRoadEvent, setSelectedRoadEvent] = useState<RoadEvent | null>(null);
   const [selectedEntEvent, setSelectedEntEvent] = useState<EntertainmentEvent | null>(null);
   const [selectedRadar, setSelectedRadar] = useState<Radar | null>(null);
@@ -289,8 +315,10 @@ export function MapScreen() {
         });
       }
     }).catch((e) => {
-      // #28 — loga falha ao restaurar posição em dev (ex: AsyncStorage corrompido)
+      // #28 — falha ao restaurar posição (ex: AsyncStorage corrompido) — não impede
+      // o mapa de abrir (cai pro DEFAULT_REGION), mas vale registrar pra investigar
       if (__DEV__) console.warn('[MapScreen] restorePersistedLocation failed:', e);
+      captureError(e, { where: 'MapScreen.restorePersistedLocation' });
     });
   }, []);
 
@@ -298,6 +326,12 @@ export function MapScreen() {
   const [zoomTier, setZoomTier] = useState<ZoomTier>(
     () => getZoomTier(DEFAULT_REGION.latitudeDelta)
   );
+  // Nível de zoom contínuo (0-20) — usado para encolher os pins gradualmente
+  // dentro do tier 'distant' (visão de estado vs. visão de cidade)
+  const [zoomLevel, setZoomLevel] = useState<number>(
+    () => deltaToZoom(DEFAULT_REGION.latitudeDelta)
+  );
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mantém o delta atual do mapa para zoom adaptativo no cluster press (item 7)
   const currentDeltaRef = useRef(DEFAULT_REGION.latitudeDelta);
@@ -308,6 +342,10 @@ export function MapScreen() {
     debounceRef.current = setTimeout(() => {
       setZoomTier((prev) => {
         const next = getZoomTier(region.latitudeDelta);
+        return next !== prev ? next : prev;
+      });
+      setZoomLevel((prev) => {
+        const next = deltaToZoom(region.latitudeDelta);
         return next !== prev ? next : prev;
       });
     }, 120);
@@ -328,7 +366,7 @@ export function MapScreen() {
   }, []);
 
   // Stores
-  const { loading: roadLoading, events: allRoadEvents, subscribeToEvents, confirmEvent, denyEvent, filterStateUF, isFromCache: roadFromCache } = useEventsStore();
+  const { loading: roadLoading, events: allRoadEvents, nearbyCache, loadNearbyCache, subscribeToEvents, confirmEvent, denyEvent, addEvent, filterStateUF, isFromCache: roadFromCache } = useEventsStore();
   const subscribeToRadars = useRadarsStore((s) => s.subscribeToRadars);
   const allRadars = useRadarsStore((s) => s.radars);
   const getVisibleRadars = useRadarsStore((s) => s.getVisibleRadars);
@@ -340,6 +378,8 @@ export function MapScreen() {
   const isAdmin = useUserStore((s) => s.isAdmin);
   const setUserCountryCode = useAppStore((s) => s.setUserCountryCode);
   const setUserStateUF = useAppStore((s) => s.setUserStateUF);
+  const userStateUF = useAppStore((s) => s.userStateUF);
+  const { locationDenied, detecting: locationDetecting } = useUserLocation();
   const setUserLocation = useAppStore((s) => s.setUserLocation);
   const userLat = useAppStore((s) => s.userLat);
   const userLon = useAppStore((s) => s.userLon);
@@ -347,40 +387,151 @@ export function MapScreen() {
   const clearMapFocus = useAppStore((s) => s.clearMapFocus);
   const pendingDeepLink = useAppStore((s) => s.pendingDeepLink);
   const setPendingDeepLink = useAppStore((s) => s.setPendingDeepLink);
+  const pendingAddCategory = useAppStore((s) => s.pendingAddCategory);
+  const setPendingAddCategory = useAppStore((s) => s.setPendingAddCategory);
+  const exploreStateUF = useAppStore((s) => s.exploreStateUF);
+  const setExploreStateUF = useAppStore((s) => s.setExploreStateUF);
 
   // Aplica filtro de categoria antes do filtro de zoom
   const entertainmentEvents = useMemo(
     () => entFilterCategory ? allEntertainmentEvents.filter((e) => e.category === entFilterCategory) : allEntertainmentEvents,
     [allEntertainmentEvents, entFilterCategory],
   );
-  // Pins filtrados por tier — memoizados para não recalcular a cada re-render do mapa
-  const roadEvents = useMemo(() => filterRoadEvents(allRoadEvents, zoomTier), [allRoadEvents, zoomTier]);
+  // Pins filtrados por tier — memoizados para não recalcular a cada re-render do mapa.
+  // nearbyCache é mesclado com os eventos live para que pins do estado do usuário
+  // não desapareçam quando a subscription troca de estado (ex: exploreStateUF).
+  const roadEvents = useMemo(() => {
+    const merged = mergeEventsByIds(allRoadEvents, nearbyCache);
+    return filterRoadEvents(merged, exploreStateUF ? 'medium' : zoomTier);
+  }, [allRoadEvents, nearbyCache, zoomTier, exploreStateUF]);
 
-  // ── Detecção de trânsito por velocidade GPS ───────────────────────────────
+  // ── Detecção de trânsito por velocidade GPS + Context Signal Engine ──────
+  const [scoredOptions, setScoredOptions] = useState<QuickOption[] | undefined>(undefined);
+  const lastPromptShownAtRef = useRef<number>(0);
+  const TRAFFIC_BASE_COOLDOWN_MS = 5 * 60_000; // mantém em sincronia com COOLDOWN_MS de useTrafficSpeedDetection.ts
+
+  const trafficDetectionPaused =
+    pickerVisible || roadModalVisible || entertainmentModalVisible ||
+    filterVisible || !!selectedRoadEvent || !!selectedEntEvent ||
+    !!commentTarget || driverModeActive || showIntro || !!trafficAlert;
+
   useTrafficSpeedDetection({
     nearbyEvents: allRoadEvents,
-    paused:
-      pickerVisible || roadModalVisible || entertainmentModalVisible ||
-      filterVisible || !!selectedRoadEvent || !!selectedEntEvent ||
-      !!commentTarget || driverModeActive || showIntro || !!trafficAlert,
+    paused: trafficDetectionPaused,
     onAlert: (alert) => {
-      setTrafficAlert(alert);
-      // #43 — também envia notificação OS: se o app estiver minimizado (mas
-      // ainda em execução), o usuário recebe o alerta como pop-up do sistema
-      // mesmo fora do app. Em foreground o handler suprime o banner
-      // (notificationService.ensureHandler), evitando duplicar com o prompt in-app.
-      const title = alert.kind === 'stopped'
-        ? `🛑 ${t('traffic_alert_stopped_title')}`
-        : `🚦 ${t('traffic_alert_slow_title')}`;
-      sendLocalNotification(title, t('traffic_alert_notif_body'), {
-        trafficAlert: true,
-        kind: alert.kind,
-        latitude: alert.latitude,
-        longitude: alert.longitude,
-      }).catch(() => {});
+      (async () => {
+        // Cooldown adaptativo — além do cooldown fixo do hook, usuários que
+        // sempre ignoram o prompt vão sendo perguntados com menos frequência.
+        const adaptiveMs = await getAdaptiveCooldownMs(TRAFFIC_BASE_COOLDOWN_MS).catch(() => TRAFFIC_BASE_COOLDOWN_MS);
+        if (Date.now() - lastPromptShownAtRef.current < adaptiveMs) return;
+        lastPromptShownAtRef.current = Date.now();
+
+        setTrafficAlert(alert);
+        // #43 — também envia notificação OS: se o app estiver minimizado (mas
+        // ainda em execução), o usuário recebe o alerta como pop-up do sistema
+        // mesmo fora do app. Em foreground o handler suprime o banner
+        // (notificationService.ensureHandler), evitando duplicar com o prompt in-app.
+        const title = alert.kind === 'stopped'
+          ? `🛑 ${t('traffic_alert_stopped_title')}`
+          : `🚦 ${t('traffic_alert_slow_title')}`;
+        sendLocalNotification(title, t('traffic_alert_notif_body'), {
+          trafficAlert: true,
+          kind: alert.kind,
+          latitude: alert.latitude,
+          longitude: alert.longitude,
+        }).catch(() => {});
+
+        // Alimenta a corroboração multi-usuário (só "parado" — "lento" é ruído demais)
+        if (alert.kind === 'stopped') {
+          reportContextSignal('stopped', alert.latitude, alert.longitude);
+        }
+
+        // Context Signal Engine — calcula as categorias mais prováveis pro pop-up
+        try {
+          const signals = await buildContextSignals(alert.latitude, alert.longitude, {
+            speedKmh: alert.kind === 'stopped' ? 0 : 10,
+            stoppedSeconds: alert.kind === 'stopped' ? 61 : 0,
+            hardBrake: false,
+          });
+          setScoredOptions(toQuickOptions(topCategories(signals)));
+        } catch (e) {
+          captureError(e, { where: 'MapScreen.trafficAlert.buildContextSignals' });
+          setScoredOptions(undefined); // cai no fallback fixo do TrafficDetectionPrompt
+        }
+      })();
     },
   });
-  const visibleEntEvents = useMemo(() => filterEntEvents(entertainmentEvents, zoomTier), [entertainmentEvents, zoomTier]);
+
+  // ── Frenagem brusca via acelerômetro — alimenta o mesmo Context Signal Engine ──
+  useAccelerometerBraking({
+    paused: trafficDetectionPaused,
+    onHardBrake: () => {
+      if (userLat != null && userLon != null) {
+        reportContextSignal('hardBrake', userLat, userLon);
+      }
+    },
+  });
+
+  // ── Criação direta a partir do TrafficDetectionPrompt (sem abrir modal) ───
+  // O usuário confirma "Há blitz?"/escolhe uma categoria sugerida → cria o
+  // evento na hora, com a localização do alerta + reverse geocode rápido.
+  const [creatingQuickEvent, setCreatingQuickEvent] = useState(false);
+  /**
+   * Criação direta de evento, sem abrir modal — usada por TrafficDetectionPrompt
+   * ("Há blitz?" Sim/Não) e por NearbyEventPrompt ("Reportar outro"). Se
+   * stateUF/cityName/countryCode já são conhecidos (NearbyEventPrompt já tem
+   * essa info do evento próximo), pula o reverse geocode.
+   */
+  const handleQuickConfirm = useCallback(async (
+    category: EventCategory,
+    coordinate: { latitude: number; longitude: number },
+    knownGeo?: { stateUF?: string; cityName?: string; countryCode?: string },
+  ) => {
+    setCreatingQuickEvent(true);
+    try {
+      let stateUF = knownGeo?.stateUF;
+      let cityName = knownGeo?.cityName;
+      let countryCode = knownGeo?.countryCode;
+      if (!stateUF) {
+        try {
+          const [place] = await Location.reverseGeocodeAsync(coordinate);
+          countryCode = place?.isoCountryCode ?? undefined;
+          stateUF = resolveRegion(place?.region, countryCode);
+          cityName = place?.city ?? place?.subregion ?? undefined;
+        } catch (_) {
+          // sem geocode — cria mesmo assim, só sem stateUF/cityName (campos opcionais)
+        }
+      }
+
+      const meta = EVENT_CATEGORIES[category] ?? FALLBACK_EVENT_META;
+      await addEvent({
+        category,
+        title: meta.label,
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+        stateUF,
+        cityName,
+        countryCode,
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      recordPromptOutcome('confirmed').catch(() => {});
+      setTrafficAlert(null);
+      setScoredOptions(undefined);
+    } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert(
+        t('error') || 'Erro',
+        err?.message || t('event_create_error') || 'Não foi possível criar o evento. Tente novamente.',
+      );
+    } finally {
+      setCreatingQuickEvent(false);
+    }
+  }, [addEvent, t]);
+  const visibleEntEvents = useMemo(
+    () => filterEntEvents(entertainmentEvents, exploreStateUF ? 'medium' : zoomTier),
+    [entertainmentEvents, zoomTier, exploreStateUF],
+  );
 
   // Lista para a SearchBar — usa allRoadEvents (não filtrado por zoom) para busca completa (#9)
   const localSearchEvents = useMemo(() => [
@@ -471,6 +622,30 @@ export function MapScreen() {
     };
   }, [pendingDeepLink, mapReady, allRoadEvents, entertainmentEvents, roadLoading, entLoading]);
 
+  // ─── Deep link → abrir AddEventModal com categoria pré-selecionada ─────────
+  // (lembrete diário de blitz/lei seca) na localização atual do usuário.
+  useEffect(() => {
+    if (!pendingAddCategory || !mapReady) return;
+    if (userLat == null || userLon == null) return;
+
+    (async () => {
+      let stateUF: string | undefined;
+      let cityName: string | undefined;
+      let countryCode: string | undefined;
+      try {
+        const [place] = await Location.reverseGeocodeAsync({ latitude: userLat, longitude: userLon });
+        countryCode = place?.isoCountryCode ?? undefined;
+        stateUF = resolveRegion(place?.region, countryCode);
+        cityName = place?.city ?? place?.subregion ?? undefined;
+      } catch { /* segue sem dados de localização — modal abre apenas com coordenadas */ }
+
+      setAddModalInitialCategory(pendingAddCategory);
+      setPendingCoord({ coordinate: { latitude: userLat, longitude: userLon }, stateUF, cityName, countryCode });
+      setRoadModalVisible(true);
+      setPendingAddCategory(null);
+    })();
+  }, [pendingAddCategory, mapReady, userLat, userLon]);
+
   // Delay de 3s no banner offline para evitar falso-positivo durante sync inicial do Firestore
   useEffect(() => {
     if (isOffline && !roadLoading) {
@@ -482,8 +657,46 @@ export function MapScreen() {
     return () => { if (offlineTimerRef.current) { clearTimeout(offlineTimerRef.current); offlineTimerRef.current = null; } };
   }, [isOffline, roadLoading]);
 
+  const { isStatePinView, otherStatePins, highlightedStateUF, handleStatePinPress } = useStatePins({
+    zoomTier,
+    zoomLevel,
+    exploreStateUF,
+    allRoadEvents,
+    allEntertainmentEvents,
+    mapRef,
+    setExploreStateUF,
+  });
+
+  // Re-assina eventos de trânsito filtrados por estado quando a localização do usuário é detectada.
+  // Em isStatePinView (zoom afastado) usa query global (null) para ter eventos de todos os estados —
+  // necessário para o fallback local de effectiveStateCounts e para não apagar pins do estado do usuário.
+  // exploreStateUF sobrepõe temporariamente o stateUF sem alterar userStateUF.
+  //
+  // Enquanto locationDetecting=true (cache do AsyncStorage/GPS ainda resolvendo), não assina
+  // nada — sem isso, userStateUF ainda é null nesse instante e a query cai pro fallback global
+  // (lenta, sem filtro), que é descartada e resubscrita assim que userStateUF chega segundos
+  // depois. Essa troca limpa `events` no meio do caminho — o "mapa não carrega instantâneo" do
+  // login. Aguardar detecting resolver evita essa query descartável.
   useEffect(() => {
-    const unsubRoad = subscribeToEvents();
+    if (locationDetecting && !exploreStateUF && !isStatePinView) return;
+
+    const targetUF = isStatePinView
+      ? null
+      : (exploreStateUF ?? (locationDenied ? null : userStateUF));
+    const unsub = subscribeToEvents(targetUF);
+    return unsub;
+  }, [userStateUF, locationDenied, locationDetecting, exploreStateUF, isStatePinView]);
+
+  const handleBackToMyRegion = useCallback(() => {
+    setExploreStateUF(null);
+    centerOnUser();
+  }, []);
+
+  useEffect(() => {
+    loadNearbyCache();
+  }, []);
+
+  useEffect(() => {
     const unsubEnt = subscribeEntertainment();
     const unsubRadars = subscribeToRadars();
     centerOnUser();
@@ -494,7 +707,7 @@ export function MapScreen() {
     // Intro para novos usuários — mostra uma vez ao abrir o mapa
     shouldShowMapIntro().then((should) => {
       if (should) setShowIntro(true);
-    }).catch(() => {});
+    }).catch((e) => captureError(e, { where: 'MapScreen.shouldShowMapIntro' }));
 
     // #26 — First-time hint "Toque no mapa para reportar"
     let hintTimer: ReturnType<typeof setTimeout> | null = null;
@@ -511,10 +724,9 @@ export function MapScreen() {
           });
         }, 5000);
       }
-    }).catch(() => {});
+    }).catch((e) => captureError(e, { where: 'MapScreen.mapHintShown' }));
 
     return () => {
-      unsubRoad();
       unsubEnt();
       unsubRadars();
       if (hintTimer) clearTimeout(hintTimer);
@@ -593,9 +805,9 @@ export function MapScreen() {
         // Usa a coordenada TOCADA (não a do usuário) para obter cidade/estado corretos
         // Importante para admins que criam eventos remotamente (item 16)
         const [place] = await Location.reverseGeocodeAsync({ latitude: tapped.latitude, longitude: tapped.longitude });
-        stateUF = resolveStateUF(place?.region);
-        cityName = place?.city ?? place?.subregion ?? undefined;
         countryCode = place?.isoCountryCode ?? undefined;
+        stateUF = resolveRegion(place?.region, countryCode);
+        cityName = place?.city ?? place?.subregion ?? undefined;
         if (countryCode) setUserCountryCode(countryCode);
         if (stateUF) setUserStateUF(stateUF);
       } catch (_) {}
@@ -675,15 +887,18 @@ export function MapScreen() {
           />
         )}
       >
-        {roadEvents.map((event) => (
+        {/* Marcadores individuais — ocultos apenas em isStatePinView (zoom ≤ 6, vendo vários estados).
+            Em zoom 'distant' mas > 6 (cidade/estado), continuam visíveis normalmente. */}
+        {(!isStatePinView || !!exploreStateUF) && roadEvents.map((event) => (
           <EventMarker
             key={`road-${event.id}`}
             event={event}
             onPress={setSelectedRoadEvent}
             zoomTier={zoomTier}
+            zoomLevel={zoomLevel}
           />
         ))}
-        {visibleEntEvents.map((event) => (
+        {(!isStatePinView || !!exploreStateUF) && visibleEntEvents.map((event) => (
           <EntertainmentMarker
             key={`ent-${event.id}`}
             event={event}
@@ -691,12 +906,26 @@ export function MapScreen() {
             zoomTier={zoomTier}
           />
         ))}
-        {visibleRadars.map((radar) => (
+        {(!isStatePinView || !!exploreStateUF) && visibleRadars.map((radar) => (
           <RadarMarker
             key={`radar-${radar.id}`}
             radar={radar}
             onPress={setSelectedRadar}
             zoomTier={zoomTier}
+            zoomLevel={zoomLevel}
+          />
+        ))}
+
+        {/* Pins "outros estados" — só em zoom bem afastado */}
+        {otherStatePins.map((p) => (
+          <StatePin
+            key={`state-${p.uf}`}
+            uf={p.uf}
+            count={p.count}
+            latitude={p.latitude}
+            longitude={p.longitude}
+            highlight={p.uf === highlightedStateUF}
+            onPress={handleStatePinPress}
           />
         ))}
 
@@ -737,6 +966,18 @@ export function MapScreen() {
         <View style={[styles.loadingOverlay, { top: topInset + 72 }]}>
           <ActivityIndicator size="small" color="#FF5722" />
           {checkingLocation && <Text style={styles.loadingText}>{t('map_checking')}</Text>}
+        </View>
+      )}
+
+      {/* Banner "explorando outro estado" — exibido após tocar num pin de resumo */}
+      {exploreStateUF && (
+        <View style={[styles.exploreBanner, { top: topInset + 12 }]}>
+          <Text style={styles.exploreBannerText}>
+            {tf('exploring_state_banner', { state: exploreStateUF }) || `Vendo eventos de ${exploreStateUF}`}
+          </Text>
+          <TouchableOpacity onPress={handleBackToMyRegion} style={styles.exploreBannerBtn}>
+            <Text style={styles.exploreBannerBtnText}>{t('back_to_my_region') || 'Voltar'}</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -844,7 +1085,8 @@ export function MapScreen() {
           stateUF={pendingCoord.stateUF}
           cityName={pendingCoord.cityName}
           countryCode={pendingCoord.countryCode}
-          onClose={() => { setRoadModalVisible(false); setPendingCoord(null); }}
+          initialCategory={addModalInitialCategory}
+          onClose={() => { setRoadModalVisible(false); setPendingCoord(null); setAddModalInitialCategory(undefined); }}
           onEventCreated={showAfterEvent}
         />
       )}
@@ -1016,11 +1258,18 @@ export function MapScreen() {
       {/* Prompt de detecção de trânsito por velocidade GPS */}
       <TrafficDetectionPrompt
         alert={trafficAlert}
+        scoredOptions={scoredOptions}
+        creating={creatingQuickEvent}
+        onQuickConfirm={handleQuickConfirm}
         onReport={(category, coordinate) => {
+          // "Mais detalhes" — ainda disponível pra quem quer adicionar foto/descrição
           setPendingCoord({ coordinate });
+          setAddModalInitialCategory(category);
           setRoadModalVisible(true);
+          recordPromptOutcome('reported').catch(() => {});
         }}
-        onDismiss={() => setTrafficAlert(null)}
+        onDismiss={() => { setTrafficAlert(null); setScoredOptions(undefined); }}
+        onIgnored={() => { recordPromptOutcome('ignored').catch(() => {}); }}
       />
 
       {/* Prompt contextual — aparece quando o usuário está ≤300 m de um evento crítico */}
@@ -1037,6 +1286,9 @@ export function MapScreen() {
           confirmEvent(id);
         }}
         onQuickReport={(category, coordinate, stateUF, cityName, countryCode) => {
+          handleQuickConfirm(category, coordinate, { stateUF, cityName, countryCode });
+        }}
+        onReportDetail={(category, coordinate, stateUF, cityName, countryCode) => {
           setPendingCoord({ coordinate, stateUF, cityName, countryCode });
           setRoadModalVisible(true);
         }}
@@ -1090,6 +1342,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 8,
   },
   loadingText: { fontSize: 13, color: '#555' },
+  exploreBanner: {
+    position: 'absolute', alignSelf: 'center',
+    backgroundColor: 'rgba(31,41,55,0.92)', borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    maxWidth: '90%',
+  },
+  exploreBannerText: { fontSize: 12.5, fontWeight: '700', color: '#fff' },
+  exploreBannerBtn: {
+    backgroundColor: '#FF5722', borderRadius: 14,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  exploreBannerBtnText: { fontSize: 11.5, fontWeight: '800', color: '#fff' },
   // FAB premium estilo Google/Waze — rounded square com shadow forte
   mapBtn: {
     position: 'absolute', right: 14,

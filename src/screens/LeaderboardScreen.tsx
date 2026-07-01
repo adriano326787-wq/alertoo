@@ -5,7 +5,7 @@
  * Destaca o usuário logado. Atualiza ao puxar para baixo.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator,
   TouchableOpacity, Image, RefreshControl, useColorScheme,
@@ -16,6 +16,7 @@ import { db } from '../services/firebase';
 import { getCurrentUserId } from '../services/authService';
 import { getRank, RANKS } from '../types/user';
 import { useT } from '../hooks/useT';
+import { AdBanner, BannerAdSize } from '../components/AdBanner';
 
 interface LeaderEntry {
   uid: string;
@@ -84,15 +85,38 @@ export function LeaderboardScreen() {
     load(true);
   }, [load]);
 
+  // Injeta banners de anúncio a cada 10 posições do ranking
+  type ListItem = (LeaderEntry & { _rank: number }) | { __ad: true; id: string };
+  const AD_INTERVAL = 10;
+  const listData: ListItem[] = useMemo(() => {
+    const result: ListItem[] = [];
+    leaders.forEach((entry, i) => {
+      result.push({ ...entry, _rank: i });
+      if ((i + 1) % AD_INTERVAL === 0) {
+        result.push({ __ad: true, id: `ad-after-${entry.uid}` });
+      }
+    });
+    return result;
+  }, [leaders]);
+
   const bg = isDark ? '#0F172A' : '#F1F5F9';
   const cardBg = isDark ? '#1E293B' : '#fff';
   const textColor = isDark ? '#F1F5F9' : '#1E293B';
   const subColor = isDark ? '#94A3B8' : '#64748B';
 
-  const renderItem = ({ item, index }: { item: LeaderEntry; index: number }) => {
+  const renderItem = ({ item }: { item: ListItem }) => {
+    if ('__ad' in item) {
+      return (
+        <View style={styles.adCard}>
+          <Text style={styles.adLabel}>{t('advertising')}</Text>
+          <AdBanner size={BannerAdSize.MEDIUM_RECTANGLE} />
+        </View>
+      );
+    }
+
     const rank = getRank(item.points);
     const isMe = item.uid === myUid;
-    const medal = MEDALS[index] ?? null;
+    const medal = MEDALS[item._rank] ?? null;
 
     return (
       <View
@@ -106,7 +130,7 @@ export function LeaderboardScreen() {
         <View style={styles.posWrap}>
           {medal
             ? <Text style={styles.medal}>{medal}</Text>
-            : <Text style={[styles.pos, { color: subColor }]}>{index + 1}</Text>}
+            : <Text style={[styles.pos, { color: subColor }]}>{item._rank + 1}</Text>}
         </View>
 
         {/* Avatar */}
@@ -178,8 +202,8 @@ export function LeaderboardScreen() {
         </View>
       ) : (
         <FlatList
-          data={leaders}
-          keyExtractor={(item) => item.uid}
+          data={listData}
+          keyExtractor={(item) => ('__ad' in item ? item.id : item.uid)}
           renderItem={renderItem}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF5722']} />
@@ -242,4 +266,11 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, textAlign: 'center' },
   retryBtn: { backgroundColor: '#FF5722', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
   retryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+  adCard: {
+    backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden',
+    alignItems: 'center', paddingTop: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+  },
+  adLabel: { fontSize: 10, color: '#bbb', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
 });

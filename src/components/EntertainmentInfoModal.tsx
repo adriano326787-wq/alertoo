@@ -298,9 +298,11 @@ export function EntertainmentInfoModal({
             title={event.title}
             description={event.description}
             category={`${meta.emoji} ${tEntCat(event.category)}`}
+            categoryColor={meta.color}
             location={location}
             eventId={event.id}
             eventType="entertainment"
+            photoUrl={event.promotionPhotoUrl || event.photoUrl}
           />
 
           <NavigationModal

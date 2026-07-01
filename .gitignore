@@ -56,6 +56,9 @@ GoogleService-Info.plist
 *.log
 build_log.txt
 
+# error log exportado do Firestore (scripts/export-error-log.mjs) — local apenas
+error-log.txt
+
 # generated native folders
 /ios
 /android

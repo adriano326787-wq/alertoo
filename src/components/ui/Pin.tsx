@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, Text, Animated, Easing, Image, ImageSourcePropType } from 'react-native';
+import { View, Text, Animated, Easing, Image, ImageSourcePropType, useColorScheme } from 'react-native';
 import { palette } from '../../theme/tokens';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -664,6 +664,14 @@ const TAIL_H = 8;
 
 export function NotifPin({ color, icon, label, subtitle, confirms = 0, timeAgo, urgent = false, onLayout }: NotifPinProps) {
   const pulse = useRef(new Animated.Value(0.35)).current;
+  // Card escuro fixo dá bom contraste contra o mapa claro (estilo padrão).
+  // Mas quando o mapa muda para o tile escuro (MapScreen customMapStyle em
+  // dark mode), o card #1C1C1E se mistura no fundo — adiciona borda clara
+  // sutil nesse caso pra manter o pin sempre visível, nos dois modos.
+  const isDarkMap = useColorScheme() === 'dark';
+  const cardBg = isDarkMap ? '#2C2C30' : '#1C1C1E';
+  const cardBorderColor = urgent ? color : (isDarkMap ? 'rgba(255,255,255,0.22)' : 'transparent');
+  const cardBorderWidth = urgent ? 1.5 : (isDarkMap ? 1 : 0);
 
   useEffect(() => {
     if (!urgent) return;
@@ -705,13 +713,13 @@ export function NotifPin({ color, icon, label, subtitle, confirms = 0, timeAgo, 
         width: CARD_W,
         height: CARD_H,
         borderRadius: 12,
-        backgroundColor: '#1C1C1E',
+        backgroundColor: cardBg,
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 8,
         paddingVertical: 6,
-        borderWidth: urgent ? 1.5 : 0,
-        borderColor: urgent ? color : 'transparent',
+        borderWidth: cardBorderWidth,
+        borderColor: cardBorderColor,
       }}>
         {/* Ícone circular */}
         <View style={{
@@ -772,7 +780,7 @@ export function NotifPin({ color, icon, label, subtitle, confirms = 0, timeAgo, 
         borderTopWidth: TAIL_H,
         borderLeftColor: 'transparent',
         borderRightColor: 'transparent',
-        borderTopColor: '#1C1C1E',
+        borderTopColor: cardBg,
         alignSelf: 'center',
       }} />
     </View>

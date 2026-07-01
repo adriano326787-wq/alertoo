@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  addDoc,
   updateDoc,
   query,
   where,
@@ -27,13 +26,9 @@ import {
   ActivePromotion,
   CreditPackage,
   CreditPackageId,
-  CreditPurchase,
   CREDIT_PACKAGES,
-  PROMOTION_TIERS,
-  PROMOTION_PACKAGES,
   PromotionTier,
   PromotionPackageId,
-  calcPackageCredits,
 } from '../types/promotion';
 
 const USERS_COL      = 'users';
@@ -118,6 +113,20 @@ export async function deletePromotionPhoto(photoUrl: string): Promise<void> {
 
 // ─── Criar promoção ───────────────────────────────────────────────────────────
 
+export interface CreatePromotionResult extends ActivePromotion {
+  /** Saldo de créditos do usuário após o débito (igual ao saldo anterior se admin). */
+  newCredits: number;
+}
+
+/**
+ * Cria/atualiza a promoção de um evento via Cloud Function `createPromotion`.
+ *
+ * Roda no backend (admin SDK) em uma única transação: debita os créditos,
+ * expira qualquer promoção ativa anterior do mesmo evento e atualiza o
+ * documento do evento — tudo atomicamente. Isso evita o cenário de "créditos
+ * debitados mas promoção não aplicada" (falha de rede entre etapas) e
+ * promoções duplicadas com status='active' para o mesmo evento.
+ */
 export async function createPromotion(params: {
   userId: string;
   eventId: string;
@@ -130,98 +139,30 @@ export async function createPromotion(params: {
   weeks?: number;                  // 1–8 semanas (ignorado se packageId=null)
   activeDays?: number[];           // dias ativos definitivos (0=Dom … 6=Sáb)
   link?: string | null;            // URL opcional do evento (site, ingressos etc.)
-}): Promise<ActivePromotion> {
+}): Promise<CreatePromotionResult> {
   const {
-    userId, eventId, tier, photoUrl, photoUrls, skipCreditCheck = false,
+    eventId, tier, photoUrl, photoUrls,
     packageId = null, weeks = 1, activeDays, link = null,
   } = params;
-  const allPhotoUrls = photoUrls && photoUrls.length > 0 ? photoUrls : (photoUrl ? [photoUrl] : []);
-  const config = PROMOTION_TIERS[tier];
 
-  // Calcula custo e duração com base no pacote (ou usa legado)
-  let creditsRequired: number;
-  let durationMs: number;
-  let finalActiveDays: number[] | null;
+  const call = httpsCallable<
+    {
+      eventId: string;
+      tier: PromotionTier;
+      photoUrl: string | null;
+      photoUrls?: string[];
+      packageId?: PromotionPackageId | null;
+      weeks?: number;
+      activeDays?: number[];
+      link?: string | null;
+    },
+    CreatePromotionResult
+  >(functions, 'createPromotion');
 
-  if (packageId) {
-    const pkg = PROMOTION_PACKAGES[packageId];
-    const days = activeDays && activeDays.length > 0 ? activeDays : pkg.defaultActiveDays;
-    creditsRequired = calcPackageCredits(tier, packageId, weeks);
-    durationMs = weeks * 7 * 24 * 60 * 60 * 1000;
-    finalActiveDays = days;
-  } else {
-    // Promoção avulsa: comportamento legado
-    creditsRequired = config.creditsRequired;
-    durationMs = config.durationDays * 24 * 60 * 60 * 1000;
-    finalActiveDays = null;
-  }
-
-  // Verifica e debita créditos (admins pulam essa etapa)
-  if (!skipCreditCheck) {
-    await runTransaction(db, async (tx) => {
-      const userRef = doc(db, USERS_COL, userId);
-      const userSnap = await tx.get(userRef);
-      const currentCredits = (userSnap.data()?.promotionCredits as number) ?? 0;
-
-      if (currentCredits < creditsRequired) {
-        throw new Error('Créditos insuficientes para esta promoção.');
-      }
-
-      tx.update(userRef, {
-        promotionCredits: increment(-creditsRequired),
-      });
-    });
-  }
-
-  const now = Date.now();
-  const endDate = now + durationMs;
-
-  const docRef = await addDoc(collection(db, PROMOTIONS_COL), {
-    eventId,
-    userId,
-    tier,
-    photoUrl: photoUrl ?? null,
-    startDate: Timestamp.fromMillis(now),
-    endDate: Timestamp.fromMillis(endDate),
-    status: 'active',
-    creditsUsed: creditsRequired,
-    packageId: packageId ?? null,
-    weeks: packageId ? weeks : null,
-    activeDays: finalActiveDays,
+  const res = await call({
+    eventId, tier, photoUrl, photoUrls, packageId, weeks, activeDays, link,
   });
-
-  // Atualiza o documento do evento com os dados da promoção.
-  // IMPORTANTE: estende expiresAt até o fim da promoção — sem isso, o evento
-  // desaparece do mapa após o TTL original (ex: 18 h para show) mesmo com
-  // promoção ativa de 7–30 dias (bug crítico corrigido aqui).
-  await updateDoc(doc(db, 'entertainment_events', eventId), {
-    isFeatured: config.showFeatured,
-    promotionTier: tier,
-    promotionEndDate: Timestamp.fromMillis(endDate),
-    promotionPhotoUrl: allPhotoUrls[0] ?? null,
-    promotionPhotoUrls: allPhotoUrls.length > 0 ? allPhotoUrls : null,
-    promotionPackage: packageId ?? null,
-    promotionWeeks: packageId ? weeks : null,
-    promotionActiveDays: finalActiveDays,
-    link: link ?? null,
-    // Garante que o evento fique visível durante toda a promoção
-    expiresAt: Timestamp.fromMillis(endDate),
-  });
-
-  return {
-    id: docRef.id,
-    eventId,
-    userId,
-    tier,
-    photoUrl,
-    startDate: now,
-    endDate,
-    status: 'active',
-    creditsUsed: creditsRequired,
-    packageId,
-    weeks: packageId ? weeks : null,
-    activeDays: finalActiveDays,
-  };
+  return res.data;
 }
 
 // ─── Buscar promoções do usuário ──────────────────────────────────────────────

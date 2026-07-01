@@ -111,7 +111,21 @@ const MobileAds = {
   initialize() {
     return Promise.resolve([]);
   },
+  setRequestConfiguration() {
+    return Promise.resolve();
+  },
 };
+
+// ─── Consentimento (UMP) — stub no-op ────────────────────────────────────────
+
+const AdsConsent = {
+  requestInfoUpdate() { return Promise.resolve({}); },
+  loadAndShowConsentFormIfRequired() { return Promise.resolve({}); },
+  showPrivacyOptionsForm() { return Promise.resolve(); },
+  getPrivacyOptionsRequirementStatus() { return Promise.resolve('NOT_REQUIRED'); },
+};
+
+const MaxAdContentRating = { G: 'G', PG: 'PG', T: 'T', MA: 'MA' };
 
 module.exports = {
   BannerAd,
@@ -122,5 +136,7 @@ module.exports = {
   AdEventType,
   RewardedAdEventType,
   MobileAds,
+  AdsConsent,
+  MaxAdContentRating,
   default: MobileAds,
 };

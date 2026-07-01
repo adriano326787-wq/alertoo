@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proposta — Pins de outros estados no mapa</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    max-width: 900px;
+    margin: 24px auto;
+    padding: 0 16px;
+    color: #1a1a1a;
+    background: #fff;
+  }
+  h1 { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 24px; }
+  h2 { font-size: 18px; font-weight: 800; margin: 0 0 16px; }
+  .info-box {
+    font-size: 13px; color: #444; line-height: 1.7;
+    background: #F3F4F6; border-radius: 10px; padding: 12px 14px; margin-bottom: 24px;
+  }
+  code {
+    background: rgba(0,0,0,0.06); border-radius: 4px; padding: 1px 5px; font-size: 12px;
+  }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .map-mock {
+    width: 340px; height: 340px; border-radius: 16px; background: #E8EEF1;
+    position: relative; overflow: hidden; flex-shrink: 0;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  .state-pin {
+    position: absolute; display: flex; align-items: center; gap: 4px;
+    background: #64748B; border-radius: 12px; padding: 3px 8px;
+    border: 1.5px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+  .state-pin span { font-size: 10px; font-weight: 800; color: #fff; }
+  .legend {
+    position: absolute; bottom: 8px; left: 8px; right: 8px;
+    font-size: 10px; color: #94A3B8; text-align: center;
+  }
+  .explain { flex: 1; min-width: 280px; }
+  .explain ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.85; color: #333; }
+  .cards { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+  .card {
+    flex: 1; min-width: 260px; background: #F3F4F6; border-radius: 12px; padding: 14px;
+  }
+  .card-title { font-weight: 800; font-size: 13px; margin-bottom: 8px; color: #1a1a1a; }
+  .card-body { font-size: 12px; color: #444; line-height: 1.7; }
+  .summary {
+    margin-top: 16px; padding: 10px 14px; background: #E8F5E9; border-radius: 10px;
+    font-size: 12px; color: #2E7D32; border: 1px solid #C8E6C9;
+  }
+  .section { margin: 32px 0 16px; }
+
+  /* --- Demo interativa --- */
+  .demo-wrap {
+    background: #FAFAFA; border: 1px solid #E5E7EB; border-radius: 16px;
+    padding: 20px; margin-bottom: 32px;
+  }
+  .demo-controls {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .demo-controls label { font-size: 12px; font-weight: 700; color: #444; }
+  .demo-controls input[type="range"] { flex: 1; min-width: 160px; }
+  .demo-zoom-badge {
+    font-size: 11px; font-weight: 800; background: #1F2937; color: #fff;
+    border-radius: 10px; padding: 4px 10px; min-width: 110px; text-align: center;
+  }
+  .demo-reset {
+    font-size: 12px; font-weight: 700; color: #FF5722; background: #fff;
+    border: 1.5px solid #FF5722; border-radius: 8px; padding: 6px 12px; cursor: pointer;
+  }
+  .demo-reset:hover { background: #FFF3EE; }
+  .demo-map {
+    width: 100%; max-width: 360px; height: 360px; border-radius: 16px; background: #E8EEF1;
+    position: relative; overflow: hidden; margin: 0 auto;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  .demo-pin {
+    position: absolute; transform: translate(-50%, -50%);
+    transition: opacity 0.15s, transform 0.15s;
+    cursor: pointer;
+  }
+  .demo-pin.state-summary {
+    display: flex; align-items: center; gap: 4px;
+    background: linear-gradient(135deg, #FF7A45, #FF5722);
+    border-radius: 14px; padding: 5px 10px 5px 8px;
+    border: 2px solid #fff; box-shadow: 0 2px 8px rgba(255,87,34,0.45);
+  }
+  .demo-pin.state-summary .pin-icon { font-size: 11px; line-height: 1; }
+  .demo-pin.state-summary span { font-size: 11.5px; font-weight: 800; color: #fff; white-space: nowrap; letter-spacing: 0.2px; }
+  .demo-pin.state-summary:hover {
+    background: linear-gradient(135deg, #FF8A5C, #FF6A3D);
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  /* anel pulsante — só no pin com maior contagem (chama atenção sem virar "árvore de natal") */
+  .demo-pin.state-summary.highlight {
+    animation: pin-pop 1.8s ease-in-out infinite;
+  }
+  .demo-pin.state-summary.highlight::before {
+    content: '';
+    position: absolute; inset: -6px;
+    border-radius: 18px;
+    border: 2px solid #FF5722;
+    opacity: 0;
+    animation: pin-ring 1.8s ease-out infinite;
+  }
+  @keyframes pin-pop {
+    0%, 100% { box-shadow: 0 2px 8px rgba(255,87,34,0.45); }
+    50% { box-shadow: 0 2px 14px rgba(255,87,34,0.75); }
+  }
+  @keyframes pin-ring {
+    0% { opacity: 0.55; transform: scale(0.9); }
+    70% { opacity: 0; transform: scale(1.35); }
+    100% { opacity: 0; transform: scale(1.35); }
+  }
+  .demo-pin.event-pin {
+    width: 16px; height: 16px; border-radius: 8px; border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .demo-toast {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(31,41,55,0.92); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 6px 12px; border-radius: 20px; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s; white-space: nowrap;
+  }
+  .demo-toast.show { opacity: 1; }
+  .demo-hint {
+    text-align: center; font-size: 11px; color: #94A3B8; margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+
+  <h1>🗺️ Pins de outros estados no mapa</h1>
+  <div class="subtitle">Proposta — visualização e impacto financeiro</div>
+
+  <h2>Por que hoje não aparece nada de outros estados</h2>
+  <div class="info-box">
+    Não é uma questão de "pin pequeno demais pra ver" — a query do mapa (<code>subscribeToEvents</code> em <code>eventsStore.ts</code>) já filtra por <code>where('stateUF','==', meuEstado)</code>. Eventos de outros estados <strong>nem chegam ao app</strong>. Pra mostrar "tem coisa rolando em SP/MG/etc" ao dar zoom out, precisamos de uma fonte de dados separada e bem mais leve.
+  </div>
+
+  <h2>Teste interativo</h2>
+
+  <div class="demo-wrap">
+    <div class="demo-controls">
+      <label for="zoomRange">Zoom do mapa</label>
+      <input type="range" id="zoomRange" min="0" max="100" value="0" />
+      <div class="demo-zoom-badge" id="zoomBadge">Bem afastado</div>
+      <button class="demo-reset" id="resetBtn">↺ Resetar</button>
+    </div>
+
+    <div class="demo-map" id="demoMap">
+      <svg viewBox="0 0 340 340" style="position:absolute; inset:0;">
+        <path d="M40 60 L160 40 L180 130 L90 160 Z" fill="#DCE6EA" stroke="#C8D4D9" stroke-width="1.5"/>
+        <path d="M180 130 L290 90 L300 190 L200 220 Z" fill="#E2ECEF" stroke="#C8D4D9" stroke-width="1.5"/>
+        <path d="M90 160 L200 220 L160 300 L60 270 Z" fill="#DCE6EA" stroke="#C8D4D9" stroke-width="1.5"/>
+        <path d="M200 220 L300 190 L310 290 L160 300 Z" fill="#E2ECEF" stroke="#C8D4D9" stroke-width="1.5"/>
+      </svg>
+
+      <!-- região do seu estado -->
+      <div id="myStateBox" style="position:absolute; left:150px; top:150px; width:90px; height:90px; border:2px dashed #FF5722; border-radius:10px;"></div>
+
+      <!-- pins de eventos do seu estado (zoom próximo) -->
+      <div class="demo-pin event-pin" id="ev1" style="left:178px; top:178px; background:#6A1B9A;"></div>
+      <div class="demo-pin event-pin" id="ev2" style="left:205px; top:190px; background:#E53935;"></div>
+
+      <!-- pins resumo de outros estados -->
+      <div class="demo-pin state-summary" data-state="MG" data-count="8" style="left:75px; top:65px;"><span class="pin-icon">📍</span><span>MG · 8</span></div>
+      <div class="demo-pin state-summary" data-state="GO" data-count="3" style="left:255px; top:55px;"><span class="pin-icon">📍</span><span>GO · 3</span></div>
+      <div class="demo-pin state-summary" data-state="PR" data-count="15" style="left:90px; top:240px;"><span class="pin-icon">📍</span><span>PR · 15</span></div>
+      <div class="demo-pin state-summary highlight" data-state="RJ" data-count="22" style="left:255px; top:245px;"><span class="pin-icon">📍</span><span>RJ · 22</span></div>
+
+      <!-- pins de eventos de "outro estado" (aparecem ao tocar num pin resumo) -->
+      <div class="demo-pin event-pin" id="otherEv1" style="left:90px; top:55px; background:#2563EB; opacity:0;"></div>
+      <div class="demo-pin event-pin" id="otherEv2" style="left:110px; top:80px; background:#16A34A; opacity:0;"></div>
+      <div class="demo-pin event-pin" id="otherEv3" style="left:65px; top:85px; background:#F59E0B; opacity:0;"></div>
+
+      <div class="demo-toast" id="demoToast"></div>
+    </div>
+
+    <div class="demo-hint" id="demoHint">
+      Arraste o slider pra simular o zoom do mapa. Clique numa pílula cinza pra "entrar" naquele estado.
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="explain" style="flex:1;">
+      <ul>
+        <li><strong>Pin "resumo de estado"</strong>: pílula cinza neutra (não compete com as cores das categorias), com sigla do estado + contagem total de eventos ativos (rodoviários + entretenimento somados).</li>
+        <li><strong>Aparece só em zoom bem afastado</strong> (mesmo <code>getZoomTier</code> que já existe) — em zoom normal/próximo, continua tudo igual a hoje.</li>
+        <li><strong>Posição</strong>: centróide aproximado de cada estado (tabela estática de lat/lon, sem custo de query).</li>
+        <li><strong>Toque no pin</strong> → recentraliza o mapa nesse estado e troca o <code>stateUF</code> da assinatura — abre os eventos reais daquele estado.</li>
+        <li>Seu estado atual continua mostrando os <strong>pins normais</strong> (clusterizados), sem mudança.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>De onde vêm os números — impacto financeiro</h2>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-title">📊 Fonte: 1 documento agregado</div>
+      <div class="card-body">
+        Nova Cloud Function <code>scheduled (ex: 1x/hora)</code> roda <code>getCountFromServer()</code> — query de <strong>contagem</strong>, não busca os documentos — para cada estado (27 UFs) x 2 coleções (road + entertainment).<br><br>
+        Resultado é escrito em <strong>1 doc só</strong>: <code>stats/eventCountsByState</code>.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">💰 Custo estimado</div>
+      <div class="card-body">
+        <strong>Aggregation queries</strong> custam 1 "read" por bloco de até 1000 índices — bem mais barato que buscar documentos.<br><br>
+        27 estados × 2 coleções = 54 aggregation reads/execução.<br>
+        24x/dia → <strong>~1.300 reads/dia</strong> (free tier Firestore = 50.000 reads/dia).<br><br>
+        + 24 invocações de function/dia → bem dentro do free tier (2M/mês).
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📱 Lado do app</div>
+      <div class="card-body">
+        App lê esse <strong>1 documento</strong> (não realtime — <code>getDoc</code> simples) quando o usuário dá zoom out, e faz cache local por alguns minutos.<br><br>
+        Praticamente <strong>0 custo adicional</strong> por usuário.
+      </div>
+    </div>
+  </div>
+
+  <div class="summary">
+    ✅ <strong>Resumo:</strong> custo adicional é praticamente irrelevante (centenas de reads/dia, bem dentro do free tier do Firestore). Não precisa de nova infra paga.
+  </div>
+
+<script>
+  const zoomRange = document.getElementById('zoomRange');
+  const zoomBadge = document.getElementById('zoomBadge');
+  const resetBtn = document.getElementById('resetBtn');
+  const demoHint = document.getElementById('demoHint');
+  const toast = document.getElementById('demoToast');
+  const myStateBox = document.getElementById('myStateBox');
+
+  const stateSummaryPins = document.querySelectorAll('.demo-pin.state-summary');
+  const myEventPins = [document.getElementById('ev1'), document.getElementById('ev2')];
+  const otherEventPins = [document.getElementById('otherEv1'), document.getElementById('otherEv2'), document.getElementById('otherEv3')];
+
+  // limiar de "zoom afastado": abaixo de 35, mostra pins resumo de estado.
+  const FAR_ZOOM_THRESHOLD = 35;
+  let focusedState = null;
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => toast.classList.remove('show'), 1600);
+  }
+
+  function update() {
+    const zoom = Number(zoomRange.value);
+    const isFar = zoom < FAR_ZOOM_THRESHOLD;
+
+    if (isFar) {
+      zoomBadge.textContent = `Bem afastado (${zoom})`;
+    } else {
+      zoomBadge.textContent = `Próximo (${zoom})`;
+    }
+
+    if (focusedState) {
+      // Estado focado: mostra eventos daquele estado, esconde tudo o resto.
+      stateSummaryPins.forEach(p => p.style.opacity = '0');
+      myEventPins.forEach(p => p.style.opacity = '0');
+      otherEventPins.forEach(p => p.style.opacity = '1');
+      myStateBox.style.opacity = '0';
+      demoHint.textContent = `Mostrando eventos reais de ${focusedState} (consulta com stateUF == '${focusedState}'). Clique em "Resetar" pra voltar.`;
+      return;
+    }
+
+    otherEventPins.forEach(p => p.style.opacity = '0');
+    myStateBox.style.opacity = isFar ? '0.5' : '1';
+
+    if (isFar) {
+      stateSummaryPins.forEach(p => p.style.opacity = '1');
+      myEventPins.forEach(p => p.style.opacity = '0.35');
+      demoHint.textContent = 'Zoom afastado: pílulas cinzas mostram contagem de eventos em outros estados. Clique numa pra "entrar" nela.';
+    } else {
+      stateSummaryPins.forEach(p => p.style.opacity = '0');
+      myEventPins.forEach(p => p.style.opacity = '1');
+      demoHint.textContent = 'Zoom próximo: comportamento atual do app, sem pins de outros estados.';
+    }
+  }
+
+  zoomRange.addEventListener('input', update);
+
+  stateSummaryPins.forEach(pin => {
+    pin.addEventListener('click', () => {
+      const uf = pin.dataset.state;
+      const count = pin.dataset.count;
+      focusedState = uf;
+      showToast(`Abrindo eventos de ${uf} (${count} ativos)...`);
+      update();
+    });
+  });
+
+  resetBtn.addEventListener('click', () => {
+    focusedState = null;
+    zoomRange.value = 0;
+    showToast('Voltando para sua região');
+    update();
+  });
+
+  update();
+</script>
+
+</body>
+</html>

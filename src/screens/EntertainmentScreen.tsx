@@ -13,7 +13,7 @@ import { EntertainmentInfoModal } from '../components/EntertainmentInfoModal';
 import { getCurrentUserId, getCurrentUser } from '../services/authService';
 import { useUserStore } from '../store/userStore';
 import { timeAgo, timeLeft } from '../utils/time';
-import { resolveStateUF } from '../utils/brazilGeo';
+import { resolveRegion } from '../utils/brazilGeo';
 import { useAppStore } from '../store/appStore';
 import { useT } from '../hooks/useT';
 import { useTick } from '../hooks/useTick';
@@ -26,6 +26,9 @@ import { useInterstitialAd } from '../hooks/useInterstitialAd';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { PROMOTION_TIERS } from '../types/promotion';
 import { ShareSheet } from '../components/ShareSheet';
+import { haversineDistance } from '../utils/geo';
+import { formatDistance } from '../utils/distance';
+import { SkeletonList } from '../components/SkeletonCard';
 
 interface PendingAdd {
   coordinate: { latitude: number; longitude: number };
@@ -41,6 +44,8 @@ function EventCard({
   onOpenComments,
   onGoToMap,
   onShare,
+  userLat,
+  userLon,
 }: {
   event: EntertainmentEvent;
   currentUid: string;
@@ -48,6 +53,8 @@ function EventCard({
   onOpenComments: (event: EntertainmentEvent) => void;
   onGoToMap: (event: EntertainmentEvent) => void;
   onShare: (event: EntertainmentEvent) => void;
+  userLat: number | null;
+  userLon: number | null;
 }) {
   const t = useT();
   // useTick removido — o componente pai já chama useTick(60_000), evitando N timers desnecessários
@@ -56,6 +63,9 @@ function EventCard({
   const likes = Array.isArray(event.likes) ? event.likes : [];
   const liked = likes.includes(myUid);
   const isOwner = event.userId === myUid;
+  const distanceKm = (userLat != null && userLon != null)
+    ? haversineDistance(userLat, userLon, event.latitude, event.longitude)
+    : null;
 
   const isPromoted = !!(event.promotionTier && event.promotionEndDate && event.promotionEndDate > Date.now());
   const tierConfig = isPromoted ? PROMOTION_TIERS[event.promotionTier!] : null;
@@ -106,6 +116,7 @@ function EventCard({
           <Text style={styles.cardTitle}>{event.title}</Text>
           <Text style={styles.cardMeta}>
             {tEntCat(event.category)}{event.cityName ? ` · ${event.cityName}` : ''} · {timeAgo(event.createdAt)}
+            {distanceKm != null ? ` · 📍 ${formatDistance(distanceKm)}` : ''}
           </Text>
         </View>
       </View>
@@ -174,7 +185,7 @@ function FeaturedStrip({
       <Text style={styles.stripTitle}>🌟 {t('featured')}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stripScroll}>
         {events.map((ev) => {
-          const meta = ENTERTAINMENT_CATEGORIES[ev.category];
+          const meta = ENTERTAINMENT_CATEGORIES[ev.category] ?? { emoji: '🎉', color: '#6A1B9A', label: ev.category };
           const tierConfig = ev.promotionTier ? PROMOTION_TIERS[ev.promotionTier] : null;
           return (
             <TouchableOpacity key={ev.id} style={styles.stripCard} onPress={() => onPress(ev)} activeOpacity={0.88}>
@@ -246,6 +257,11 @@ export function EntertainmentScreen() {
   const setUserCountryCode = useAppStore((s) => s.setUserCountryCode);
   const setUserStateUF = useAppStore((s) => s.setUserStateUF);
   const userStateUF = useAppStore((s) => s.userStateUF);
+  const exploreStateUF = useAppStore((s) => s.exploreStateUF);
+  // #31 — coordenadas cacheadas (preenchidas quando o usuário visita o mapa) para
+  // exibir distância nos cards sem pedir permissão de GPS de novo nesta tela
+  const userLat = useAppStore((s) => s.userLat);
+  const userLon = useAppStore((s) => s.userLon);
   // Detecta estado do usuário automaticamente ao montar
   const { detecting, locationDenied } = useUserLocation();
 
@@ -256,7 +272,9 @@ export function EntertainmentScreen() {
   const events = useMemo(() => {
     const now = Date.now();
     let filtered: typeof allEvents;
-    if (locationDenied || !userStateUF) {
+    if (exploreStateUF) {
+      filtered = allEvents.filter((e) => e.stateUF === exploreStateUF && e.expiresAt > now);
+    } else if (locationDenied || !userStateUF) {
       filtered = allEvents.filter((e) => e.expiresAt > now);
     } else {
       filtered = allEvents.filter((e) => e.stateUF === userStateUF && e.expiresAt > now);
@@ -285,7 +303,7 @@ export function EntertainmentScreen() {
       }
       return b.createdAt - a.createdAt; // 'recent' (padrão)
     });
-  }, [allEvents, userStateUF, locationDenied, activeCategory, sortBy]);
+  }, [allEvents, userStateUF, exploreStateUF, locationDenied, activeCategory, sortBy]);
 
   // Eventos em destaque Prata/Ouro para o carrossel (memoizado, item 15)
   const featuredEvents = useMemo(() => {
@@ -297,9 +315,9 @@ export function EntertainmentScreen() {
   }, [events]);
 
   useEffect(() => {
-    const unsub = subscribe();
+    const unsub = subscribe(exploreStateUF ?? (locationDenied ? null : userStateUF));
     return unsub;
-  }, []);
+  }, [userStateUF, locationDenied, exploreStateUF]);
 
   // #10 — Abre automaticamente um evento quando navega com eventId.
   // Não descarta silenciosamente quando events ainda não carregou:
@@ -385,9 +403,9 @@ export function EntertainmentScreen() {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
         });
-        stateUF = resolveStateUF(place?.region);
-        cityName = place?.city ?? place?.subregion ?? undefined;
         countryCode = place?.isoCountryCode ?? undefined;
+        stateUF = resolveRegion(place?.region, countryCode);
+        cityName = place?.city ?? place?.subregion ?? undefined;
         if (countryCode) setUserCountryCode(countryCode);
         if (stateUF) setUserStateUF(stateUF);
       } catch (_) {}
@@ -423,10 +441,10 @@ export function EntertainmentScreen() {
       <View style={[styles.header, { paddingTop: topInset + 12 }]}>
         <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>🎉 {t('ent_title')}</Text>
-          {userStateUF && (
+          {(exploreStateUF || userStateUF) && (
             <View style={styles.stateBadge}>
               <Text style={styles.stateBadgeText}>
-                {tf('filter_state_badge', { state: userStateUF })}
+                {tf('filter_state_badge', { state: exploreStateUF ?? userStateUF! })}
               </Text>
             </View>
           )}
@@ -509,10 +527,7 @@ export function EntertainmentScreen() {
       )}
 
       {(loading || (detecting && !userStateUF)) ? (
-        <View style={styles.loaderWrap}>
-          <ActivityIndicator color="#6A1B9A" />
-          <Text style={styles.loaderText}>{t('map_checking')}</Text>
-        </View>
+        <SkeletonList count={5} withPhoto />
       ) : (
         <FlatList
           data={listData}
@@ -523,6 +538,14 @@ export function EntertainmentScreen() {
           ListHeaderComponent={<FeaturedStrip events={featuredEvents} onPress={setSelectedEvent} />}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
+          // #32 — virtualização: cards têm altura variável (foto opcional, descrição,
+          // endereço), então getItemLayout não é viável; estes parâmetros ainda reduzem
+          // o trabalho de render em listas longas com muitas fotos
+          windowSize={9}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews
           renderItem={({ item }) => {
             if ('__ad' in item) {
               return (
@@ -540,18 +563,33 @@ export function EntertainmentScreen() {
                 onOpenComments={setSelectedEvent}
                 onGoToMap={handleGoToMap}
                 onShare={setShareTarget}
+                userLat={userLat}
+                userLon={userLon}
               />
             );
           }}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>🎪</Text>
-              <Text style={styles.emptyText}>{t('ent_empty')}</Text>
-              <Text style={styles.emptyHint}>{t('ent_empty_hint')}</Text>
-              <TouchableOpacity style={styles.emptyAddBtn} onPress={handleAdd}>
-                <Text style={styles.emptyAddText}>+ {t('ent_add')}</Text>
-              </TouchableOpacity>
-            </View>
+            // #33 — diferencia "filtro de categoria sem resultado" (ação: limpar filtro)
+            // de "realmente não há eventos na região" (ação: criar um)
+            activeCategory ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyEmoji}>🔍</Text>
+                <Text style={styles.emptyText}>{t('ent_empty_filtered') || 'Nenhum evento nesta categoria'}</Text>
+                <Text style={styles.emptyHint}>{t('ent_empty_filtered_hint') || 'Toque em "Todos" para ver todos os eventos.'}</Text>
+                <TouchableOpacity style={styles.emptyAddBtn} onPress={() => setActiveCategory(null)}>
+                  <Text style={styles.emptyAddText}>🎯 Todos</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <Text style={styles.emptyEmoji}>🎪</Text>
+                <Text style={styles.emptyText}>{t('ent_empty')}</Text>
+                <Text style={styles.emptyHint}>{t('ent_empty_hint')}</Text>
+                <TouchableOpacity style={styles.emptyAddBtn} onPress={handleAdd}>
+                  <Text style={styles.emptyAddText}>+ {t('ent_add')}</Text>
+                </TouchableOpacity>
+              </View>
+            )
           }
           ListFooterComponent={
             loadingMore ? (
@@ -607,9 +645,11 @@ export function EntertainmentScreen() {
           title={shareTarget.title}
           description={shareTarget.description}
           category={`${ENTERTAINMENT_CATEGORIES[shareTarget.category]?.emoji ?? '🎉'} ${tEntCat(shareTarget.category)}`}
+          categoryColor={ENTERTAINMENT_CATEGORIES[shareTarget.category]?.color ?? '#6A1B9A'}
           location={[shareTarget.cityName, shareTarget.stateUF].filter(Boolean).join(' — ')}
           eventId={shareTarget.id}
           eventType="entertainment"
+          photoUrl={shareTarget.promotionPhotoUrl || shareTarget.photoUrl}
         />
       )}
     </View>

@@ -1,14 +1,12 @@
 /**
  * AdBanner — componente de banner AdMob.
  *
- * Usa o SDK real (react-native-google-mobile-ads) quando instalado,
- * ou o stub localizado em src/stubs/admob-stub.js como fallback.
- *
- * Para ativar o SDK real:
- *   1. npm install react-native-google-mobile-ads@17+
- *   2. npx expo run:android  (rebuild necessário)
- *   3. Adicionar App ID no AndroidManifest.xml (ver adsService.ts)
- *   4. Trocar AD_UNITS.BANNER_* pelos IDs reais no painel AdMob
+ * SDK real já ativo no Android (ver adsService.ts). iOS é desligado de
+ * propósito — o app ainda não está publicado na App Store, então não há
+ * App ID/unidades de anúncio próprios para iOS cadastrados no painel AdMob.
+ * Quando o app iOS for lançado: criar o app "Alertoo iOS" no painel AdMob,
+ * gerar unidades de anúncio próprias, atualizar `iosAppId` em app.config.js
+ * e remover o bloqueio de Platform.OS === 'ios' abaixo.
  */
 
 import React, { useState } from 'react';

@@ -4,7 +4,9 @@
  * Aparece quando o usuário está a ≤300 m de um evento ativo de trânsito.
  * Pergunta se ele está passando pelo evento e oferece:
  *   • Confirmar — incrementa confirmations no evento existente
- *   • Reportar outro — abre AddEventModal pré-preenchido com a categoria do evento próximo
+ *   • Reportar outro — cria um evento novo DIRETO (sem modal), mesma categoria
+ *     do evento próximo. Toque e mantenha pressionado abre o modal completo
+ *     pra quem quiser adicionar foto/descrição (onReportDetail).
  *
  * Regras:
  *   - Só exibe uma vez por evento por sessão (dismissedIds)
@@ -22,7 +24,7 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { RoadEvent, EVENT_CATEGORIES } from '../types';
+import { RoadEvent, EventCategory, EVENT_CATEGORIES } from '../types';
 import { haversineDistance } from '../utils/geo';
 import { getCurrentUserId } from '../services/authService';
 
@@ -35,8 +37,17 @@ interface Props {
   events: RoadEvent[];
   blocked?: boolean;
   onConfirm:     (eventId: string) => void;
+  /** Cria o evento DIRETO (toque normal). */
   onQuickReport: (
-    category: string,
+    category: EventCategory,
+    coordinate: { latitude: number; longitude: number },
+    stateUF?: string,
+    cityName?: string,
+    countryCode?: string,
+  ) => void;
+  /** Abre o modal completo (toque e mantenha pressionado) — pra quem quer adicionar foto/descrição. */
+  onReportDetail?: (
+    category: EventCategory,
     coordinate: { latitude: number; longitude: number },
     stateUF?: string,
     cityName?: string,
@@ -46,7 +57,7 @@ interface Props {
 
 export function NearbyEventPrompt({
   userLat, userLon, events, blocked = false,
-  onConfirm, onQuickReport,
+  onConfirm, onQuickReport, onReportDetail,
 }: Props) {
   const [promptEvent, setPromptEvent] = useState<RoadEvent | null>(null);
   const dismissedIds = useRef<Set<string>>(new Set());
@@ -164,6 +175,16 @@ export function NearbyEventPrompt({
           activeOpacity={0.8}
           onPress={() => {
             onQuickReport(
+              promptEvent.category,
+              { latitude: promptEvent.latitude, longitude: promptEvent.longitude },
+              promptEvent.stateUF,
+              promptEvent.cityName,
+              promptEvent.countryCode,
+            );
+            dismiss(promptEvent.id);
+          }}
+          onLongPress={() => {
+            (onReportDetail ?? onQuickReport)(
               promptEvent.category,
               { latitude: promptEvent.latitude, longitude: promptEvent.longitude },
               promptEvent.stateUF,

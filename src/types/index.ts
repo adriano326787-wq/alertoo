@@ -50,3 +50,13 @@ export const EVENT_CATEGORIES: Record<EventCategory, EventCategoryMeta> = {
   // Radar / fiscalização eletrônica de velocidade
   radar:       { label: 'Radar',              emoji: '📷', color: '#00ACC1', defaultTtlMinutes: 180 },
 };
+
+/**
+ * Fallback para quando event.category não existe em EVENT_CATEGORIES (categoria
+ * antiga/removida, dado corrompido, ou typo). Sem isso, `EVENT_CATEGORIES[cat]`
+ * retorna `undefined` e qualquer `.emoji`/`.color` subsequente crasha o app —
+ * já causou crash em produção (TypeError: Cannot read property 'emoji' of undefined).
+ */
+export const FALLBACK_EVENT_META: EventCategoryMeta = {
+  label: 'Evento', emoji: '📍', color: '#607D8B', defaultTtlMinutes: 60,
+};

@@ -1,10 +1,11 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   collection,
   addDoc,
   doc,
   deleteDoc,
-  onSnapshot,
+  getDocs,
   query,
   orderBy,
   limit,
@@ -13,8 +14,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { getCurrentUserId } from '../services/authService';
-import { awardPoints } from '../services/userService';
+import { awardPoints, recordDailyActivity } from '../services/userService';
 import { t, tf } from '../utils/i18n';
+import { checkRateLimit, requireAuth } from '../utils/rateLimiter';
 import { POINTS } from '../types/user';
 import {
   Radar,
@@ -27,13 +29,16 @@ import {
 } from '../types/radar';
 
 const RADARS_COLLECTION = 'radars';
-const RATE_LIMIT_MS = 30_000;
+const RADARS_CACHE_KEY = 'radars_cache_v2';
+// Radares mudam com pouca frequência — não precisam de push em tempo real.
+// Cache local de ~30min evita reabrir leituras do Firestore a cada montagem do mapa.
+const RADARS_CACHE_TTL_MS = 30 * 60 * 1000;
 
 interface RadarsState {
   radars: Radar[];
   loading: boolean;
   _subscriberCount: number;
-  _unsub: (() => void) | null;
+  _refreshInterval: ReturnType<typeof setInterval> | null;
   _lastRadarAt: number | null;
 
   subscribeToRadars: () => () => void;
@@ -55,11 +60,23 @@ interface RadarsState {
   deleteRadar: (id: string) => Promise<void>;
 }
 
+// Aceita Firestore Timestamp ou número (ms) — defensivo contra documentos
+// gravados via script com createdAt/lastConfirmedAt em formato incorreto, que
+// senão lançam TypeError e quebram o fetch de TODOS os radares.
+function toMillis(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === 'number') return value;
+  if (value instanceof Timestamp) return value.toMillis();
+  return null;
+}
+
 function docToRadar(d: any): Radar | null {
   const data = d.data();
-  const expiresAt = data.expiresAt ? (data.expiresAt as Timestamp).toMillis() : null;
+  const expiresAt = toMillis(data.expiresAt);
   // Radar móvel/blitz expirado some imediatamente do cliente
   if (expiresAt !== null && expiresAt <= Date.now()) return null;
+
+  const createdAt = toMillis(data.createdAt) ?? Date.now();
   return {
     id: d.id,
     type: data.type,
@@ -67,14 +84,12 @@ function docToRadar(d: any): Radar | null {
     longitude: data.longitude,
     speedLimit: data.speedLimit ?? undefined,
     createdBy: data.createdBy,
-    createdAt: (data.createdAt as Timestamp).toMillis(),
+    createdAt,
     expiresAt,
     confirmations: data.confirmations ?? 0,
     denials: data.denials ?? 0,
     voterStamps: data.voterStamps ?? {},
-    lastConfirmedAt: data.lastConfirmedAt
-      ? (data.lastConfirmedAt as Timestamp).toMillis()
-      : (data.createdAt as Timestamp).toMillis(),
+    lastConfirmedAt: toMillis(data.lastConfirmedAt) ?? createdAt,
     status: data.status ?? 'active',
     stateUF: data.stateUF ?? undefined,
     cityName: data.cityName ?? undefined,
@@ -82,14 +97,27 @@ function docToRadar(d: any): Radar | null {
   };
 }
 
+async function fetchAndCacheRadars(): Promise<Radar[]> {
+  const snap = await getDocs(query(
+    collection(db, RADARS_COLLECTION),
+    orderBy('lastConfirmedAt', 'desc'),
+    limit(300),
+  ));
+  const radars: Radar[] = snap.docs
+    .map(docToRadar)
+    .filter((r): r is Radar => r !== null);
+  AsyncStorage.setItem(RADARS_CACHE_KEY, JSON.stringify({ radars, timestamp: Date.now() })).catch(() => {});
+  return radars;
+}
+
 export const useRadarsStore = create<RadarsState>((set, get) => ({
   radars: [],
   loading: true,
   _subscriberCount: 0,
-  _unsub: null,
+  _refreshInterval: null,
   _lastRadarAt: null,
 
-  // ─── Subscription com ref-count (mesmo padrão do eventsStore) ─────────────
+  // ─── Fetch único + cache local com ref-count (radares não precisam de push) ─
   subscribeToRadars: () => {
     const state = get();
     if (state._subscriberCount > 0) {
@@ -97,39 +125,48 @@ export const useRadarsStore = create<RadarsState>((set, get) => ({
       return () => {
         set((s) => {
           const count = s._subscriberCount - 1;
-          if (count <= 0 && s._unsub) {
-            s._unsub();
-            return { _subscriberCount: 0, _unsub: null };
+          if (count <= 0 && s._refreshInterval) {
+            clearInterval(s._refreshInterval);
+            return { _subscriberCount: 0, _refreshInterval: null };
           }
           return { _subscriberCount: count };
         });
       };
     }
 
-    const q = query(
-      collection(db, RADARS_COLLECTION),
-      orderBy('lastConfirmedAt', 'desc'),
-      limit(500),
-    );
+    set({ _subscriberCount: 1 });
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const radars: Radar[] = snapshot.docs
-        .map(docToRadar)
-        .filter((r): r is Radar => r !== null);
-      set({ radars, loading: false });
-    }, (err) => {
-      if (__DEV__) console.error('[RadarsStore] onSnapshot error:', err.code, err.message);
-      set({ loading: false });
-    });
+    (async () => {
+      try {
+        const cached = await AsyncStorage.getItem(RADARS_CACHE_KEY);
+        if (cached) {
+          const { radars, timestamp } = JSON.parse(cached);
+          set({ radars, loading: false });
+          if (Date.now() - timestamp < RADARS_CACHE_TTL_MS) return;
+        }
+      } catch {}
 
-    set({ _subscriberCount: 1, _unsub: unsub });
+      try {
+        const radars = await fetchAndCacheRadars();
+        set({ radars, loading: false });
+      } catch (err: any) {
+        if (__DEV__) console.error('[RadarsStore] fetch error:', err?.code, err?.message);
+        set({ loading: false });
+      }
+    })();
+
+    const refreshInterval = setInterval(() => {
+      fetchAndCacheRadars().then((radars) => set({ radars })).catch(() => {});
+    }, RADARS_CACHE_TTL_MS);
+
+    set({ _refreshInterval: refreshInterval });
 
     return () => {
       set((s) => {
         const count = s._subscriberCount - 1;
-        if (count <= 0 && s._unsub) {
-          s._unsub();
-          return { _subscriberCount: 0, _unsub: null };
+        if (count <= 0 && s._refreshInterval) {
+          clearInterval(s._refreshInterval);
+          return { _subscriberCount: 0, _refreshInterval: null };
         }
         return { _subscriberCount: count };
       });
@@ -151,16 +188,10 @@ export const useRadarsStore = create<RadarsState>((set, get) => ({
   // ─── Criar radar ──────────────────────────────────────────────────────────
   addRadar: async ({ type, latitude, longitude, speedLimit, stateUF, cityName, countryCode }) => {
     const uid = getCurrentUserId();
-    if (!uid || uid === 'anonymous') {
-      throw new Error(t('login_required_road'));
-    }
+    requireAuth(uid, 'login_required_road');
+    checkRateLimit(get()._lastRadarAt);
 
     const now = Date.now();
-    const { _lastRadarAt } = get();
-    if (_lastRadarAt && now - _lastRadarAt < RATE_LIMIT_MS) {
-      const remaining = Math.ceil((RATE_LIMIT_MS - (now - _lastRadarAt)) / 1000);
-      throw new Error(tf('rate_limit_wait', { remaining }));
-    }
 
     const ttl = RADAR_TYPES[type].ttlHours;
     await addDoc(collection(db, RADARS_COLLECTION), {
@@ -183,6 +214,7 @@ export const useRadarsStore = create<RadarsState>((set, get) => ({
 
     set({ _lastRadarAt: now });
     awardPoints(uid, POINTS.ROAD_EVENT_CREATED, 'eventsReported').catch(() => {});
+    recordDailyActivity(uid).catch(() => {});
   },
 
   // ─── Confirmar (janela de re-voto de 30 dias; renova lastConfirmedAt) ─────
@@ -217,6 +249,7 @@ export const useRadarsStore = create<RadarsState>((set, get) => ({
     });
 
     if (alreadyVoted) throw new Error(t('radar_already_voted'));
+    recordDailyActivity(uid).catch(() => {});
     if (ownerId && ownerId !== 'anonymous' && ownerId !== uid) {
       awardPoints(ownerId, POINTS.CONFIRMATION_RECEIVED).catch(() => {});
     }
@@ -253,6 +286,7 @@ export const useRadarsStore = create<RadarsState>((set, get) => ({
     });
 
     if (alreadyVoted) throw new Error(t('radar_already_voted'));
+    recordDailyActivity(uid).catch(() => {});
     if (ownerId && ownerId !== 'anonymous' && ownerId !== uid) {
       awardPoints(ownerId, POINTS.DENIAL_RECEIVED).catch(() => {});
     }

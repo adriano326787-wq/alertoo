@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEventsStore } from '../store/eventsStore';
 import { useAppStore } from '../store/appStore';
 import { haversineDistance } from '../utils/geo';
-import { EVENT_CATEGORIES, RoadEvent } from '../types';
+import { EVENT_CATEGORIES, FALLBACK_EVENT_META, RoadEvent } from '../types';
 import { rw, rh, rf } from '../utils/responsive';
 import { useT } from '../hooks/useT';
 
@@ -83,7 +83,7 @@ export function DriverModeOverlay({ visible, onClose }: Props) {
       if (!spokenIds.current.has(ev.id)) {
         spokenIds.current.add(ev.id);
         hasNew = true;
-        const meta = EVENT_CATEGORIES[ev.category];
+        const meta = EVENT_CATEGORIES[ev.category] ?? FALLBACK_EVENT_META;
         const dist = userLat != null && userLon != null
           ? haversineDistance(userLat, userLon, ev.latitude, ev.longitude)
           : null;
@@ -142,7 +142,7 @@ export function DriverModeOverlay({ visible, onClose }: Props) {
           scrollEnabled={nearby.length > 2}
         >
           {nearby.map((ev) => {
-            const meta = EVENT_CATEGORIES[ev.category];
+            const meta = EVENT_CATEGORIES[ev.category] ?? FALLBACK_EVENT_META;
             const dist = userLat != null && userLon != null
               ? haversineDistance(userLat, userLon, ev.latitude, ev.longitude)
               : null;

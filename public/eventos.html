@@ -2,12 +2,12 @@
 <html lang="pt-BR">
 <head>
   <!-- Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-TSS9J9VDTC"></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-52XN3QT3EQ"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-TSS9J9VDTC');
+    gtag('config', 'G-52XN3QT3EQ');
   </script>
 
   <!-- Google AdSense -->
@@ -108,7 +108,7 @@
       --dark-3: #0A0F1A;
       --white: #FFFFFF;
     }
-    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--dark-3); color: var(--white); overflow-x: hidden; }
+    html, body { height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; background: var(--dark-3); color: var(--white); }
 
     /* ── NAV ────────────────────────────────────────────────────────── */
     nav {
@@ -145,7 +145,7 @@
     }
 
     /* ── LAYOUT PRINCIPAL ───────────────────────────────────────────── */
-    .page { display: flex; flex-direction: column; height: 100vh; padding-top: 61px; }
+    .page { position: fixed; top: 61px; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; }
 
     /* Barra de filtros */
     .filter-bar {
@@ -164,13 +164,15 @@
     }
     .f-chip:hover { border-color: var(--brand); color: rgba(255,255,255,0.85); }
     .f-chip.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+    .f-clear { border-color: rgba(255,255,255,0.25); color: rgba(255,255,255,0.7); font-weight: 700; }
 
     /* Body split */
-    .content { display: flex; flex: 1; overflow: hidden; }
+    .content { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 
     /* Sidebar lista */
     .sidebar {
       width: 340px; flex-shrink: 0; display: flex; flex-direction: column;
+      min-height: 0; overflow: hidden;
       border-right: 1px solid rgba(255,255,255,0.06);
       background: rgba(255,255,255,0.02);
     }
@@ -192,11 +194,12 @@
       padding: 2px 8px; border-radius: 999px;
     }
     .list-scroll {
-      flex: 1; overflow-y: auto; padding: 8px;
-      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent;
+      flex: 1; min-height: 0; overflow-y: auto; padding: 8px;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent;
+      touch-action: pan-y; -webkit-overflow-scrolling: touch;
     }
-    .list-scroll::-webkit-scrollbar { width: 4px; }
-    .list-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+    .list-scroll::-webkit-scrollbar { width: 5px; }
+    .list-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 4px; }
 
     /* Cards da lista */
     .ev-item {
@@ -239,8 +242,8 @@
     .list-empty span { font-size: 42px; }
 
     /* Mapa */
-    .map-col { flex: 1; position: relative; }
-    #evMap { width: 100%; height: 100%; }
+    .map-col { flex: 1; position: relative; display: flex; flex-direction: column; min-height: 0; }
+    #evMap { width: 100%; flex: 1; min-height: 0; }
 
     /* Loading overlay */
     .map-overlay {
@@ -348,9 +351,49 @@
       margin-top: 20px;
     }
 
+    /* ── Sheet handle (aparece só no mobile) ──────────────────────── */
+    .sheet-handle {
+      display: none;
+      flex-direction: column; align-items: center;
+      padding: 10px 16px 4px; flex-shrink: 0;
+      cursor: grab; user-select: none; -webkit-user-select: none;
+      touch-action: none;
+    }
+    .sheet-handle-bar {
+      width: 44px; height: 4px; border-radius: 2px;
+      background: rgba(255,255,255,0.28); margin-bottom: 8px;
+    }
+    .sheet-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding: 0 2px;
+    }
+    .sheet-meta-label { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.65); }
+    .sheet-meta-caret {
+      font-size: 14px; color: rgba(255,255,255,0.35);
+      transition: transform .3s; display: inline-block;
+    }
+    .sidebar.sheet-open .sheet-meta-caret { transform: rotate(180deg); }
+
     /* Responsivo mobile */
     @media (max-width: 700px) {
-      .sidebar { display: none; }
+      .sidebar {
+        display: flex;
+        position: fixed; bottom: 0; left: 0; right: 0;
+        width: 100%; max-width: 100%;
+        height: 82vh; border-radius: 22px 22px 0 0;
+        border-right: none;
+        border-top: 1px solid rgba(255,255,255,0.12);
+        background: rgba(10,15,26,0.97);
+        backdrop-filter: blur(24px);
+        z-index: 400;
+        transform: translateY(calc(100% - 72px));
+        transition: transform .36s cubic-bezier(.32,1,.6,1);
+        will-change: transform;
+      }
+      .sidebar.sheet-open { transform: translateY(0); }
+      .sheet-handle { display: flex; }
+      .sidebar-header { border-top: 1px solid rgba(255,255,255,0.06); }
+      .ad-wrap { display: none; }
       .ev-modal { max-height: 96vh; }
     }
   </style>
@@ -384,12 +427,21 @@
       <button class="f-chip" data-type="hazard" data-i18n="events.hazard">⚠️ Perigo</button>
       <button class="f-chip" data-type="closure" data-i18n="events.closure">🚫 Interdição</button>
       <button class="f-chip" data-type="entertainment" data-i18n="events.entertainment">🎉 Entretenimento</button>
+      <button class="f-chip f-clear" id="btnClearFilter" style="display:none">× Limpar</button>
     </div>
 
     <div class="content">
 
       <!-- Sidebar -->
       <div class="sidebar">
+        <!-- Handle deslizável (mobile) -->
+        <div class="sheet-handle" id="sheetHandle">
+          <div class="sheet-handle-bar"></div>
+          <div class="sheet-meta">
+            <span class="sheet-meta-label" id="sheetMetaLabel">Eventos</span>
+            <span class="sheet-meta-caret">▲</span>
+          </div>
+        </div>
         <div class="sidebar-header">
           <span class="sidebar-title" id="sidebarTitle">0 eventos</span>
           <div class="sidebar-actions">
@@ -468,7 +520,30 @@
       other:       { label: 'Outro',            emoji: '📍', color: '#607D8B', type: 'entertainment' },
     };
 
+    const DISTANT_ZOOM = 5;
+
+    const STATE_CENTROIDS = {
+      AC:[-9.02,-70.81], AL:[-9.57,-36.78], AP:[1.41,-51.77],  AM:[-3.47,-65.10],
+      BA:[-12.97,-41.73],CE:[-5.49,-39.32], DF:[-15.80,-47.86],ES:[-19.19,-40.34],
+      GO:[-15.83,-49.62],MA:[-5.42,-45.44], MT:[-12.98,-55.82],MS:[-20.51,-54.54],
+      MG:[-18.51,-44.56],PA:[-3.42,-52.29], PB:[-7.12,-36.72], PR:[-24.89,-51.55],
+      PE:[-8.38,-37.86], PI:[-7.72,-42.73], RJ:[-22.25,-42.66],RN:[-5.81,-36.59],
+      RS:[-30.03,-53.23],RO:[-11.22,-63.58],RR:[1.99,-61.33],  SC:[-27.45,-50.95],
+      SP:[-22.27,-48.73],SE:[-10.57,-37.45],TO:[-9.46,-48.33],
+    };
+
+    const STATE_NAMES = {
+      AC:'Acre',AL:'Alagoas',AP:'Amapá',AM:'Amazonas',BA:'Bahia',CE:'Ceará',
+      DF:'Distrito Federal',ES:'Espírito Santo',GO:'Goiás',MA:'Maranhão',
+      MT:'Mato Grosso',MS:'Mato Grosso do Sul',MG:'Minas Gerais',PA:'Pará',
+      PB:'Paraíba',PR:'Paraná',PE:'Pernambuco',PI:'Piauí',RJ:'Rio de Janeiro',
+      RN:'Rio Grande do Norte',RS:'Rio Grande do Sul',RO:'Rondônia',
+      RR:'Roraima',SC:'Santa Catarina',SP:'São Paulo',SE:'Sergipe',TO:'Tocantins',
+    };
+
     let allEvents = [], activeFilter = 'all', map = null, markers = [], activeIdx = -1;
+    let markerByEventId = {};
+    let statePinMarkers = [], isDistantView = false;
 
     // ── AdSense helpers ───────────────────────────────────────────────
     // IDs dos ad units — crie em adsense.google.com → Anúncios → Por unidade de anúncio
@@ -536,6 +611,89 @@
       return L.divIcon({ html: svg, className: '', iconSize: [52, 62], iconAnchor: [26, 62], popupAnchor: [0, -64] });
     }
 
+    function makeIconHovered(emoji, color) {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="70" height="82" viewBox="0 0 70 82">
+        <circle cx="35" cy="35" r="33" fill="${color}" opacity="0.22"/>
+        <circle cx="35" cy="35" r="25" fill="${color}" opacity="0.15"/>
+        <rect x="7" y="7" width="56" height="56" rx="16" fill="${color}" stroke="#fff" stroke-width="3"/>
+        <text x="35" y="39" text-anchor="middle" font-size="28" dominant-baseline="middle">${emoji}</text>
+        <polygon points="35,80 24,63 46,63" fill="${color}"/>
+        <polygon points="35,78 24,63 46,63" fill="${color}" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`;
+      return L.divIcon({ html: svg, className: '', iconSize: [70, 82], iconAnchor: [35, 82], popupAnchor: [0, -84] });
+    }
+
+    function makeLeiSecaIconHovered() {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="116" height="106" viewBox="0 0 116 106">
+        <circle cx="58" cy="44" r="52" fill="#00C853" opacity="0.15"/>
+        <rect x="1" y="1" width="114" height="88" rx="24" fill="none" stroke="#00C853" stroke-width="2.5" opacity="0.5"/>
+        <rect x="7" y="7" width="102" height="76" rx="20" fill="none" stroke="#00C853" stroke-width="2.5" opacity="0.7"/>
+        <rect x="14" y="14" width="88" height="62" rx="16" fill="#00C853" stroke="#fff" stroke-width="3"/>
+        <text x="58" y="40" text-anchor="middle" font-size="24" dominant-baseline="middle">🍺</text>
+        <text x="58" y="63" text-anchor="middle" font-size="11" font-weight="900" fill="#fff" letter-spacing="1.5">LEI SECA</text>
+        <polygon points="58,104 44,88 72,88" fill="#00C853" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`;
+      return L.divIcon({ html: svg, className: '', iconSize: [116, 106], iconAnchor: [58, 106], popupAnchor: [0, -108] });
+    }
+
+    function makeStatePinIcon(uf, count) {
+      const huge = count > 500, big = count > 100;
+      const size  = huge ? 64 : big ? 56 : 48;
+      const color = huge ? '#FF5722' : big ? '#FF9800' : '#4CAF50';
+      const half  = size / 2;
+      const cntStr = count > 9999 ? '9k+' : String(count);
+      const fs = cntStr.length > 3 ? 9 : cntStr.length > 2 ? 10 : 12;
+      return L.divIcon({
+        html: `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size+14}" viewBox="0 0 ${size} ${size+14}">
+          <circle cx="${half}" cy="${half}" r="${half-2}" fill="${color}" stroke="#fff" stroke-width="2.5"/>
+          <text x="${half}" y="${half-5}" text-anchor="middle" dominant-baseline="middle"
+            font-family="Inter,system-ui,sans-serif" font-size="${fs}" font-weight="900" fill="#fff">${cntStr}</text>
+          <text x="${half}" y="${half+7}" text-anchor="middle" dominant-baseline="middle"
+            font-family="Inter,system-ui,sans-serif" font-size="9" font-weight="700" fill="rgba(255,255,255,0.9)">${uf}</text>
+          <polygon points="${half},${size+13} ${half-5},${size-1} ${half+5},${size-1}" fill="${color}"/>
+        </svg>`,
+        className: '',
+        iconSize: [size, size+14],
+        iconAnchor: [half, size+14],
+      });
+    }
+
+    function clearStatePins() {
+      statePinMarkers.forEach(m => map.removeLayer(m));
+      statePinMarkers = [];
+    }
+
+    function clearIndividualMarkers() {
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
+      markerByEventId = {};
+      activeIdx = -1;
+    }
+
+    function getStateCounts() {
+      const counts = {};
+      allEvents.forEach(ev => {
+        if (ev.stateUF) counts[ev.stateUF] = (counts[ev.stateUF] || 0) + 1;
+      });
+      return counts;
+    }
+
+    function renderStatePins() {
+      clearStatePins();
+      clearIndividualMarkers();
+      const counts = getStateCounts();
+      if (!Object.keys(counts).length) return;
+      Object.entries(counts).forEach(([uf, count]) => {
+        const coords = STATE_CENTROIDS[uf];
+        if (!coords) return;
+        const m = L.marker(coords, { icon: makeStatePinIcon(uf, count), zIndexOffset: 100 })
+          .addTo(map);
+        m.on('click', () => map.setView(coords, 7, { animate: true }));
+        statePinMarkers.push(m);
+      });
+      isDistantView = true;
+    }
+
     function filtered() {
       if (activeFilter === 'all') return allEvents;
       if (activeFilter === 'traffic') return allEvents.filter(e => e._type === 'traffic');
@@ -543,11 +701,69 @@
       return allEvents.filter(e => e.category === activeFilter);
     }
 
+    function filteredByBounds() {
+      const evs = filtered();
+      if (!map || isDistantView) return evs;
+      const bounds = map.getBounds();
+      return evs.filter(ev =>
+        ev.latitude != null && ev.longitude != null &&
+        bounds.contains([ev.latitude, ev.longitude])
+      );
+    }
+
+    function setSidebarCount(n) {
+      document.getElementById('sidebarTitle').textContent = `${n} evento${n !== 1 ? 's' : ''}`;
+      document.getElementById('sidebarBadge').textContent = n;
+    }
+
+    let _hoveredEvId = null;
+    function hoverMarker(i, entering) {
+      if (isDistantView) return;
+      const evs = filteredByBounds();
+      const ev = evs[i];
+      if (!ev || !ev.id) return;
+      const m = markerByEventId[ev.id];
+      if (!m) return;
+      if (entering) {
+        if (_hoveredEvId && _hoveredEvId !== ev.id) {
+          const prev = markerByEventId[_hoveredEvId];
+          if (prev) { prev.setIcon(_restoreIcon(prev._hovEvMeta)); prev.setZIndexOffset(0); }
+        }
+        const meta = getMeta(ev);
+        m._hovEvMeta = { emoji: meta.emoji, color: meta.color, drunkcheck: ev.category === 'drunkcheck', urgent: (ev.confirmations ?? 0) >= 3 };
+        const icon = ev.category === 'drunkcheck' ? makeLeiSecaIconHovered() : makeIconHovered(meta.emoji, meta.color);
+        m.setIcon(icon);
+        m.setZIndexOffset(1000);
+        _hoveredEvId = ev.id;
+      } else {
+        m.setIcon(_restoreIcon(m._hovEvMeta));
+        m.setZIndexOffset(0);
+        _hoveredEvId = null;
+      }
+    }
+    function _restoreIcon(meta) {
+      if (!meta) return makeIcon('📍', '#607D8B', false);
+      return meta.drunkcheck ? makeLeiSecaIcon() : makeIcon(meta.emoji, meta.color, meta.urgent);
+    }
+    window.__evHover = hoverMarker;
+
     function renderAll() {
       const evs = filtered();
-      updateCounts(evs.length);
-      renderMarkers(evs);
-      renderList(evs);
+      document.getElementById('navCount').textContent = `${allEvents.length} eventos ao vivo`;
+      if (!map || map.getZoom() <= DISTANT_ZOOM) {
+        clearIndividualMarkers();
+        renderStatePins();
+        isDistantView = true;
+        setSidebarCount(evs.length);
+        renderList(evs);
+      } else {
+        clearStatePins();
+        isDistantView = false;
+        renderMarkers(evs);
+        const visible = filteredByBounds();
+        setSidebarCount(visible.length);
+        renderList(visible);
+      }
     }
 
     function updateCounts(n) {
@@ -557,6 +773,7 @@
     }
 
     function renderMarkers(evs) {
+      clearStatePins();
       markers.forEach(m => map.removeLayer(m));
       markers = [];
       activeIdx = -1;
@@ -585,11 +802,9 @@
         const m = L.marker([ev.latitude, ev.longitude], { icon }).addTo(map);
         m.on('click', () => { selectItem(i); openModal(ev); });
         markers.push(m);
+        if (ev.id) markerByEventId[ev.id] = m;
       });
 
-      if (markers.length > 0) {
-        map.fitBounds(L.featureGroup(markers).getBounds().pad(0.2), { maxZoom: 13 });
-      }
     }
 
     function renderList(evs) {
@@ -630,7 +845,7 @@
           if (pills.length) statsHtml = `<div class="ev-stats-row">${pills.join('')}</div>`;
         }
 
-        parts.push(`<div class="ev-item" data-i="${i}" onclick="window.__evSel(${i})">
+        parts.push(`<div class="ev-item" data-i="${i}" onclick="window.__evSel(${i})" onmouseenter="window.__evHover(${i},true)" onmouseleave="window.__evHover(${i},false)">
           <div class="ev-icon" style="background:${meta.color}25">${meta.emoji}</div>
           <div class="ev-body">
             <div class="ev-name">${meta.label}${ev.title ? ' — ' + ev.title : ''}</div>
@@ -834,7 +1049,7 @@
 
       const evs = filtered();
       const ev = evs[i];
-      if (ev && markers[i]) {
+      if (ev?.latitude && ev?.longitude) {
         map.setView([ev.latitude, ev.longitude], 14, { animate: true });
       }
       if (ev) openModal(ev);
@@ -880,6 +1095,37 @@
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         subdomains: 'abcd', maxZoom: 19,
       }).addTo(map);
+
+      map.on('zoomend', () => {
+        const zoom = map.getZoom();
+        if (zoom <= DISTANT_ZOOM && !isDistantView) {
+          isDistantView = true;
+          clearIndividualMarkers();
+          renderStatePins();
+          const evs = filtered();
+          setSidebarCount(evs.length);
+          renderList(evs);
+        } else if (zoom > DISTANT_ZOOM && isDistantView) {
+          isDistantView = false;
+          clearStatePins();
+          renderMarkers(filtered());
+          const visible = filteredByBounds();
+          setSidebarCount(visible.length);
+          renderList(visible);
+        } else if (!isDistantView) {
+          const visible = filteredByBounds();
+          setSidebarCount(visible.length);
+          renderList(visible);
+        }
+      });
+
+      map.on('moveend', () => {
+        if (!isDistantView) {
+          const visible = filteredByBounds();
+          setSidebarCount(visible.length);
+          renderList(visible);
+        }
+      });
     }
 
     function locateUser() {
@@ -904,22 +1150,113 @@
     }
 
     // Filtros
-    document.querySelectorAll('.f-chip').forEach(btn => {
+    const btnClear = document.getElementById('btnClearFilter');
+    function updateClearBtn() {
+      btnClear.style.display = activeFilter !== 'all' ? 'inline-flex' : 'none';
+    }
+
+    document.querySelectorAll('.f-chip:not(#btnClearFilter)').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.f-chip').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         activeFilter = btn.dataset.type;
+        updateClearBtn();
         renderAll();
       });
+    });
+
+    btnClear.addEventListener('click', () => {
+      document.querySelectorAll('.f-chip').forEach(b => b.classList.remove('active'));
+      document.querySelector('.f-chip[data-type="all"]').classList.add('active');
+      activeFilter = 'all';
+      updateClearBtn();
+      renderAll();
     });
 
     // Refresh — dados já chegam em tempo real via onSnapshot; o botão apenas
     // re-renderiza a partir do estado mais recente (evita listeners duplicados).
     document.getElementById('btnRefresh').addEventListener('click', mergeAndRender);
 
+
+    function initBottomSheet() {
+      if (window.innerWidth > 700) return;
+
+      const sidebar  = document.querySelector('.sidebar');
+      const handle   = document.getElementById('sheetHandle');
+      const label    = document.getElementById('sheetMetaLabel');
+      const PEEK     = 72; // px visíveis quando fechado
+      let startY = 0, lastY = 0, startT = 0, dragging = false;
+
+      function collapsedT() { return sidebar.offsetHeight - PEEK; }
+
+      function expand() {
+        sidebar.style.transition = '';
+        sidebar.style.transform  = 'translateY(0)';
+        sidebar.classList.add('sheet-open');
+        label.textContent = 'Fechar lista';
+      }
+
+      function collapse() {
+        sidebar.style.transition = '';
+        sidebar.style.transform  = `translateY(${collapsedT()}px)`;
+        sidebar.classList.remove('sheet-open');
+        label.textContent = 'Ver eventos';
+      }
+
+      handle.addEventListener('touchstart', e => {
+        startY  = e.touches[0].clientY;
+        lastY   = startY;
+        dragging = false;
+        // captura posição atual do transform
+        const m = new DOMMatrix(window.getComputedStyle(sidebar).transform);
+        startT  = m.m42;
+        sidebar.style.transition = 'none';
+      }, { passive: true });
+
+      handle.addEventListener('touchmove', e => {
+        const y  = e.touches[0].clientY;
+        const dy = y - startY;
+        if (Math.abs(dy) > 6) dragging = true;
+        lastY = y;
+        const next = Math.max(0, Math.min(collapsedT(), startT + dy));
+        sidebar.style.transform = `translateY(${next}px)`;
+      }, { passive: true });
+
+      handle.addEventListener('touchend', () => {
+        sidebar.style.transition = '';
+        if (!dragging) {
+          sidebar.classList.contains('sheet-open') ? collapse() : expand();
+          return;
+        }
+        const dy = lastY - startY;
+        if (dy < -60) expand();
+        else if (dy > 60) collapse();
+        else sidebar.classList.contains('sheet-open') ? expand() : collapse();
+      });
+
+      // fallback para click (desktop narrow / simulador)
+      handle.addEventListener('click', () => {
+        if (dragging) return;
+        sidebar.classList.contains('sheet-open') ? collapse() : expand();
+      });
+
+      // atualiza label quando setSidebarCount é chamado
+      const origSet = setSidebarCount;
+      window.__setSidebarCountOrig = origSet;
+      setSidebarCount = n => {
+        origSet(n);
+        if (window.innerWidth <= 700)
+          label.textContent = sidebar.classList.contains('sheet-open')
+            ? 'Fechar lista'
+            : `${n} evento${n !== 1 ? 's' : ''} — toque para ver`;
+      };
+    }
+
     initMap();
+    requestAnimationFrame(() => map && map.invalidateSize());
     locateUser();
     loadEvents();
+    initBottomSheet();
 
     // Inicializa o ad fixo do rodapé da sidebar
     // (o <ins> já está no HTML estático; apenas dá o push)

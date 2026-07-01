@@ -18,6 +18,7 @@ interface BadgeInput {
   commentsPosted: number;
   points: number;
   favoritesCount: number;
+  longestStreak: number;
 }
 
 const BADGE_DEFS: Array<{
@@ -83,6 +84,34 @@ const BADGE_DEFS: Array<{
     label: 'Lenda',
     description: 'Acumulou 10.000 pontos. Lendário!',
     check: (i) => i.points >= 10000,
+  },
+  {
+    id: 'streak_3',
+    emoji: '🔥',
+    label: 'Ritmo',
+    description: 'Usou o app por 3 dias consecutivos.',
+    check: (i) => i.longestStreak >= 3,
+  },
+  {
+    id: 'streak_7',
+    emoji: '🔥',
+    label: 'Constante',
+    description: 'Usou o app por 7 dias consecutivos.',
+    check: (i) => i.longestStreak >= 7,
+  },
+  {
+    id: 'streak_30',
+    emoji: '🔥',
+    label: 'Inabalável',
+    description: 'Usou o app por 30 dias consecutivos — 1 mês seguido!',
+    check: (i) => i.longestStreak >= 30,
+  },
+  {
+    id: 'streak_100',
+    emoji: '🔥',
+    label: 'Imparável',
+    description: 'Usou o app por 100 dias consecutivos. Lendário!',
+    check: (i) => i.longestStreak >= 100,
   },
 ];
 

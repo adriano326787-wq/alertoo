@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-52XN3QT3EQ"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-52XN3QT3EQ');</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Alertoo — Alertas de trânsito em tempo real e descoberta de eventos perto de você. Veja blitz, acidentes, alagamentos e o que está rolando na sua cidade. Gratuito para Android e iOS." />
+  <meta name="description" content="Alertoo mostra alertas de trânsito, lei seca, acidentes, alagamentos, radares e eventos em tempo real. Busque sua cidade, veja o mapa ao vivo e baixe grátis no Android." />
   <meta name="keywords" content="alertas de trânsito, blitz, lei seca, blitz lei seca, lei seca hoje, festas perto de mim, baladas hoje, eventos hoje, o que fazer hoje, acidente, alagamento, mapa colaborativo, alertoo" />
   <meta name="theme-color" content="#FF5722" />
   <meta name="robots" content="index, follow" />
@@ -20,7 +22,7 @@
 
   <!-- Open Graph -->
   <meta property="og:title" content="Alertoo — Alertas e Eventos em Tempo Real" />
-  <meta property="og:description" content="Veja blitz, acidentes, alagamentos e eventos perto de você. Reporte em 1 toque. Gratuito para Android e iOS." />
+  <meta property="og:description" content="Busque alertas na sua cidade, veja o mapa ao vivo e receba avisos de trânsito e eventos pelo Alertoo." />
   <meta property="og:image" content="https://alertoo.com.br/feature-graphic-1024x500.png" />
   <meta property="og:url" content="https://alertoo.com.br/" />
   <meta property="og:type" content="website" />
@@ -29,7 +31,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Alertoo — Alertas e Eventos em Tempo Real" />
-  <meta name="twitter:description" content="Alertas de trânsito colaborativos e eventos perto de você. Gratuito." />
+  <meta name="twitter:description" content="Alertas colaborativos de trânsito, lei seca, acidentes, alagamentos, radares e eventos em tempo real." />
   <meta name="twitter:image" content="https://alertoo.com.br/feature-graphic-1024x500.png" />
 
   <!-- Structured Data: SoftwareApplication -->
@@ -45,8 +47,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
     "url": "https://alertoo.com.br",
     "downloadUrl": "https://play.google.com/store/apps/details?id=com.alertoo.app",
-    "installUrl": "https://play.google.com/store/apps/details?id=com.alertoo.app",
-    "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.5", "ratingCount": "120" }
+    "installUrl": "https://play.google.com/store/apps/details?id=com.alertoo.app"
   }
   </script>
 
@@ -78,7 +79,7 @@
   }
   </script>
 
-  <title>Alertoo — Alertas de Trânsito e Eventos em Tempo Real</title>
+  <title>Alertoo — Alertas de Trânsito, Lei Seca e Eventos em Tempo Real</title>
 
   <link rel="icon" href="/icon.png" type="image/png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -142,7 +143,7 @@
       </div>
     </div>
     <a class="btn-account js-account-link" id="navAccount" href="/conta" data-i18n="nav.account">👤 Entrar</a>
-    <a class="btn-download" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" data-i18n="nav.download">
+    <a class="btn-download" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" data-i18n="nav.download" onclick="trackPlayStoreClick('nav')">
       ▶ Baixar agora
     </a>
     <button class="nav-hamburger" id="hamburger" aria-label="Menu">
@@ -173,14 +174,46 @@
     <h1 data-i18n-html="hero.h1">Alertas em<br /><span>tempo real.</span><br />Sua cidade viva.</h1>
     <p data-i18n="hero.p">Veja blitz, acidentes, alagamentos e eventos perto de você. Reporte em 1 toque e ajude quem está na estrada agora.</p>
     <div class="hero-ctas">
-      <a class="btn-primary" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" data-i18n-html="hero.googlePlay">
+      <a class="btn-primary" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" data-i18n-html="hero.googlePlay" onclick="trackPlayStoreClick('hero')">
         ▶ &nbsp;Baixar no Google Play
       </a>
+      <a class="btn-secondary" href="#eventos" onclick="trackEvent('hero_live_click')">
+        Ver alertas agora
+      </a>
       <div class="btn-ios-soon">
-        🍎 &nbsp;App Store
+        App Store
         <span class="ios-soon-badge" data-i18n="hero.iosSoon">Em breve</span>
       </div>
     </div>
+
+    <!-- Busca de alertas por cidade/categoria -->
+    <div class="city-search-wrap">
+      <div class="city-search-box">
+        <span class="city-search-icon">🔎</span>
+        <input
+          type="text"
+          id="citySearchInput"
+          class="city-search-input"
+          autocomplete="off"
+          data-i18n-placeholder="search.placeholder"
+          placeholder="Buscar alertas na sua cidade — ex: lei seca Niterói"
+        />
+      </div>
+      <div id="citySearchResults" class="city-search-results"></div>
+      <div class="city-search-suggestions" aria-label="Sugestoes populares">
+        <a href="/lei-seca/rio-de-janeiro" onclick="trackEvent('hero_quick_search', {target: 'lei-seca-rj'})">Lei Seca RJ</a>
+        <a href="/acidentes/sao-paulo" onclick="trackEvent('hero_quick_search', {target: 'acidentes-sp'})">Acidentes SP</a>
+        <a href="/alagamentos/niteroi" onclick="trackEvent('hero_quick_search', {target: 'alagamentos-niteroi'})">Alagamentos Niteroi</a>
+        <a href="/festas-e-eventos" onclick="trackEvent('hero_quick_search', {target: 'eventos'})">Eventos hoje</a>
+      </div>
+    </div>
+
+    <div class="hero-pulse-panel" aria-label="Como o Alertoo funciona ao vivo">
+      <div><strong>1 toque</strong><span>para reportar</span></div>
+      <div><strong>5 km</strong><span>de alertas perto de voce</span></div>
+      <div><strong>Comunidade</strong><span>confirma o que esta acontecendo</span></div>
+    </div>
+
     <div class="hero-screenshots fade-in">
       <img src="/screenshots/01-mapa.webp" alt="Mapa em tempo real" loading="lazy" data-i18n-alt="hero.alt.map" />
       <img src="/screenshots/03-eventos.webp" alt="Eventos perto de você" loading="lazy" data-i18n-alt="hero.alt.events" />
@@ -241,8 +274,13 @@
             <p data-i18n="events.loading">Carregando eventos...</p>
           </div>
           <div id="liveMapEmpty" class="live-map-empty" style="display:none">
-            <span>📍</span>
-            <p data-i18n="events.empty">Nenhum evento ativo.</p>
+            <span>Mapa pronto</span>
+            <p data-i18n="events.empty">Nenhum alerta ativo agora. Explore as categorias ou baixe o app para receber quando surgir algo perto de voce.</p>
+            <div class="live-map-empty-actions">
+              <a href="/lei-seca">Lei Seca</a>
+              <a href="/acidentes">Acidentes</a>
+              <a href="/radares">Radares</a>
+            </div>
           </div>
         </div>
       </div>
@@ -273,144 +311,169 @@
   <!-- FEATURES -->
   <section class="features" id="features">
     <div class="section-header center fade-in">
-      <div class="section-label" data-i18n="features.label">Recursos</div>
-      <h2 class="section-title" data-i18n-html="features.title">Tudo que você precisa<br />na palma da mão</h2>
-      <p class="section-sub" data-i18n="features.sub">Do mapa colaborativo ao modo motorista com GPS — o Alertoo tem o que importa para quem está na estrada.</p>
+      <div class="section-label" data-i18n="features.label">Explore por categoria</div>
+      <h2 class="section-title" data-i18n-html="features.title">Entre pelo que importa<br />agora na sua cidade</h2>
+      <p class="section-sub" data-i18n="features.sub">Cada card leva para uma area viva do Alertoo: alertas, mapa, comunidade e descoberta local.</p>
     </div>
-    <div class="features-grid">
-      <div class="feature-card fade-in">
-        <div class="feature-icon">🗺️</div>
-        <h3 data-i18n="feature1.title">Mapa em Tempo Real</h3>
-        <p data-i18n="feature1.p">Pins coloridos por categoria — blitz, acidente, alagamento, obra. Entenda a situação do trânsito em 1 segundo.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">🚦</div>
-        <h3 data-i18n="feature2.title">Reporte em 1 Toque</h3>
-        <p data-i18n="feature2.p">Reporte uma blitz ou um acidente em segundos. Sua localização só é usada com o app aberto — nunca em segundo plano.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">🎉</div>
-        <h3 data-i18n="feature3.title">Eventos perto de você</h3>
-        <p data-i18n="feature3.p">Festas, shows, bares, restaurantes e festivais aparecem no mapa. Descubra o que está rolando na sua cidade hoje.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">🧭</div>
-        <h3 data-i18n="feature4.title">Navegação GPS</h3>
-        <p data-i18n="feature4.p">Modo motorista com TTS (voz), alertas ao longo da rota e navegação turn-by-turn integrada ao Google Maps e Waze.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">🔔</div>
-        <h3 data-i18n="feature5.title">Notificações Inteligentes</h3>
-        <p data-i18n="feature5.p">Receba alertas quando um evento aparecer no seu raio de 5 km. Salve rotas e seja notificado de eventos no seu corredor.</p>
-      </div>
-      <div class="feature-card fade-in">
-        <div class="feature-icon">🏆</div>
-        <h3 data-i18n="feature6.title">Ranking e Conquistas</h3>
-        <p data-i18n="feature6.p">Acumule pontos reportando eventos e ganhe badges. Veja seu rank no leaderboard da sua cidade.</p>
-      </div>
+    <div class="category-grid">
+      <a class="category-card cat-dui fade-in" href="/lei-seca" onclick="trackEvent('category_card_click', {category: 'lei-seca'})">
+        <span class="category-kicker">Transito</span>
+        <div class="category-icon">🚔</div>
+        <h3>Lei Seca</h3>
+        <p>Veja alertas reportados pela comunidade e acompanhe pontos criticos por cidade.</p>
+        <strong>Ver alertas</strong>
+      </a>
+      <a class="category-card cat-accident fade-in" href="/acidentes" onclick="trackEvent('category_card_click', {category: 'acidentes'})">
+        <span class="category-kicker">Agora</span>
+        <div class="category-icon">🚨</div>
+        <h3>Acidentes</h3>
+        <p>Entenda rapidamente onde ha ocorrencias e evite perder tempo no caminho.</p>
+        <strong>Consultar mapa</strong>
+      </a>
+      <a class="category-card cat-flood fade-in" href="/alagamentos" onclick="trackEvent('category_card_click', {category: 'alagamentos'})">
+        <span class="category-kicker">Clima</span>
+        <div class="category-icon">🌧️</div>
+        <h3>Alagamentos</h3>
+        <p>Monitore ruas e regioes com risco para decidir a melhor rota antes de sair.</p>
+        <strong>Explorar regioes</strong>
+      </a>
+      <a class="category-card cat-radar fade-in" href="/radares" onclick="trackEvent('category_card_click', {category: 'radares'})">
+        <span class="category-kicker">Rota</span>
+        <div class="category-icon">📷</div>
+        <h3>Radares</h3>
+        <p>Consulte pontos de atencao e use o app para receber alertas perto de voce.</p>
+        <strong>Ver radares</strong>
+      </a>
+      <a class="category-card cat-events fade-in" href="/festas-e-eventos" onclick="trackEvent('category_card_click', {category: 'eventos'})">
+        <span class="category-kicker">Cidade</span>
+        <div class="category-icon">🎉</div>
+        <h3>Eventos</h3>
+        <p>Descubra festas, shows, bares e movimentos acontecendo perto de voce.</p>
+        <strong>Ver eventos</strong>
+      </a>
+      <a class="category-card cat-app fade-in" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" onclick="trackPlayStoreClick('category_grid')">
+        <span class="category-kicker">App gratis</span>
+        <div class="category-icon">🔔</div>
+        <h3>Receba alertas</h3>
+        <p>Baixe o app e seja avisado quando algo surgir no seu raio de 5 km.</p>
+        <strong>Baixar agora</strong>
+      </a>
+    </div>
+  </section>
+
+  <section class="mid-cta-section">
+    <div>
+      <span>Alertoo ao vivo</span>
+      <h2>Procure sua cidade ou veja o mapa completo.</h2>
+      <p>O usuario nao precisa esperar baixar o app para entender o valor: ele explora, encontra uma categoria e decide participar.</p>
+    </div>
+    <div class="mid-cta-actions">
+      <a class="btn-primary" href="#eventos" onclick="trackEvent('mid_cta_live')">Ver mapa ao vivo</a>
+      <a class="btn-secondary" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" onclick="trackPlayStoreClick('mid_cta')">Baixar app</a>
     </div>
   </section>
 
   <!-- HOW IT WORKS -->
   <section class="how" id="como-funciona">
-    <div style="max-width:900px; margin:0 auto;">
-      <div class="section-header fade-in">
+    <div class="journey-wrap">
+      <div class="section-header center fade-in">
         <div class="section-label" data-i18n="how.label">Como funciona</div>
-        <h2 class="section-title" data-i18n="how.title">Simples assim.</h2>
-        <p class="section-sub" data-i18n="how.sub">Sem cadastro complicado, sem rastreamento em segundo plano. Só você e a estrada.</p>
+        <h2 class="section-title" data-i18n="how.title">Uma jornada simples, feita para movimento.</h2>
+        <p class="section-sub" data-i18n="how.sub">Do primeiro alerta ate a confirmacao da comunidade, tudo precisa ser rapido, claro e acionavel.</p>
       </div>
-      <div class="steps">
-        <div class="step fade-in">
-          <div class="step-num">1</div>
-          <div class="step-content">
-            <h3 data-i18n="step1.title">Abra o mapa</h3>
-            <p data-i18n="step1.p">Ao abrir o app, o mapa carrega automaticamente os eventos próximos à sua localização. Nenhuma configuração necessária.</p>
-          </div>
+      <div class="journey-grid">
+        <div class="journey-card fade-in">
+          <div class="journey-num">01</div>
+          <h3>Veja no mapa</h3>
+          <p>Abra o Alertoo e veja o que esta acontecendo perto de voce por categoria, cidade e distancia.</p>
         </div>
-        <div class="step fade-in">
-          <div class="step-num">2</div>
-          <div class="step-content">
-            <h3 data-i18n="step2.title">Toque para reportar</h3>
-            <p data-i18n="step2.p">Tocou no mapa → escolhe o tipo do evento → confirmou. Em menos de 10 segundos o alerta aparece para todos os usuários perto.</p>
-          </div>
+        <div class="journey-card fade-in">
+          <div class="journey-num">02</div>
+          <h3>Reporte em 1 toque</h3>
+          <p>Encontrou blitz, acidente, alagamento ou evento? Publique rapido e ajude quem esta na rota.</p>
         </div>
-        <div class="step fade-in">
-          <div class="step-num">3</div>
-          <div class="step-content">
-            <h3 data-i18n="step3.title">Ganhe pontos e ajude a comunidade</h3>
-            <p data-i18n="step3.p">Cada reporte confirmado pela comunidade vale pontos. Suba no ranking, desbloqueie badges e vire referência da sua cidade.</p>
-          </div>
+        <div class="journey-card fade-in">
+          <div class="journey-num">03</div>
+          <h3>A comunidade confirma</h3>
+          <p>Outros usuarios validam o alerta, aumentam a confianca e deixam a informacao mais util.</p>
+        </div>
+        <div class="journey-card fade-in">
+          <div class="journey-num">04</div>
+          <h3>Voce recebe alertas</h3>
+          <p>Com o app, notificacoes chegam quando algo aparece no seu raio ou na cidade que voce acompanha.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- AD UNIT 2 — Responsivo entre seções -->
-  <div class="ad-unit" style="background:var(--dark2); padding: 12px 5%;">
-    <div class="ad-unit-label" data-i18n="ad.label">Publicidade</div>
-    <ins class="adsbygoogle"
-         style="display:block"
-         data-ad-client="ca-pub-4349309505537394"
-         data-ad-format="auto"
-         data-full-width-responsive="true"></ins>
-    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-  </div>
+  <section class="community-proof-section">
+    <div class="community-proof-inner">
+      <div class="community-copy fade-in">
+        <div class="section-label">Comunidade</div>
+        <h2>Quanto mais gente participa, mais util o Alertoo fica.</h2>
+        <p>O site precisa mostrar esse ciclo: reportar, confirmar, ganhar pontos e proteger a rota de outras pessoas.</p>
+        <a class="btn-primary" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" onclick="trackPlayStoreClick('community_section')">Entrar na comunidade</a>
+      </div>
+      <div class="community-metrics fade-in">
+        <div><strong>+10 pts</strong><span>por reporte criado</span></div>
+        <div><strong>+5 pts</strong><span>por confirmacao recebida</span></div>
+        <div><strong>Ranks</strong><span>para reconhecer quem ajuda</span></div>
+        <div><strong>Streak</strong><span>para voltar todos os dias</span></div>
+      </div>
+    </div>
+  </section>
 
   <!-- SCREENSHOTS -->
-  <section class="screenshots-section" id="screenshots" style="padding-bottom:0;">
+  <section class="screenshots-section" id="screenshots">
     <div class="section-header center fade-in" style="padding:0 5%;">
-      <div class="section-label" data-i18n="screenshots.label">Screenshots</div>
-      <h2 class="section-title" data-i18n="screenshots.title">Veja como é</h2>
-      <p class="section-sub" style="margin:0 auto;" data-i18n="screenshots.sub">Interface limpa, rápida e pensada para uso no volante.</p>
+      <div class="section-label" data-i18n="screenshots.label">Por dentro do app</div>
+      <h2 class="section-title" data-i18n="screenshots.title">Cada tela resolve uma decisao.</h2>
+      <p class="section-sub" style="margin:0 auto;" data-i18n="screenshots.sub">Mapa, reporte, eventos e comunidade aparecem como uma experiencia continua, nao como telas soltas.</p>
     </div>
-    <div class="screenshots-scroll">
-      <img src="/screenshots/01-mapa.webp" alt="Mapa" loading="lazy" />
-      <img src="/screenshots/02-reportar.webp" alt="Reportar evento" loading="lazy" />
-      <img src="/screenshots/03-eventos.webp" alt="Eventos" loading="lazy" />
-      <img src="/screenshots/04-comunidade.webp" alt="Comunidade" loading="lazy" />
-      <img src="/screenshots/05-promover.webp" alt="Promover evento" loading="lazy" />
+    <div class="screenshots-showcase">
+      <article class="shot-card fade-in">
+        <img src="/screenshots/01-mapa.webp" alt="Mapa em tempo real" loading="lazy" />
+        <div><span>Mapa</span><h3>Veja tudo perto de voce</h3><p>Alertas por categoria e distancia, com foco em decisao rapida.</p></div>
+      </article>
+      <article class="shot-card fade-in">
+        <img src="/screenshots/02-reportar.webp" alt="Reportar evento" loading="lazy" />
+        <div><span>Reporte</span><h3>Publique em segundos</h3><p>Menos friccao para transformar usuario em colaborador.</p></div>
+      </article>
+      <article class="shot-card fade-in">
+        <img src="/screenshots/03-eventos.webp" alt="Eventos perto de voce" loading="lazy" />
+        <div><span>Descoberta</span><h3>Encontre o que esta rolando</h3><p>Eventos e entretenimento tornam o app util alem do transito.</p></div>
+      </article>
+      <article class="shot-card fade-in">
+        <img src="/screenshots/04-comunidade.webp" alt="Comunidade e ranking" loading="lazy" />
+        <div><span>Comunidade</span><h3>Ganhe pontos e reputacao</h3><p>Ranking, badges e sequencia diaria criam motivo para voltar.</p></div>
+      </article>
     </div>
   </section>
 
-  <!-- TESTIMONIALS -->
-  <section class="testimonials" id="depoimentos">
+  <!-- TRUST -->
+  <section class="trust-section" id="confianca">
     <div class="section-header center fade-in">
-      <div class="section-label" data-i18n="testimonials.label">Depoimentos</div>
-      <h2 class="section-title" data-i18n="testimonials.title">O que os usuários dizem</h2>
+      <div class="section-label">Confiança</div>
+      <h2 class="section-title">Informação útil, sem promessa vazia.</h2>
+      <p class="section-sub">O Alertoo deve ganhar confiança com clareza: uso gratuito, privacidade simples, comunidade ativa e caminhos transparentes para verificar alertas.</p>
     </div>
-    <div class="testimonials-grid">
-      <div class="testimonial-card fade-in">
-        <div class="testimonial-stars">★★★★★</div>
-        <p class="testimonial-text" data-i18n="test1.text">"Evitei três blitz na semana passada. O app avisa com antecedência suficiente para desviar. Indispensável!"</p>
-        <div class="testimonial-author">
-          <div class="testimonial-avatar">R</div>
-          <div>
-            <div class="testimonial-name" data-i18n="test1.name">Rafael M.</div>
-            <div class="testimonial-city" data-i18n="test1.city">São Paulo, SP</div>
-          </div>
-        </div>
+    <div class="trust-grid">
+      <div class="trust-card fade-in"><span>100%</span><h3>Gratuito para usar</h3><p>O usuário pode explorar o mapa, buscar páginas locais e baixar o app sem assinatura obrigatória.</p></div>
+      <div class="trust-card fade-in"><span>Ao vivo</span><h3>Mapa em tempo real</h3><p>Os alertas ativos aparecem no mapa e a home deixa claro quando não há eventos naquela categoria.</p></div>
+      <div class="trust-card fade-in"><span>Privacidade</span><h3>Localização sob controle</h3><p>A comunicação do site reforça que a localização é usada para entregar alertas próximos, com transparência para o usuário.</p></div>
+      <div class="trust-card fade-in"><span>Comunidade</span><h3>Reportes e confirmações</h3><p>O valor cresce quando usuários reportam, confirmam e ajudam outras pessoas a decidir melhor a rota.</p></div>
+    </div>
+    <div class="seo-links-panel">
+      <div>
+        <strong>Buscas populares</strong>
+        <p>Links internos ajudam o usuário e reforçam as páginas que queremos posicionar no Google.</p>
       </div>
-      <div class="testimonial-card fade-in">
-        <div class="testimonial-stars">★★★★★</div>
-        <p class="testimonial-text" data-i18n="test2.text">"Uso todo dia no caminho pro trabalho. Os alertas de alagamento me salvaram várias vezes no inverno."</p>
-        <div class="testimonial-author">
-          <div class="testimonial-avatar">C</div>
-          <div>
-            <div class="testimonial-name" data-i18n="test2.name">Carla S.</div>
-            <div class="testimonial-city" data-i18n="test2.city">Rio de Janeiro, RJ</div>
-          </div>
-        </div>
-      </div>
-      <div class="testimonial-card fade-in">
-        <div class="testimonial-stars">★★★★★</div>
-        <p class="testimonial-text" data-i18n="test3.text">"Descobri um show incrível pelo Alertoo. A parte de eventos é fantástica — fica sabendo de tudo que rola na cidade."</p>
-        <div class="testimonial-author">
-          <div class="testimonial-avatar">L</div>
-          <div>
-            <div class="testimonial-name" data-i18n="test3.name">Lucas P.</div>
-            <div class="testimonial-city" data-i18n="test3.city">Belo Horizonte, MG</div>
-          </div>
-        </div>
+      <div class="seo-links">
+        <a href="/lei-seca/rio-de-janeiro" onclick="trackEvent('seo_link_click', {target:'lei-seca-rj'})">Lei Seca RJ</a>
+        <a href="/acidentes/sao-paulo" onclick="trackEvent('seo_link_click', {target:'acidentes-sp'})">Acidentes SP</a>
+        <a href="/alagamentos/niteroi" onclick="trackEvent('seo_link_click', {target:'alagamentos-niteroi'})">Alagamentos Niterói</a>
+        <a href="/radares/sao-paulo" onclick="trackEvent('seo_link_click', {target:'radares-sp'})">Radares SP</a>
+        <a href="/festas-e-eventos/rio-de-janeiro" onclick="trackEvent('seo_link_click', {target:'eventos-rj'})">Eventos RJ</a>
       </div>
     </div>
   </section>
@@ -418,24 +481,60 @@
   <!-- RANKING -->
   <section class="ranking-section">
     <div class="section-header center fade-in">
-      <div class="section-label" data-i18n="ranking.label">Gamificação</div>
-      <h2 class="section-title" data-i18n-html="ranking.title">Suba de rank.<br />Seja reconhecido.</h2>
-      <p class="section-sub" data-i18n="ranking.sub">Quanto mais você contribui, mais pontos acumula e mais alto você sobe no ranking.</p>
+      <div class="section-label" data-i18n="ranking.label">Gamificacao</div>
+      <h2 class="section-title" data-i18n-html="ranking.title">Ajude a cidade.<br />Ganhe reconhecimento.</h2>
+      <p class="section-sub" data-i18n="ranking.sub">Pontos, ranks e badges deixam claro que contribuir tem retorno dentro da comunidade.</p>
     </div>
-    <div class="ranks-grid">
+    <div class="engagement-grid">
+      <div class="engagement-card fade-in"><span>🚨</span><h3>Reportar</h3><p>Crie alertas uteis em poucos segundos e ganhe pontos pela contribuicao.</p></div>
+      <div class="engagement-card fade-in"><span>✅</span><h3>Confirmar</h3><p>Valide alertas de outras pessoas e aumente a confianca da informacao.</p></div>
+      <div class="engagement-card fade-in"><span>🏆</span><h3>Subir de rank</h3><p>Quanto mais ajuda, mais visibilidade ganha no ranking da cidade.</p></div>
+      <div class="engagement-card fade-in"><span>🔥</span><h3>Voltar todo dia</h3><p>Sequencias e badges criam o habito de abrir o app antes de sair.</p></div>
+    </div>
+    <div class="ranks-grid compact-ranks">
       <div class="rank-card fade-in"><span class="rank-emoji">🌱</span><div class="rank-name" data-i18n="rank1">Iniciante</div><div class="rank-pts">0 pts</div></div>
       <div class="rank-card fade-in"><span class="rank-emoji">🔵</span><div class="rank-name" data-i18n="rank2">Explorador</div><div class="rank-pts">100 pts</div></div>
-      <div class="rank-card fade-in"><span class="rank-emoji">🟢</span><div class="rank-name" data-i18n="rank3">Colaborador</div><div class="rank-pts">500 pts</div></div>
-      <div class="rank-card fade-in"><span class="rank-emoji">🟡</span><div class="rank-name" data-i18n="rank4">Guardião</div><div class="rank-pts">1.000 pts</div></div>
-      <div class="rank-card fade-in"><span class="rank-emoji">🟠</span><div class="rank-name" data-i18n="rank5">Especialista</div><div class="rank-pts">2.500 pts</div></div>
-      <div class="rank-card fade-in"><span class="rank-emoji">🔴</span><div class="rank-name" data-i18n="rank6">Mestre</div><div class="rank-pts">5.000 pts</div></div>
-      <div class="rank-card fade-in" style="border-color:rgba(255,87,34,0.3);">
-        <span class="rank-emoji">💎</span><div class="rank-name" data-i18n="rank7">Lenda</div><div class="rank-pts" style="color:var(--brand);">10.000 pts</div>
-      </div>
+      <div class="rank-card fade-in"><span class="rank-emoji">🟣</span><div class="rank-name" data-i18n="rank3">Veterano</div><div class="rank-pts">500 pts</div></div>
+      <div class="rank-card fade-in"><span class="rank-emoji">🟠</span><div class="rank-name" data-i18n="rank4">Guardiao</div><div class="rank-pts">1.000 pts</div></div>
+      <div class="rank-card fade-in"><span class="rank-emoji">🏆</span><div class="rank-name" data-i18n="rank5">Lenda</div><div class="rank-pts">5.000 pts</div></div>
+    </div>
+    <div class="cta-group">
+      <a class="btn-primary" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" onclick="trackPlayStoreClick('ranking_section')">Comecar a pontuar</a>
+      <a class="btn-secondary" href="#screenshots" onclick="trackEvent('ranking_screenshots_click')">Ver telas do app</a>
+    </div>
+  </section>
+
+  <!-- STREAK DIÁRIO -->
+  <section class="streak-promo-section">
+    <div class="section-header center fade-in">
+      <div class="section-label" data-i18n="streak.label">🔥 Sequência diária</div>
+      <h2 class="section-title" data-i18n-html="streak.title">Use todo dia.<br />Vire uma lenda.</h2>
+      <p class="section-sub" data-i18n="streak.sub">Cada dia que você reporta, confirma ou comenta conta pra sua sequência. Quanto mais dias seguidos, mais distintivos você desbloqueia.</p>
+    </div>
+    <div class="streak-badges-grid">
+      <div class="streak-badge-card fade-in"><span class="streak-badge-emoji">🔥</span><div class="streak-badge-name" data-i18n="streak.badge3">Ritmo</div><div class="streak-badge-days">3 dias</div></div>
+      <div class="streak-badge-card fade-in"><span class="streak-badge-emoji">🔥</span><div class="streak-badge-name" data-i18n="streak.badge7">Constante</div><div class="streak-badge-days">7 dias</div></div>
+      <div class="streak-badge-card fade-in"><span class="streak-badge-emoji">🔥</span><div class="streak-badge-name" data-i18n="streak.badge30">Inabalável</div><div class="streak-badge-days">30 dias</div></div>
+      <div class="streak-badge-card fade-in" style="border-color:rgba(255,87,34,0.3);"><span class="streak-badge-emoji">🔥</span><div class="streak-badge-name" data-i18n="streak.badge100">Imparável</div><div class="streak-badge-days" style="color:var(--brand);">100 dias</div></div>
+    </div>
+    <div class="cta-group" style="margin-top:32px;">
+      <a class="btn-primary" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" onclick="trackPlayStoreClick('streak_section')" data-i18n="streak.cta">▶ Começar minha sequência</a>
     </div>
   </section>
 
   <!-- iOS EM BREVE -->
+  <div class="city-alert-section" id="avisar-cidade">
+    <div class="ios-badge-big">🔔 Alertas locais</div>
+    <h2 data-i18n="cityAlert.h2">Avise-me sobre a minha cidade.</h2>
+    <p data-i18n="cityAlert.p">Deixe seu e-mail e sua cidade — avisamos quando surgir um alerta novo de lei seca, acidente, alagamento ou radar perto de você.</p>
+    <form class="notify-form" onsubmit="handleCityAlertSignup(event)">
+      <input class="notify-input" type="email" placeholder="seu@email.com" required id="cityAlertEmail" data-i18n-placeholder="cityAlert.emailPlaceholder" />
+      <input class="notify-input" type="text" placeholder="Sua cidade (ex: Niterói)" required id="cityAlertCity" data-i18n-placeholder="cityAlert.cityPlaceholder" />
+      <button class="notify-btn" type="submit" data-i18n="cityAlert.btn">Avisar 🔔</button>
+    </form>
+    <p id="cityAlertMsg" data-i18n="cityAlert.success" style="margin-top:16px; font-size:14px; color:#FFAB91; display:none;">✅ Pronto! Você vai receber novidades da sua cidade.</p>
+  </div>
+
   <div class="ios-section">
     <div class="ios-badge-big">🍎 iOS</div>
     <h2 data-i18n="ios.h2">Chegando no iPhone em breve.</h2>
@@ -445,6 +544,18 @@
       <button class="notify-btn" type="submit" data-i18n="ios.btn">Me avise! 🔔</button>
     </form>
     <p id="notifyMsg" data-i18n="ios.success" style="margin-top:16px; font-size:14px; color:#FFAB91; display:none;">✅ Ótimo! Você será notificado assim que chegar.</p>
+  </div>
+
+  <!-- PROGRAMA DE TESTES (closed testing — Google Play) -->
+  <div class="beta-section">
+    <div class="ios-badge-big">🧪 Programa de testes</div>
+    <h2 data-i18n="beta.h2">Quer testar as novidades antes de todo mundo?</h2>
+    <p data-i18n="beta.p">Entre no nosso grupo de testers do Google Play e tenha acesso a recursos novos em primeira mão. Use o e-mail da sua conta Google (Gmail) — é o que o Play usa para liberar o acesso.</p>
+    <form class="notify-form" onsubmit="handleBetaSignup(event)">
+      <input class="notify-input" type="email" placeholder="seuemail@gmail.com" required id="betaEmail" data-i18n-placeholder="beta.placeholder" />
+      <button class="notify-btn" type="submit" data-i18n="beta.btn">Quero testar 🚀</button>
+    </form>
+    <p id="betaMsg" style="margin-top:16px; font-size:14px; color:#FFAB91; display:none;" data-i18n="beta.success">✅ Recebemos seu e-mail! Em breve você recebe o convite para entrar no programa de testes.</p>
   </div>
 
   <!-- FAQ -->
@@ -508,7 +619,7 @@
     <h2 data-i18n="cta.title">Baixe grátis agora.</h2>
     <p data-i18n="cta.sub">Disponível para Android. iOS chegando em breve.</p>
     <div class="cta-badges">
-      <a class="badge-store" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" aria-label="Baixar Alertoo no Google Play">
+      <a class="badge-store" href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" aria-label="Baixar Alertoo no Google Play" onclick="trackPlayStoreClick('cta_section')">
         <span class="badge-store-icon">▶</span>
         <div class="badge-store-text">
           <small data-i18n="cta.available">Disponível no</small>
@@ -523,6 +634,11 @@
         </div>
       </a>
     </div>
+    <a class="whatsapp-share-btn" target="_blank" rel="noopener"
+       href="https://wa.me/?text=Tô%20usando%20o%20Alertoo%20pra%20saber%20de%20blitz%2C%20acidentes%20e%20alagamentos%20em%20tempo%20real.%20Baixa%20também%3A%20https%3A%2F%2Falertoo.com.br"
+       onclick="trackEvent('whatsapp_share')" data-i18n="cta.whatsapp">
+      💬 Compartilhar no WhatsApp
+    </a>
   </section>
 
   <!-- FOOTER -->
@@ -539,7 +655,7 @@
         <h4 data-i18n="footer.app">App</h4>
         <a href="#features" data-i18n="footer.features">Recursos</a>
         <a href="#como-funciona" data-i18n="footer.how">Como funciona</a>
-        <a href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank">▶ Google Play</a>
+        <a href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" onclick="trackPlayStoreClick('footer')">▶ Google Play</a>
         <a href="/conta" data-i18n="footer.account">👤 Minha Conta</a>
         <a href="#" style="opacity:0.4;pointer-events:none;" data-i18n="footer.iosSoon">🍎 App Store (em breve)</a>
         <a href="/sobre" data-i18n="footer.about">Sobre o Alertoo</a>
@@ -629,6 +745,60 @@
     });
     function closeMobileMenu() { mobileMenu.classList.remove('open'); }
 
+    // ── Busca de alertas por cidade/categoria ───────────────────────
+    // Índice estático (gerado a partir das páginas reais — ver search-index.json)
+    // pra nunca linkar uma URL que não existe.
+    (function initCitySearch() {
+      const input = document.getElementById('citySearchInput');
+      const resultsBox = document.getElementById('citySearchResults');
+      if (!input || !resultsBox) return;
+
+      let index = [];
+      fetch('/search-index.json').then(r => r.json()).then(data => { index = data; }).catch(() => {});
+
+      const normalize = (s) => s
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, ''); // remove acentos
+
+      function search(query) {
+        const q = normalize(query.trim());
+        if (!q) return [];
+        const terms = q.split(/\s+/).filter(Boolean);
+        return index
+          .filter((item) => {
+            const haystack = normalize(`${item.label} ${item.city}`);
+            return terms.every((t) => haystack.includes(t));
+          })
+          .slice(0, 8);
+      }
+
+      function render(matches, query) {
+        if (!query.trim()) { resultsBox.classList.remove('open'); resultsBox.innerHTML = ''; return; }
+        if (matches.length === 0) {
+          resultsBox.innerHTML = `<div class="city-search-empty">Nenhuma página local encontrada — <a href="/eventos" style="color:var(--brand);">veja o mapa completo</a>.</div>`;
+        } else {
+          resultsBox.innerHTML = matches.map((m) =>
+            `<a class="city-search-result" href="${m.url}" onclick="trackEvent('city_search_click', {query: '${query.replace(/'/g, '')}', target: '${m.url}'})">
+              <span>${m.emoji}</span> ${m.label} <small>— ${m.city}</small>
+            </a>`
+          ).join('');
+        }
+        resultsBox.classList.add('open');
+      }
+
+      input.addEventListener('input', () => render(search(input.value), input.value));
+      input.addEventListener('focus', () => { if (input.value.trim()) render(search(input.value), input.value); });
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.city-search-wrap')) resultsBox.classList.remove('open');
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const first = resultsBox.querySelector('.city-search-result');
+          if (first) { trackEvent('city_search_enter', { query: input.value }); first.click(); }
+        }
+      });
+    })();
+
     // ── FAQ accordion ──────────────────────────────────────────────
     function toggleFaq(btn) {
       const item = btn.parentElement;
@@ -637,6 +807,29 @@
       if (!isOpen) item.classList.add('open');
     }
 
+    // ── GA4 — eventos de conversão (Key Events configurados no painel) ──
+    function trackEvent(name, params) {
+      if (typeof gtag === 'function') gtag('event', name, params || {});
+    }
+    function trackPlayStoreClick(location) {
+      trackEvent('play_store_click', { link_location: location });
+    }
+    setTimeout(() => trackEvent('engaged_45s'), 45000);
+    (function trackScrollDepth() {
+      const marks = new Set();
+      window.addEventListener('scroll', () => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        if (max <= 0) return;
+        const pct = Math.round((window.scrollY / max) * 100);
+        [50, 75, 90].forEach((mark) => {
+          if (pct >= mark && !marks.has(mark)) {
+            marks.add(mark);
+            trackEvent('scroll_depth', { percent: mark });
+          }
+        });
+      }, { passive: true });
+    })();
+
     // ── iOS notify form — grava na lista de espera (Firestore) ─────
     function handleNotify(e) {
       e.preventDefault();
@@ -644,8 +837,40 @@
       const email = input.value.trim();
       if (!email) return;
       if (window.__saveWaitlistEmail) window.__saveWaitlistEmail(email).catch(() => {});
+      trackEvent('ios_waitlist_signup');
       input.value = '';
       document.getElementById('notifyMsg').style.display = 'block';
+    }
+
+    // ── Programa de testes (Google Play) — exige conta Google ───────
+    function handleBetaSignup(e) {
+      e.preventDefault();
+      const input = document.getElementById('betaEmail');
+      const email = input.value.trim().toLowerCase();
+      if (!email) return;
+      if (!/^[^\s@]+@(gmail\.com|googlemail\.com)$/.test(email)) {
+        alert('Use o e-mail da sua conta Google (@gmail.com) — é o que o Play Console usa para liberar o acesso ao teste.');
+        return;
+      }
+      if (window.__saveBetaTesterEmail) window.__saveBetaTesterEmail(email).catch(() => {});
+      trackEvent('beta_tester_signup');
+      input.value = '';
+      document.getElementById('betaMsg').style.display = 'block';
+    }
+
+    // ── Avisar minha cidade ──────────────────────────────────────────
+    function handleCityAlertSignup(e) {
+      e.preventDefault();
+      const emailInput = document.getElementById('cityAlertEmail');
+      const cityInput = document.getElementById('cityAlertCity');
+      const email = emailInput.value.trim().toLowerCase();
+      const city = cityInput.value.trim();
+      if (!email || !city) return;
+      if (window.__saveCityAlertEmail) window.__saveCityAlertEmail(email, city).catch(() => {});
+      trackEvent('city_alert_signup', { city });
+      emailInput.value = '';
+      cityInput.value = '';
+      document.getElementById('cityAlertMsg').style.display = 'block';
     }
 
     // ── Cookie banner (LGPD) ───────────────────────────────────────
@@ -666,7 +891,7 @@
   <script src="/lib/leaflet.js" defer></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, Timestamp }
+    import { getFirestore, collection, query, where, getDocs, addDoc, doc, setDoc, getDoc, serverTimestamp, Timestamp }
       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
     import {
       getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
@@ -809,6 +1034,43 @@
         createdAt: serverTimestamp(),
       });
 
+    // ═══ PROGRAMA DE TESTES — Google Play closed testing ════════════
+    // O e-mail aqui precisa ser de conta Google (Play exige isso pra liberar
+    // o opt-in). Uma Cloud Function (onBetaTesterAdded) processa o registro
+    // e adiciona à lista de testers da track de closed testing no Play Console.
+    //
+    // Usamos o e-mail como ID do documento (em vez de addDoc com ID aleatório)
+    // pra deduplicar de forma natural: se a pessoa preencher o formulário de
+    // novo, é a mesma "criação" do mesmo doc — sem duplicar na lista que vai
+    // pro Play Console nem reenviar o e-mail de convite à toa.
+    window.__saveBetaTesterEmail = async (email) => {
+      const ref = doc(db, 'beta_testers', email);
+      const existing = await getDoc(ref);
+      if (existing.exists()) return; // já cadastrado — não reenvia nem duplica
+      return setDoc(ref, {
+        email,
+        lang: window.__alertooLang || 'pt-BR',
+        createdAt: serverTimestamp(),
+        invited: false,
+      });
+    };
+
+    // ═══ AVISAR MINHA CIDADE ══════════════════════════════════════════
+    // ID do doc = email + cidade normalizada — permite o mesmo e-mail
+    // assinar mais de uma cidade, mas bloqueia duplicar a mesma combinação.
+    window.__saveCityAlertEmail = async (email, city) => {
+      const citySlug = city.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-');
+      const ref = doc(db, 'city_alerts', `${email}__${citySlug}`);
+      const existing = await getDoc(ref);
+      if (existing.exists()) return;
+      return setDoc(ref, {
+        email,
+        city: city.trim(),
+        lang: window.__alertooLang || 'pt-BR',
+        createdAt: serverTimestamp(),
+      });
+    };
+
     const TRAFFIC_CATS = {
       traffic:     { label: 'Congestionamento', emoji: '🐢', color: '#F4511E' },
       hazard:      { label: 'Perigo na via',    emoji: '⚠️', color: '#FFB300' },
@@ -948,7 +1210,19 @@
     function renderList(evs) {
       const el = document.getElementById('liveEventsList');
       if (evs.length === 0) {
-        el.innerHTML = `<div class="ev-list-empty"><span>📍</span><p>Nenhum evento nessa categoria.</p></div>`;
+        el.innerHTML = `
+          <div class="ev-list-empty ev-list-empty-rich">
+            <span>Monitoramento ativo</span>
+            <p>Nenhum alerta ativo nessa categoria agora, mas a comunidade pode atualizar a qualquer momento.</p>
+            <div class="ev-empty-links">
+              <a href="/lei-seca">Lei Seca</a>
+              <a href="/acidentes">Acidentes</a>
+              <a href="/alagamentos">Alagamentos</a>
+              <a href="/radares">Radares</a>
+              <a href="/festas-e-eventos">Eventos</a>
+            </div>
+            <a href="https://play.google.com/store/apps/details?id=com.alertoo.app" target="_blank" rel="noopener" class="ev-empty-cta" onclick="trackPlayStoreClick('empty_state')">Receber alertas no app</a>
+          </div>`;
         return;
       }
       el.innerHTML = evs.map((ev, i) => {

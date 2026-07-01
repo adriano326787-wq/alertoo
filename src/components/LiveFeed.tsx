@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { RoadEvent, EVENT_CATEGORIES } from '../types';
+import { RoadEvent, EVENT_CATEGORIES, FALLBACK_EVENT_META } from '../types';
 import { timeAgo, timeLeft } from '../utils/time';
 import { useEventsStore } from '../store/eventsStore';
 import { useT } from '../hooks/useT';
@@ -22,7 +22,7 @@ interface FeedCardProps {
 
 function FeedCard({ event, onNavigate, onConfirm, onDeny }: FeedCardProps) {
   const t = useT();
-  const meta = EVENT_CATEGORIES[event.category];
+  const meta = EVENT_CATEGORIES[event.category] ?? FALLBACK_EVENT_META;
 
   return (
     <TouchableOpacity style={[styles.card, { borderLeftColor: meta.color }]} onPress={() => onNavigate(event)} activeOpacity={0.85}>

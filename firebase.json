@@ -23,9 +23,16 @@
     }
   ],
   "emulators": {
-    "functions": { "port": 5001 },
-    "firestore": { "port": 8080 },
-    "ui": { "enabled": true, "port": 4000 }
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    }
   },
   "hosting": {
     "public": "public",
@@ -72,33 +79,108 @@
       {
         "source": "**/*.@(png|webp|jpg|jpeg|svg|ico|woff2)",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=604800" }
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=604800"
+          }
         ]
       },
       {
         "source": "/sw.js",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
         ]
       },
       {
         "source": "/.well-known/assetlinks.json",
         "headers": [
-          { "key": "Content-Type",  "value": "application/json" },
-          { "key": "Cache-Control", "value": "public, max-age=3600" },
-          { "key": "Access-Control-Allow-Origin", "value": "*" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
+      },
+      {
+        "source": "/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/search-index.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/sitemap.xml",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
         ]
       }
     ],
     "rewrites": [
-      { "source": "/en",    "destination": "/en/index.html" },
-      { "source": "/en/",   "destination": "/en/index.html" },
-      { "source": "/es",    "destination": "/es/index.html" },
-      { "source": "/es/",   "destination": "/es/index.html" },
-      { "source": "/fr",    "destination": "/fr/index.html" },
-      { "source": "/fr/",   "destination": "/fr/index.html" },
-      { "source": "/pt-PT", "destination": "/pt-PT/index.html" },
-      { "source": "/pt-PT/","destination": "/pt-PT/index.html" },
+      {
+        "source": "/en",
+        "destination": "/en/index.html"
+      },
+      {
+        "source": "/en/",
+        "destination": "/en/index.html"
+      },
+      {
+        "source": "/es",
+        "destination": "/es/index.html"
+      },
+      {
+        "source": "/es/",
+        "destination": "/es/index.html"
+      },
+      {
+        "source": "/fr",
+        "destination": "/fr/index.html"
+      },
+      {
+        "source": "/fr/",
+        "destination": "/fr/index.html"
+      },
+      {
+        "source": "/pt-PT",
+        "destination": "/pt-PT/index.html"
+      },
+      {
+        "source": "/pt-PT/",
+        "destination": "/pt-PT/index.html"
+      },
       {
         "source": "/conta",
         "destination": "/conta.html"
@@ -128,7 +210,17 @@
       },
       {
         "source": "/lei-seca",
-        "destination": "/lei-seca.html"
+        "function": {
+          "functionId": "leiSecaPage",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/lei-seca/**",
+        "function": {
+          "functionId": "leiSecaPage",
+          "region": "us-central1"
+        }
       },
       {
         "source": "/festas-e-eventos",

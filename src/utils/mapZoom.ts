@@ -83,15 +83,10 @@ export function filterRoadEvents(events: RoadEvent[], tier: ZoomTier): RoadEvent
     return [...active].sort((a, b) => roadScore(b) - roadScore(a)).slice(0, 120);
   }
 
-  // distant — 1+ confirmação líquida OU criado nas últimas 2h
-  const twoHours = 2 * 60 * 60 * 1000;
-  return active
-    .filter((e) =>
-      (e.confirmations ?? 0) - (e.denials ?? 0) >= 1 ||
-      Date.now() - e.createdAt < twoHours
-    )
+  // distant — todos os eventos ativos; expiresAt já garante validade
+  return [...active]
     .sort((a, b) => roadScore(b) - roadScore(a))
-    .slice(0, 60);
+    .slice(0, 80);
 }
 
 /**
@@ -104,25 +99,17 @@ export function filterEntEvents(events: EntertainmentEvent[], tier: ZoomTier): E
     !!(e.promotionTier && e.promotionEndDate && e.promotionEndDate > now);
 
   if (tier === 'close') {
-    // Mostra tudo — ordenado por score
-    return [...events].sort((a, b) => entScore(b) - entScore(a));
+    return [...events].sort((a, b) => entScore(b) - entScore(a)).slice(0, 15);
   }
 
   if (tier === 'medium') {
-    // Mostra todos os eventos — ordenados por score
-    return [...events].sort((a, b) => entScore(b) - entScore(a)).slice(0, 120);
+    return [...events].sort((a, b) => entScore(b) - entScore(a)).slice(0, 30);
   }
 
-  // distant — qualquer promovido OU ≥2 likes OU criado nas últimas 6h
-  const sixHours = 6 * 60 * 60 * 1000;
-  return events
-    .filter((e) =>
-      isActivePromotion(e) ||
-      (e.likes?.length ?? 0) >= 2 ||
-      Date.now() - e.createdAt < sixHours
-    )
+  // distant: pins de estado já representam os estados → poucos marcadores individuais
+  return [...events]
     .sort((a, b) => entScore(b) - entScore(a))
-    .slice(0, 60);
+    .slice(0, 20);
 }
 
 // ─── Labels de UI ─────────────────────────────────────────────────────────────

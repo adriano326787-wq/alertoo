@@ -41,6 +41,19 @@ export interface UserProfile {
   commentsPosted: number;
   createdAt: number;
   promotionCredits?: number; // #8 — real-time credits from Firestore
+  notifPrefs?: {
+    engagementReminders?: boolean; // default true se ausente
+    eventEngagementUpdates?: boolean; // default true se ausente — views/likes/comentários dos meus eventos
+    nearbyDrunkcheckAlerts?: boolean; // default true se ausente — lei seca criada por outros usuários em até 5km
+  };
+  onboarding?: {
+    firstEventTourSeen?: boolean;
+  };
+  /** Dias consecutivos com pelo menos 1 ação relevante — ver src/utils/streakLogic.ts */
+  currentStreak?: number;
+  longestStreak?: number;
+  /** 'YYYY-MM-DD' (dia local do dispositivo na última ação) */
+  lastActiveDate?: string;
 }
 
 export const POINTS = {

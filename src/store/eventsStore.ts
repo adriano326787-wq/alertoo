@@ -17,10 +17,11 @@ import {
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { getCurrentUserId } from '../services/authService';
-import { awardPoints } from '../services/userService';
+import { awardPoints, recordDailyActivity } from '../services/userService';
 import { t, tf } from '../utils/i18n';
+import { checkRateLimit, requireAuth } from '../utils/rateLimiter';
 import { trackEventCreated } from '../services/reviewService';
-import { RoadEvent, EventCategory, EVENT_CATEGORIES } from '../types';
+import { RoadEvent, EventCategory, EVENT_CATEGORIES, FALLBACK_EVENT_META } from '../types';
 import { POINTS } from '../types/user';
 import { notifyIfNearby, sendLocalNotification } from '../services/notificationService';
 import { loadSavedRoutes, isPointNearRoute } from '../services/savedRoutesService';
@@ -28,10 +29,11 @@ import { useAppStore } from './appStore';
 
 const EVENTS_COLLECTION = 'events';
 const FILTER_KEY = 'road_events_filter';
-const RATE_LIMIT_MS = 30_000; // 30 segundos entre eventos
 
 // #3 Ciclo 8 — knownIds em nível de módulo (sobrevive a re-subscribe sem gerar notificações duplicadas)
 const _knownEventIds = new Set<string>();
+
+const NEARBY_CACHE_KEY = '@road_events_nearby';
 
 interface EventsState {
   events: RoadEvent[];
@@ -39,6 +41,8 @@ interface EventsState {
   isFromCache: boolean;        // #34 — offline indicator
   filterStateUF: string | null;
   filterCityName: string | null;
+  /** Eventos persistidos localmente — sobrevivem à troca de subscription */
+  nearbyCache: RoadEvent[];
   // controle interno
   _subscriberCount: number;
   _unsub: (() => void) | null;
@@ -47,6 +51,8 @@ interface EventsState {
 
   setFilter: (stateUF: string | null, cityName: string | null) => void;
   loadFilter: () => Promise<void>;
+  /** Carrega o cache de proximidade do AsyncStorage ao abrir o app */
+  loadNearbyCache: () => Promise<void>;
   _subscriptionStateUF: string | null;    // #1 — stateUF da query ativa
   subscribeToEvents: (stateUF?: string | null) => () => void;
   reloadEvents: () => void;               // #4 — força re-subscribe (usado no refresh)
@@ -73,6 +79,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
   isFromCache: false,
   filterStateUF: null,
   filterCityName: null,
+  nearbyCache: [],
   _subscriberCount: 0,
   _unsub: null,
   _expiryTimer: null,
@@ -93,6 +100,17 @@ export const useEventsStore = create<EventsState>((set, get) => ({
         set({ filterStateUF: stateUF ?? null, filterCityName: cityName ?? null });
       }
     } catch (_) {}
+  },
+
+  loadNearbyCache: async () => {
+    try {
+      const raw = await AsyncStorage.getItem(NEARBY_CACHE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { events: RoadEvent[]; ts: number };
+      const now = Date.now();
+      const valid = parsed.events.filter((e) => e.expiresAt > now);
+      if (valid.length > 0) set({ nearbyCache: valid });
+    } catch {}
   },
 
   getFilteredEvents: () => {
@@ -131,6 +149,12 @@ export const useEventsStore = create<EventsState>((set, get) => ({
     if (prev._expiryTimer) clearInterval(prev._expiryTimer);
     if (prev._unsub) { prev._unsub(); }
 
+    // #X — limpa os eventos do estado anterior imediatamente para não exibir
+    // pins "antigos" (de outro stateUF) enquanto o novo snapshot não chega.
+    if (prev._subscriptionStateUF !== (stateUF ?? null)) {
+      set({ events: [], loading: true });
+    }
+
     // #1 — Filtro geográfico quando stateUF é conhecido; limit(300) como safety net
     // #13 — orderBy garante ordem consistente e viabiliza índice composto no Firestore
     const q = stateUF
@@ -139,13 +163,13 @@ export const useEventsStore = create<EventsState>((set, get) => ({
           where('stateUF', '==', stateUF),
           where('expiresAt', '>', Timestamp.now()),
           orderBy('expiresAt', 'desc'),
-          limit(300)
+          limit(150)
         )
       : query(
           collection(db, EVENTS_COLLECTION),
           where('expiresAt', '>', Timestamp.now()),
           orderBy('expiresAt', 'desc'),
-          limit(300)
+          limit(150)
         );
 
     function docToEvent(d: any): RoadEvent | null {
@@ -193,7 +217,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
           // Verifica proximidade com posição do usuário
           if (userLat != null && userLon != null) {
             newEvents.forEach((e) => {
-              const meta = EVENT_CATEGORIES[e.category];
+              const meta = EVENT_CATEGORIES[e.category] ?? FALLBACK_EVENT_META;
               notifyIfNearby({
                 eventTitle: e.title,
                 eventEmoji: meta.emoji,
@@ -212,7 +236,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
             const enabledRoutes = routes.filter((r) => r.enabled);
             if (enabledRoutes.length === 0) return;
             newEvents.forEach((e) => {
-              const meta = EVENT_CATEGORIES[e.category];
+              const meta = EVENT_CATEGORIES[e.category] ?? FALLBACK_EVENT_META;
               for (const route of enabledRoutes) {
                 if (isPointNearRoute(
                   e.latitude, e.longitude,
@@ -237,7 +261,15 @@ export const useEventsStore = create<EventsState>((set, get) => ({
       _knownEventIds.clear();
       events.forEach((e) => _knownEventIds.add(e.id));
       isFirstLoad = false;
-      set({ events, loading: false, isFromCache: fromCache });
+
+      // Persiste cache local quando subscrito a um estado específico (não query global).
+      // O merge no MapScreen usa esse cache para manter pins visíveis durante troca de subscription.
+      if (stateUF && events.length > 0) {
+        AsyncStorage.setItem(NEARBY_CACHE_KEY, JSON.stringify({ events, ts: Date.now() })).catch(() => {});
+        set({ events, loading: false, isFromCache: fromCache, nearbyCache: events });
+      } else {
+        set({ events, loading: false, isFromCache: fromCache });
+      }
     }, (err) => {
       // #5 — trata erros de permissão/rede do Firestore em vez de silenciar
       if (__DEV__) console.error('[RoadStore] Firestore onSnapshot error:', err.code, err.message);
@@ -284,18 +316,10 @@ export const useEventsStore = create<EventsState>((set, get) => ({
   addEvent: async ({ category, title, description, latitude, longitude, stateUF, cityName, countryCode, speedLimit }) => {
     const uid = getCurrentUserId();
 
-    // #3 — block anonymous users (entertainment store already does this; now road does too)
-    if (!uid || uid === 'anonymous') {
-      throw new Error(t('login_required_road')); // #5 Ciclo 8 — i18n
-    }
+    requireAuth(uid, 'login_required_road');
+    checkRateLimit(get()._lastEventAt);
 
     const now = Date.now();
-
-    const { _lastEventAt } = get();
-    if (_lastEventAt && now - _lastEventAt < RATE_LIMIT_MS) {
-      const remaining = Math.ceil((RATE_LIMIT_MS - (now - _lastEventAt)) / 1000);
-      throw new Error(tf('rate_limit_wait', { remaining })); // #5 Ciclo 8 — i18n
-    }
 
     const meta = EVENT_CATEGORIES[category];
     const expiresAt = now + meta.defaultTtlMinutes * 60 * 1000;
@@ -320,6 +344,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
 
     set({ _lastEventAt: now });
     awardPoints(uid, POINTS.ROAD_EVENT_CREATED, 'eventsReported').catch(() => {});
+    recordDailyActivity(uid).catch(() => {});
     trackEventCreated().catch(() => {});
   },
 
@@ -340,6 +365,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
       tx.update(ref, { confirmations: increment(1), voters: arrayUnion(uid) });
     });
 
+    if (!alreadyVoted) recordDailyActivity(uid).catch(() => {});
     if (!alreadyVoted && ownerId && ownerId !== 'anonymous' && ownerId !== uid) {
       awardPoints(ownerId, POINTS.CONFIRMATION_RECEIVED).catch(() => {});
     }
@@ -367,6 +393,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
       }
     });
 
+    if (!alreadyVoted) recordDailyActivity(uid).catch(() => {});
     if (!alreadyVoted && ownerId && ownerId !== 'anonymous' && ownerId !== uid) {
       awardPoints(ownerId, POINTS.DENIAL_RECEIVED).catch(() => {});
     }

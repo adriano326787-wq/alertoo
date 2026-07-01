@@ -81,6 +81,10 @@ service cloud.firestore {
           isVoteOnlyChange(request.resource.data, resource.data)
           || (request.auth.uid == resource.data.userId
               && !hasPromoFieldChange(request.resource.data, resource.data))
+          || (request.auth.uid == resource.data.userId
+              && hasPromoFieldChange(request.resource.data, resource.data)
+              && isValidPromotionFieldChange(request.resource.data, resource.data))
+          || isAdmin()
         );
       allow delete: if request.auth != null
         && (request.auth.uid == resource.data.userId || isAdmin());
@@ -91,7 +95,8 @@ service cloud.firestore {
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() >= 1
-          && request.resource.data.text.size() <= 500;
+          && request.resource.data.text.size() <= 500
+          && !isRateLimited(request.auth.uid, 'lastCommentAt', 5);
         allow delete: if request.auth != null
           && request.auth.uid == resource.data.userId;
       }
@@ -143,6 +148,106 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    // ── Programa de testes Google Play — closed testing (formulário público) ──
+    // 'invited' só é setado por uma Cloud Function (admin SDK) após adicionar
+    // o e-mail na lista de testers da track no Play Console.
+    // ID do doc == e-mail (dedupe natural): re-cadastro vira 'update', que só
+    // admin pode fazer — então o client nunca duplica nem reenvia o convite.
+    match /beta_testers/{entryId} {
+      allow create: if entryId == request.resource.data.email
+        && request.resource.data.keys().hasOnly(['email', 'lang', 'createdAt', 'invited'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() >= 5
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email.matches('.+@(gmail|googlemail)\\.com')
+        && request.resource.data.invited == false
+        && (!('lang' in request.resource.data)
+            || (request.resource.data.lang is string && request.resource.data.lang.size() <= 8));
+      // 'get' (doc único, sem listagem) é público só pra checar duplicidade no
+      // formulário — quem já sabe o e-mail que está digitando não ganha nada
+      // de novo lendo o próprio registro.
+      allow get: if true;
+      allow list, update, delete: if isAdmin();
+    }
+
+    // ── Avisar minha cidade (formulário público do site) ──────────────────
+    // ID do doc == email__citySlug — mesmo dedupe natural do beta_testers.
+    match /city_alerts/{entryId} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'city', 'lang', 'createdAt'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() >= 5
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email.matches('.+@.+\\..+')
+        && request.resource.data.city is string
+        && request.resource.data.city.size() >= 2
+        && request.resource.data.city.size() <= 100
+        && entryId.split('__')[0] == request.resource.data.email
+        && (!('lang' in request.resource.data)
+            || (request.resource.data.lang is string && request.resource.data.lang.size() <= 8));
+      allow get: if true;
+      allow list, update, delete: if isAdmin();
+    }
+
+    // ── Estatísticas agregadas (pins "outros estados" no mapa) ─────────────
+    // Escrito apenas pela Cloud Function stateEventCountsScheduler (admin SDK).
+    match /stats/{statId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── Context Signal Engine ───────────────────────────────────────────────
+    // Sinal de corroboração multi-usuário (quantos pararam na mesma célula).
+    // Escrito apenas via Cloud Function reportContextSignal (valida 1 entrada
+    // por uid e expira entradas antigas — escrita direta do cliente permitiria
+    // inflar o contador). Lido pelo cliente para alimentar contextScoring.ts.
+    match /context_signals/{geohash6} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Cache de clima por região (~20km) — escrito por weatherRefreshScheduler.
+    match /weather_cache/{geohash4} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Contagem histórica de reports confirmados por célula+categoria —
+    // escrito por geoBlackspotsScheduler a partir de event_history.
+    match /geo_blackspots/{geohash6} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Histórico interno (não lido pelo cliente) — arquivado por
+    // cleanupExpiredEvents antes de deletar eventos expirados, agregado
+    // diariamente em geo_blackspots por geoBlackspotsScheduler.
+    match /event_history/{eventId} {
+      allow read, write: if false;
+    }
+
+    // Contador interno de chamadas/dia à API de clima — garante que o
+    // weatherRefreshScheduler nunca passe do plano gratuito da OpenWeatherMap.
+    match /weather_quota/{date} {
+      allow read, write: if false;
+    }
+
+    // ── Log de erros do app (captureError em src/services/sentry.ts) ───────
+    // Qualquer cliente (mesmo anônimo) pode criar um registro — um erro pode
+    // acontecer antes do login. Só admin lê/edita; exportado para .txt via
+    // scripts/export-error-log.mjs.
+    match /error_logs/{logId} {
+      allow create: if request.resource.data.keys().hasOnly(['message', 'stack', 'where', 'platform', 'appVersion', 'createdAt'])
+          && request.resource.data.message is string
+          && request.resource.data.message.size() <= 2000
+          && (!('stack' in request.resource.data) || request.resource.data.stack == null || (request.resource.data.stack is string && request.resource.data.stack.size() <= 4000))
+          && (!('where' in request.resource.data) || request.resource.data.where == null || (request.resource.data.where is string && request.resource.data.where.size() <= 200))
+          && request.resource.data.platform is string
+          && request.resource.data.appVersion is string
+          && request.resource.data.createdAt is timestamp;
+      allow read, update, delete: if isAdmin();
+      allow list: if isAdmin();
+    }
+
     // ── Denúncias de eventos ───────────────────────────────────────────────
     match /reports/{reportId} {
       allow get: if request.auth != null
@@ -151,7 +256,8 @@ service cloud.firestore {
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.reason is string
-        && request.resource.data.reason.size() <= 300;
+        && request.resource.data.reason.size() <= 300
+        && !isRateLimited(request.auth.uid, 'lastReportAt', 30);
       allow list, update, delete: if false;
     }
   }
@@ -184,11 +290,13 @@ service cloud.firestore {
         && data.title.size() <= 120
         && data.userId is string
         && data.userId.size() <= 128
-        // latitude/longitude dentro dos limites do Brasil + margem
+        // latitude/longitude dentro dos limites da América do Sul + margem
+        // (Brasil + AR/CL/CO/PE/UY — países com expansão ativa). Caixa continental
+        // funciona como sanity-check contra coordenadas inválidas/abuso.
         && data.latitude is number
-        && data.latitude >= -35.0 && data.latitude <= 6.0
+        && data.latitude >= -56.0 && data.latitude <= 13.5
         && data.longitude is number
-        && data.longitude >= -75.0 && data.longitude <= -28.0
+        && data.longitude >= -82.0 && data.longitude <= -28.0
         // description opcional (app envia null quando vazio), mas se for string tem limite
         && (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 500));
   }
@@ -199,9 +307,9 @@ service cloud.firestore {
         && data.createdBy is string
         && data.createdBy.size() <= 128
         && data.latitude is number
-        && data.latitude >= -35.0 && data.latitude <= 6.0
+        && data.latitude >= -56.0 && data.latitude <= 13.5
         && data.longitude is number
-        && data.longitude >= -75.0 && data.longitude <= -28.0
+        && data.longitude >= -82.0 && data.longitude <= -28.0
         && (!('speedLimit' in data) || data.speedLimit == null
             || (data.speedLimit is number && data.speedLimit >= 10 && data.speedLimit <= 150));
   }
@@ -243,7 +351,20 @@ service cloud.firestore {
   function isValidUserProfile(data) {
     return (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 80))
         && (!('bio' in data) || (data.bio is string && data.bio.size() <= 300))
-        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500));
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && (!('notifPrefs' in data) || data.notifPrefs is map)
+        && (!('onboarding' in data) || data.onboarding is map)
+        // Geohash (precisão 5) + última posição — usados para notificar
+        // usuários próximos sobre novos eventos de Lei Seca.
+        && (!('geohash5' in data) || (data.geohash5 is string && data.geohash5.size() == 5))
+        && (!('lastLat' in data) || (data.lastLat is number && data.lastLat >= -56.0 && data.lastLat <= 13.5))
+        && (!('lastLon' in data) || (data.lastLon is number && data.lastLon >= -82.0 && data.lastLon <= -28.0))
+        && (!('lastLocationUpdatedAt' in data) || data.lastLocationUpdatedAt is timestamp)
+        // Streak diário — limites generosos mas finitos, evita escrita fraudulenta
+        // de valor absurdo pra desbloquear badge (ver src/utils/streakLogic.ts)
+        && (!('currentStreak' in data) || (data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 3650))
+        && (!('longestStreak' in data) || (data.longestStreak is int && data.longestStreak >= 0 && data.longestStreak <= 3650))
+        && (!('lastActiveDate' in data) || (data.lastActiveDate is string && data.lastActiveDate.size() == 10));
   }
 
   // ── Campos que apenas admin SDK pode alterar (créditos, status admin) ──────
@@ -259,6 +380,19 @@ service cloud.firestore {
                        'promotionPackage', 'promotionWeeks', 'promotionActiveDays',
                        'expiresAt'];
     return newData.diff(oldData).affectedKeys().hasAny(promoFields);
+  }
+
+  // ── Valida mudança feita pelo dono ao promover/cancelar promoção ───────────
+  function isValidPromotionFieldChange(newData, oldData) {
+    let promoUpdateFields = ['promotionTier', 'promotionEndDate', 'isFeatured',
+                       'promotionPhotoUrl', 'promotionPhotoUrls',
+                       'promotionPackage', 'promotionWeeks', 'promotionActiveDays',
+                       'expiresAt', 'link'];
+    return newData.diff(oldData).affectedKeys().hasOnly(promoUpdateFields)
+        && (newData.promotionTier == null || newData.promotionTier in ['bronze', 'prata', 'ouro'])
+        && newData.isFeatured is bool
+        && (newData.promotionEndDate == null || newData.promotionEndDate is timestamp)
+        && (newData.expiresAt == null || newData.expiresAt is timestamp);
   }
 
   // ── Detecta se a mudança é apenas em campos de interação ──────────────────

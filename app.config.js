@@ -2,12 +2,18 @@
 module.exports = {
   name: 'Alertoo',
   slug: 'road-events',
-  version: '1.1.11',
+  version: '1.1.19',
   scheme: 'alertoo',
   orientation: 'default',
   icon: './assets/icon.png',
   userInterfaceStyle: 'light',
   newArchEnabled: true,
+  runtimeVersion: {
+    policy: 'appVersion',
+  },
+  updates: {
+    url: 'https://u.expo.dev/4e50f222-420e-465f-9624-3634d83ae645',
+  },
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
@@ -58,7 +64,7 @@ module.exports = {
   },
   android: {
     package: 'com.alertoo.app',
-    versionCode: 32,
+    versionCode: 41,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#FF5722',
@@ -83,7 +89,11 @@ module.exports = {
     [
       'react-native-google-mobile-ads',
       {
-        androidAppId: 'ca-app-pub-4349309505537394~6456788249',
+        androidAppId: 'ca-app-pub-4349309505537394~6456788249', // real, em produção
+        // ⚠️ iosAppId é um placeholder (mesmo valor do Android) — trocar pelo
+        // App ID real assim que o app "Alertoo iOS" for criado no painel AdMob,
+        // antes de publicar na App Store. AdBanner.tsx já bloqueia ads no iOS
+        // até esse passo ser feito.
         iosAppId: 'ca-app-pub-4349309505537394~6456788249',
         userTrackingUsageDescription: 'Este identificador é usado para entregar anúncios personalizados.',
         skAdNetworkItems: [],
@@ -103,6 +113,7 @@ module.exports = {
     ],
     'react-native-edge-to-edge',
     'expo-web-browser',
+    'expo-audio',
     [
       '@react-native-google-signin/google-signin',
       {
@@ -123,6 +134,26 @@ module.exports = {
         icon: './assets/icon.png',
         color: '#FF5722',
         sounds: [],
+      },
+    ],
+    [
+      'expo-image-picker',
+      {
+        photosPermission: 'Usamos a galeria para adicionar fotos aos seus eventos e ao seu perfil.',
+        cameraPermission: 'Usamos a câmera para adicionar fotos aos seus eventos e ao seu perfil.',
+      },
+    ],
+    [
+      'expo-sensors',
+      {
+        motionPermission: 'Usamos o sensor de movimento para detectar frenagens bruscas e sugerir reportes de acidente/perigo na via.',
+      },
+    ],
+    [
+      'react-native-share',
+      {
+        ios: ['instagram-stories', 'instagram', 'fb-messenger-share-api', 'whatsapp', 'twitter'],
+        android: ['com.instagram.android', 'com.facebook.katana', 'com.whatsapp'],
       },
     ],
   ],

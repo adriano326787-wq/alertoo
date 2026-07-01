@@ -9,12 +9,12 @@ import {
   doc, updateDoc, collection, query, where, onSnapshot, Timestamp,
   orderBy, limit, getDocs, Timestamp as FBTimestamp,
 } from 'firebase/firestore';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '../services/safeImagePicker';
 import { useNavigation } from '@react-navigation/native';
 import { useUserStore } from '../store/userStore';
 import { useAppStore } from '../store/appStore';
 import { getRank, POINTS } from '../types/user';
-import { EVENT_CATEGORIES } from '../types';
+import { EVENT_CATEGORIES, FALLBACK_EVENT_META } from '../types';
 import { RankBadge, RankProgressBar, AllRanksLegend } from '../components/RankBadge';
 import { signOut, getCurrentUser } from '../services/authService';
 import { db } from '../services/firebase';
@@ -23,6 +23,7 @@ import { tEntCat, tTier } from '../utils/i18n';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { MercadoPagoModal } from '../components/MercadoPagoModal';
+import { AdBanner } from '../components/AdBanner';
 import { PromoteEventModal } from '../components/PromoteEventModal';
 import { BuyCreditsScreen } from './BuyCreditsScreen';
 import { getUserCredits, daysRemaining } from '../services/promotionService';
@@ -42,7 +43,10 @@ import {
   enableBackgroundTrafficAlerts,
   disableBackgroundTrafficAlerts,
   getBackgroundTrafficAlertsPreference,
+  enableRadarProximityAlerts,
+  disableRadarProximityAlerts,
 } from '../services/backgroundLocationTask';
+import { getRadarProximityAlertsPreference } from '../services/radarProximityAlert';
 
 export function ProfileScreen() {
   const { top } = useSafeAreaInsets();
@@ -107,6 +111,99 @@ export function ProfileScreen() {
     }
   }, []);
 
+  // ─── Aviso de proximidade de radar (voz + beep) ────────────────────────────────
+  const [radarAlertEnabled, setRadarAlertEnabled] = useState(false);
+  const [radarAlertLoading, setRadarAlertLoading] = useState(false);
+  const [radarDisclosureVisible, setRadarDisclosureVisible] = useState(false);
+
+  useEffect(() => {
+    getRadarProximityAlertsPreference().then(setRadarAlertEnabled).catch(() => {});
+  }, []);
+
+  const proceedEnableRadarAlert = useCallback(async () => {
+    setRadarDisclosureVisible(false);
+    setRadarAlertLoading(true);
+    try {
+      const result = await enableRadarProximityAlerts();
+      if (result === 'granted') {
+        setRadarAlertEnabled(true);
+      } else if (result === 'foreground_only') {
+        setRadarAlertEnabled(false);
+        Alert.alert(t('radar_alert_setting_title'), t('bg_traffic_foreground_only'));
+      } else {
+        setRadarAlertEnabled(false);
+        Alert.alert(t('radar_alert_setting_title'), t('bg_traffic_permission_denied'));
+      }
+    } finally {
+      setRadarAlertLoading(false);
+    }
+  }, [t]);
+
+  const handleToggleRadarAlert = useCallback(async (value: boolean) => {
+    if (value) {
+      setRadarDisclosureVisible(true);
+      return;
+    }
+    setRadarAlertLoading(true);
+    try {
+      await disableRadarProximityAlerts();
+      setRadarAlertEnabled(false);
+    } finally {
+      setRadarAlertLoading(false);
+    }
+  }, []);
+
+  // ─── Lembrete diário de blitz/lei seca (notificação de engajamento) ────────────
+  const [engagementNotifEnabled, setEngagementNotifEnabled] = useState(true);
+
+  useEffect(() => {
+    setEngagementNotifEnabled(profile?.notifPrefs?.engagementReminders !== false);
+  }, [profile?.notifPrefs?.engagementReminders]);
+
+  const handleToggleEngagementNotif = useCallback(async (value: boolean) => {
+    setEngagementNotifEnabled(value);
+    if (!currentUser) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        'notifPrefs.engagementReminders': value,
+      });
+    } catch (_) {}
+  }, [currentUser]);
+
+  // ─── Atualizações de engajamento dos eventos criados pelo usuário ──────────
+  const [eventEngagementNotifEnabled, setEventEngagementNotifEnabled] = useState(true);
+
+  useEffect(() => {
+    setEventEngagementNotifEnabled(profile?.notifPrefs?.eventEngagementUpdates !== false);
+  }, [profile?.notifPrefs?.eventEngagementUpdates]);
+
+  const handleToggleEventEngagementNotif = useCallback(async (value: boolean) => {
+    setEventEngagementNotifEnabled(value);
+    if (!currentUser) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        'notifPrefs.eventEngagementUpdates': value,
+      });
+    } catch (_) {}
+  }, [currentUser]);
+
+  // ─── Alerta de lei seca criada por outros usuários por perto (5km) ────────
+  const [nearbyDrunkcheckNotifEnabled, setNearbyDrunkcheckNotifEnabled] = useState(true);
+
+  useEffect(() => {
+    setNearbyDrunkcheckNotifEnabled(profile?.notifPrefs?.nearbyDrunkcheckAlerts !== false);
+  }, [profile?.notifPrefs?.nearbyDrunkcheckAlerts]);
+
+  const handleToggleNearbyDrunkcheckNotif = useCallback(async (value: boolean) => {
+    setNearbyDrunkcheckNotifEnabled(value);
+    if (!currentUser) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        'notifPrefs.nearbyDrunkcheckAlerts': value,
+      });
+    } catch (_) {}
+  }, [currentUser]);
+
   // ─── Promoção ────────────────────────────────────────────────────────────────
   // #8 — credits come from the real-time profile snapshot; no separate fetch needed
   const [userCredits, setUserCredits] = useState(0);
@@ -155,7 +252,7 @@ export function ProfileScreen() {
         const { ENTERTAINMENT_CATEGORIES } = await import('../types/entertainment');
         setHistoryRoad(roadSnap.docs.map((d) => {
           const data = d.data();
-          const meta = EVENT_CATEGORIES[data.category as keyof typeof EVENT_CATEGORIES];
+          const meta = EVENT_CATEGORIES[data.category as keyof typeof EVENT_CATEGORIES] ?? FALLBACK_EVENT_META;
           return {
             id: d.id,
             title: data.title,
@@ -176,9 +273,12 @@ export function ProfileScreen() {
           };
         }));
       } catch {
-        // Mostra feedback ao usuário em vez de falhar silenciosamente
+        // Falha ao carregar histórico (ex: índice ainda não disponível para
+        // usuários novos) não deve assustar o usuário com um popup de erro —
+        // a seção simplesmente mostra "Nenhum evento encontrado".
         if (__DEV__) console.warn('[ProfileScreen] loadHistory failed');
-        Alert.alert(t('error') || 'Erro', 'Não foi possível carregar seu histórico. Tente novamente.');
+        setHistoryRoad([]);
+        setHistoryEnt([]);
       }
       setHistoryLoading(false);
     };
@@ -203,6 +303,38 @@ export function ProfileScreen() {
     : [];
   const focusOnMap = useAppStore((s) => s.focusOnMap);
   const setPendingDeepLink = useAppStore((s) => s.setPendingDeepLink);
+
+  // ─── Excluir evento próprio (Perfil) ──────────────────────────────────────
+  const deleteRoadEvent = useEventsStore((s) => s.deleteEvent);
+  const deleteEntertainmentEvent = useEntertainmentStore((s) => s.deleteEntertainmentEvent);
+
+  const handleDeleteRoadEvent = useCallback((id: string, title: string) => {
+    Alert.alert(
+      t('delete_event_confirm_title'),
+      t('delete_event_confirm_msg').replace('{title}', title),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'), style: 'destructive',
+          onPress: () => { deleteRoadEvent(id).catch(() => {}); },
+        },
+      ]
+    );
+  }, [t, deleteRoadEvent]);
+
+  const handleDeleteEntertainmentEvent = useCallback((id: string, title: string) => {
+    Alert.alert(
+      t('delete_event_confirm_title'),
+      t('delete_event_confirm_msg').replace('{title}', title),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'), style: 'destructive',
+          onPress: () => { deleteEntertainmentEvent(id).catch(() => {}); },
+        },
+      ]
+    );
+  }, [t, deleteEntertainmentEvent]);
 
   // Carrega créditos uma vez
   const loadCredits = useCallback(async () => {
@@ -288,6 +420,10 @@ export function ProfileScreen() {
   const handlePickPhoto = useCallback(async () => {
     if (!currentUser) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status === 'unavailable') {
+      Alert.alert('Indisponível nesta versão', 'A seleção de fotos não está disponível nesta versão do app. Atualize o Alertoo e tente novamente.');
+      return;
+    }
     if (status !== 'granted') {
       Alert.alert(t('permission_required'), t('gallery_permission_msg'));
       return;
@@ -532,7 +668,8 @@ export function ProfileScreen() {
     commentsPosted: profile.commentsPosted ?? 0,
     points: profile.points ?? 0,
     favoritesCount: favorites.length,
-  }), [profile.eventsReported, profile.commentsPosted, profile.points, favorites.length]);
+    longestStreak: profile.longestStreak ?? 0,
+  }), [profile.eventsReported, profile.commentsPosted, profile.points, favorites.length, profile.longestStreak]);
 
   // Memoizado — recalcula apenas quando createdAt muda
   const memberSince = useMemo(() => {
@@ -598,6 +735,24 @@ export function ProfileScreen() {
         <Text style={[styles.points, { color: rank.color }]}>{profile.points} pts</Text>
         <RankProgressBar points={profile.points} />
       </View>
+
+      {/* Streak diário */}
+      {(profile.currentStreak ?? 0) > 0 && (
+        <View style={[styles.card, { backgroundColor: cardBg }]}>
+          <Text style={[styles.cardTitle, { color: subColor }]}>🔥 Sequência de dias ativos</Text>
+          <View style={styles.streakRow}>
+            <Text style={styles.streakNumber}>{profile.currentStreak}</Text>
+            <Text style={[styles.streakUnit, { color: subColor }]}>
+              {profile.currentStreak === 1 ? 'dia seguido' : 'dias seguidos'}
+            </Text>
+          </View>
+          {(profile.longestStreak ?? 0) > (profile.currentStreak ?? 0) && (
+            <Text style={[styles.streakRecord, { color: subColor }]}>
+              Seu recorde: {profile.longestStreak} dias
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* ── Conquistas / Badges ─────────────────────────────────────────────── */}
       {(() => {
@@ -782,6 +937,12 @@ export function ProfileScreen() {
                     >
                       <Text style={styles.goToEventText}>📍 {t('view')}</Text>
                     </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.deleteEventBtn}
+                      onPress={() => handleDeleteRoadEvent(ev.id, ev.title)}
+                    >
+                      <Text style={styles.deleteEventBtnText}>🗑️</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
@@ -837,6 +998,12 @@ export function ProfileScreen() {
                     <Text style={[styles.promoteBtnText, isPromoted && styles.promoteBtnTextActive]}>
                       {isPromoted ? `⚙️ ${t('manage')}` : `🚀 ${t('promote')}`}
                     </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteEventBtn}
+                    onPress={() => handleDeleteEntertainmentEvent(ev.id, ev.title)}
+                  >
+                    <Text style={styles.deleteEventBtnText}>🗑️</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -979,6 +1146,70 @@ export function ProfileScreen() {
         )}
       </View>
 
+      {/* Aviso de proximidade de radar (voz + beep) */}
+      <View style={[styles.bgTrafficCard, { backgroundColor: cardBg }]}>
+        <Text style={styles.bgTrafficEmoji}>🔊</Text>
+        <View style={styles.bgTrafficTexts}>
+          <Text style={[styles.bgTrafficTitle, { color: textColor }]}>{t('radar_alert_setting_title')}</Text>
+          <Text style={[styles.bgTrafficSub, { color: subColor }]}>{t('radar_alert_setting_desc')}</Text>
+        </View>
+        {radarAlertLoading ? (
+          <ActivityIndicator size="small" color="#FF5722" />
+        ) : (
+          <Switch
+            value={radarAlertEnabled}
+            onValueChange={handleToggleRadarAlert}
+            trackColor={{ false: '#CBD5E1', true: '#FF8A65' }}
+            thumbColor={radarAlertEnabled ? '#FF5722' : '#f4f3f4'}
+          />
+        )}
+      </View>
+
+      {/* Lembrete diário de blitz/lei seca (notificação de engajamento) */}
+      <View style={[styles.bgTrafficCard, { backgroundColor: cardBg }]}>
+        <Text style={styles.bgTrafficEmoji}>🚔</Text>
+        <View style={styles.bgTrafficTexts}>
+          <Text style={[styles.bgTrafficTitle, { color: textColor }]}>{t('engagement_notif_title')}</Text>
+          <Text style={[styles.bgTrafficSub, { color: subColor }]}>{t('engagement_notif_desc')}</Text>
+        </View>
+        <Switch
+          value={engagementNotifEnabled}
+          onValueChange={handleToggleEngagementNotif}
+          trackColor={{ false: '#CBD5E1', true: '#FF8A65' }}
+          thumbColor={engagementNotifEnabled ? '#FF5722' : '#f4f3f4'}
+        />
+      </View>
+
+      {/* Atualizações de engajamento dos meus eventos (views/curtidas/comentários) */}
+      <View style={[styles.bgTrafficCard, { backgroundColor: cardBg }]}>
+        <Text style={styles.bgTrafficEmoji}>📊</Text>
+        <View style={styles.bgTrafficTexts}>
+          <Text style={[styles.bgTrafficTitle, { color: textColor }]}>{t('event_engagement_notif_title')}</Text>
+          <Text style={[styles.bgTrafficSub, { color: subColor }]}>{t('event_engagement_notif_desc')}</Text>
+        </View>
+        <Switch
+          value={eventEngagementNotifEnabled}
+          onValueChange={handleToggleEventEngagementNotif}
+          trackColor={{ false: '#CBD5E1', true: '#FF8A65' }}
+          thumbColor={eventEngagementNotifEnabled ? '#FF5722' : '#f4f3f4'}
+        />
+      </View>
+
+      {/* Lei seca reportada por outros usuários por perto (raio de 5km) */}
+      <View style={[styles.bgTrafficCard, { backgroundColor: cardBg }]}>
+        <Text style={styles.bgTrafficEmoji}>🍺</Text>
+        <View style={styles.bgTrafficTexts}>
+          <Text style={[styles.bgTrafficTitle, { color: textColor }]}>{t('nearby_drunkcheck_notif_title')}</Text>
+          <Text style={[styles.bgTrafficSub, { color: subColor }]}>{t('nearby_drunkcheck_notif_desc')}</Text>
+        </View>
+        <Switch
+          value={nearbyDrunkcheckNotifEnabled}
+          onValueChange={handleToggleNearbyDrunkcheckNotif}
+          trackColor={{ false: '#CBD5E1', true: '#FF8A65' }}
+          thumbColor={nearbyDrunkcheckNotifEnabled ? '#FF5722' : '#f4f3f4'}
+        />
+      </View>
+
       {/* Idioma */}
       <LanguagePicker />
 
@@ -994,6 +1225,8 @@ export function ProfileScreen() {
         </TouchableOpacity>
       )}
 
+      <AdBanner />
+
       <MercadoPagoModal visible={donateVisible} onClose={() => setDonateVisible(false)} />
 
       {/* Compartilhar evento */}
@@ -1004,9 +1237,11 @@ export function ProfileScreen() {
           title={shareEvent.title}
           description={shareEvent.description}
           category={`${ENTERTAINMENT_CATEGORIES[shareEvent.category]?.emoji ?? '🎉'} ${tEntCat(shareEvent.category)}`}
+          categoryColor={ENTERTAINMENT_CATEGORIES[shareEvent.category]?.color ?? '#6A1B9A'}
           location={[shareEvent.cityName, shareEvent.stateUF].filter(Boolean).join(' — ')}
           eventId={shareEvent.id}
           eventType="entertainment"
+          photoUrl={shareEvent.promotionPhotoUrl || shareEvent.photoUrl}
         />
       )}
 
@@ -1087,6 +1322,24 @@ export function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Divulgação em destaque — aviso de proximidade de radar (localização em segundo plano) */}
+      <Modal visible={radarDisclosureVisible} transparent animationType="fade" onRequestClose={() => setRadarDisclosureVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.disclosureCard}>
+            <Text style={styles.disclosureEmoji}>🔊</Text>
+            <Text style={styles.disclosureTitle}>{t('radar_alert_disclosure_title')}</Text>
+            <Text style={styles.disclosureBody}>{t('radar_alert_disclosure_body')}</Text>
+            <Text style={styles.disclosureDetail}>{t('radar_alert_disclosure_detail')}</Text>
+            <TouchableOpacity style={styles.disclosureAccept} onPress={proceedEnableRadarAlert}>
+              <Text style={styles.disclosureAcceptText}>{t('bg_traffic_disclosure_accept')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.disclosureDecline} onPress={() => setRadarDisclosureVisible(false)}>
+              <Text style={styles.disclosureDeclineText}>{t('bg_traffic_disclosure_decline')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1157,6 +1410,10 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 13, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 },
   points: { fontSize: 42, fontWeight: '900', textAlign: 'center', marginBottom: 12 },
+  streakRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 8 },
+  streakNumber: { fontSize: 36, fontWeight: '900', color: '#FF5722' },
+  streakUnit: { fontSize: 14, fontWeight: '600' },
+  streakRecord: { fontSize: 12, textAlign: 'center', marginTop: 6 },
 
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   statCard: {
@@ -1395,6 +1652,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#1565C0', backgroundColor: '#E3F2FD',
   },
   goToEventText: { fontSize: 12, fontWeight: '700', color: '#1565C0' },
+  deleteEventBtn: {
+    borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7,
+    borderWidth: 1.5, borderColor: '#E53935', backgroundColor: '#FFEBEE',
+  },
+  deleteEventBtnText: { fontSize: 13 },
   promoTag: {
     marginTop: 3, alignSelf: 'flex-start',
     backgroundColor: '#FFF3E0', borderRadius: 6,

@@ -11,6 +11,7 @@ import { createMPPreferenceCloud, verifyMPPaymentCloud, awardAdCredit } from '..
 import { useRewardedAd } from '../hooks/useRewardedAd';
 import { getCurrentUserId } from '../services/authService';
 import { useAppStore } from '../store/appStore';
+import { captureError } from '../services/sentry';
 import { PixPaymentModal } from '../components/PixPaymentModal';
 import { StripePaymentModal } from '../components/StripePaymentModal';
 
@@ -76,8 +77,12 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
         if (pkg && saved.preferenceId) {
           setPendingVerification({ preferenceId: saved.preferenceId, pkg });
         }
-      } catch {}
-    }).catch(() => {});
+      } catch (e) {
+        // JSON corrompido — usuário pode ter um pagamento pendente que nunca será
+        // verificado/creditado. Vale registrar pra investigar caso se repita.
+        captureError(e, { where: 'BuyCreditsScreen.parsePendingPayment' });
+      }
+    }).catch((e) => captureError(e, { where: 'BuyCreditsScreen.restorePendingPayment' }));
   }, [visible]);
 
   // Reage ao retorno do checkout do Mercado Pago via deep link alertoo://payment/*

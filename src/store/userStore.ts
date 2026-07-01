@@ -58,6 +58,11 @@ export const useUserStore = create<UserState>((set, get) => ({
         commentsPosted: d.commentsPosted ?? 0,
         createdAt: (d.createdAt as any)?.toMillis?.() ?? Date.now(),
         promotionCredits: d.promotionCredits ?? 0,
+        notifPrefs: d.notifPrefs ?? undefined,
+        onboarding: d.onboarding ?? undefined,
+        currentStreak: d.currentStreak ?? 0,
+        longestStreak: d.longestStreak ?? 0,
+        lastActiveDate: d.lastActiveDate ?? undefined,
       };
       const currentEmail = d.email ?? null;
       if (lastCheckedEmail !== currentEmail) {

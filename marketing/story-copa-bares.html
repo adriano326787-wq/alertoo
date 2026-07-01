@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080, initial-scale=1" />
+<title>Alertoo — Story Copa do Mundo / Bares</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #0F6E56;
+    width: 1080px;
+    height: 1920px;
+    position: relative;
+    color: #fff;
+  }
+
+  /* Story progress bar */
+  .progress {
+    position: absolute;
+    top: 32px;
+    left: 24px;
+    right: 24px;
+    height: 8px;
+    background: rgba(255,255,255,0.35);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress::after {
+    content: '';
+    display: block;
+    width: 62%;
+    height: 100%;
+    background: #fff;
+    border-radius: 999px;
+  }
+
+  /* Header */
+  .header {
+    position: absolute;
+    top: 72px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .logo-circle {
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .logo-circle i {
+    font-size: 44px;
+    color: #0F6E56;
+  }
+  .header .brand {
+    font-size: 38px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .badge-copa {
+    margin-left: auto;
+    background: #FAC775;
+    color: #412402;
+    font-size: 28px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 14px 36px;
+  }
+
+  /* Center radar */
+  .center-wrap {
+    position: absolute;
+    top: 520px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 360px;
+  }
+  .pulse-ring {
+    position: absolute;
+    width: 360px;
+    height: 360px;
+    border-radius: 50%;
+    border: 4px solid rgba(255,255,255,0.85);
+    animation: pulseRing 2.4s ease-out infinite;
+  }
+  .pulse-ring-delay {
+    animation-delay: 1.2s;
+  }
+  .center-circle {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    overflow: hidden;
+  }
+  .ball-spin i {
+    font-size: 112px;
+    color: #173404;
+    display: block;
+    animation: ballSpin 6s linear infinite;
+  }
+
+  @keyframes pulseRing {
+    0%   { transform: scale(0.6); opacity: 0.9; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+  @keyframes ballSpin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  /* Floating cards */
+  .float-card {
+    position: absolute;
+    background: #fff;
+    border-radius: 24px;
+    padding: 22px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.18);
+    animation: floatY 3s ease-in-out infinite;
+  }
+  .float-card.delay {
+    animation-delay: 1.5s;
+  }
+  .float-card i {
+    font-size: 40px;
+  }
+  .float-card span {
+    font-size: 30px;
+    font-weight: 600;
+    color: #333;
+  }
+  .card-happy { top: 380px; left: 60px; }
+  .card-happy i { color: #854F0B; }
+  .card-live { top: 680px; right: 50px; }
+  .card-live i { color: #185FA5; }
+
+  @keyframes floatY {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+  }
+
+  /* Center text */
+  .center-text {
+    position: absolute;
+    top: 980px;
+    left: 80px;
+    right: 80px;
+    text-align: center;
+  }
+  .center-text h1 {
+    font-size: 64px;
+    font-weight: 600;
+    line-height: 1.25;
+    margin-bottom: 28px;
+  }
+  .center-text p {
+    font-size: 38px;
+    line-height: 1.4;
+    color: rgba(255,255,255,0.88);
+  }
+
+  /* Bottom overlay */
+  .bottom-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 480px;
+    background: rgba(0,0,0,0.20);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 48px;
+    padding: 0 60px;
+    text-align: center;
+  }
+  .bottom-overlay p {
+    font-size: 36px;
+    color: #fff;
+    line-height: 1.4;
+  }
+  .cta {
+    background: #FAC775;
+    color: #412402;
+    font-size: 42px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 32px 72px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    animation: ctaPulse 2s ease-in-out infinite;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.25);
+  }
+  .cta i { font-size: 44px; }
+
+  @keyframes ctaPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+</style>
+</head>
+<body>
+
+  <div class="progress"></div>
+
+  <div class="header">
+    <div class="logo-circle"><i class="ti ti-map-pin"></i></div>
+    <div class="brand">Alertoo</div>
+    <div class="badge-copa">Copa 2026</div>
+  </div>
+
+  <div class="center-wrap">
+    <div class="pulse-ring"></div>
+    <div class="pulse-ring pulse-ring-delay"></div>
+    <div class="center-circle ball-spin"><i class="ti ti-ball-football"></i></div>
+  </div>
+
+  <div class="float-card card-happy">
+    <i class="ti ti-beer"></i>
+    <span>Happy hour</span>
+  </div>
+
+  <div class="float-card card-live delay">
+    <i class="ti ti-device-tv"></i>
+    <span>Transmissão ao vivo</span>
+  </div>
+
+  <div class="center-text">
+    <h1>Seu bar bombando na Copa do Mundo</h1>
+    <p>Anuncie a transmissão dos jogos e promoções no Alertoo e apareça para quem está perto</p>
+  </div>
+
+  <div class="bottom-overlay">
+    <p>Cadastre seu evento e ganhe destaque na aba Entretenimento</p>
+    <div class="cta">
+      <span>Anunciar meu evento</span>
+      <i class="ti ti-arrow-up"></i>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { resolveStateUF } from '../utils/brazilGeo';
+import { resolveRegion } from '../utils/brazilGeo';
 import { useAppStore } from '../store/appStore';
 
 const STATE_STORAGE_KEY = '@alertoo_stateUF';
@@ -78,8 +78,8 @@ export function useUserLocation() {
 
         if (cancelled) return;
 
-        const stateUF     = resolveStateUF(place?.region) ?? null;
         const countryCode = place?.isoCountryCode ?? null;
+        const stateUF     = resolveRegion(place?.region, countryCode) ?? null;
 
         if (countryCode) {
           setUserCountryCode(countryCode);

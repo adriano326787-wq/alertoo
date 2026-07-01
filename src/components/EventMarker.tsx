@@ -23,12 +23,20 @@ interface Props {
   event: RoadEvent;
   onPress: (event: RoadEvent) => void;
   zoomTier?: ZoomTier;
+  /** Nível de zoom contínuo (0-20) — encolhe o pin gradualmente dentro do tier 'distant' */
+  zoomLevel?: number;
 }
 
 const FALLBACK_META = { color: '#607D8B', emoji: '📍' };
 
-function pinSize(zoom: ZoomTier): number {
-  return zoom === 'distant' ? 30 : zoom === 'medium' ? 38 : 46;
+// Dentro do tier 'distant' (zoom < 12), o pin encolhe continuamente conforme o
+// usuário afasta o mapa — evita "spam" visual em visões de estado/região.
+// Não se aplica à Lei Seca (LeiSecaPin tem tamanho fixo, ver abaixo).
+function pinSize(zoom: ZoomTier, zoomLevel: number): number {
+  if (zoom === 'medium') return 38;
+  if (zoom === 'close') return 46;
+  // zoom 7 → ~18px, zoom 11 → ~22px (mínimo 16 para ser tocável)
+  return Math.round(Math.min(28, Math.max(16, 12 + (zoomLevel - 4) * 1.5)));
 }
 
 function timeAgo(ms: number): string {
@@ -41,7 +49,7 @@ function timeAgo(ms: number): string {
   return `há ${Math.floor(h / 24)}d`;
 }
 
-export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
+export function EventMarker({ event, onPress, zoomTier = 'close', zoomLevel = 12 }: Props) {
   const meta = EVENT_CATEGORIES[event.category] ?? FALLBACK_META;
   const [tracks, setTracks] = useState(true);
   const layoutDoneRef = useRef(false);
@@ -50,7 +58,8 @@ export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
   const netConfirms = (event.confirmations ?? 0) - (event.denials ?? 0);
   const isAlert = netConfirms >= 3;
 
-  const contentKey = [event.category, isAlert ? 'A' : 'S', zoomTier].join('|');
+  const size = pinSize(zoomTier, zoomLevel);
+  const contentKey = [event.category, isAlert ? 'A' : 'S', zoomTier, size].join('|');
 
   // Resetar tracking quando o conteúdo muda
   // fallbackRef garante que tracksViewChanges vira false mesmo se onLayout não disparar
@@ -76,8 +85,6 @@ export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setTracks(false), 500);
   }, []);
-
-  const size = pinSize(zoomTier);
 
   const confirmations = event.confirmations ?? 0;
   // #18 — mostra badge de confirmações quando há pelo menos 1 (estilo Waze)
@@ -131,7 +138,7 @@ export function EventMarker({ event, onPress, zoomTier = 'close' }: Props) {
         anchor={{ x: 0.5, y: 0.5 }}
         onPress={() => onPress(event)}
         tracksViewChanges={tracks}
-        zIndex={40}
+        zIndex={2}
       >
         <View collapsable={false}>
           <AlertPin

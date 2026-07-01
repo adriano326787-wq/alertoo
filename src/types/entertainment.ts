@@ -1,4 +1,4 @@
-export type EntertainmentCategory = 'bar' | 'restaurant' | 'party' | 'show' | 'festival' | 'club';
+export type EntertainmentCategory = 'bar' | 'restaurant' | 'party' | 'show' | 'festival' | 'club' | 'cultural' | 'sports';
 
 /**
  * TTL por categoria de entretenimento (em horas).
@@ -17,6 +17,8 @@ export const ENTERTAINMENT_TTL_HOURS: Record<EntertainmentCategory, number> = {
   bar:        36, // destaque de hoje e amanhã
   restaurant: 36, // idem
   festival:   72, // cobre fins de semana completos
+  cultural:   72, // exposições e eventos culturais duram o fim de semana
+  sports:     48, // eventos esportivos — dia do jogo + dia seguinte
 };
 
 export interface EntertainmentEvent {
@@ -59,6 +61,13 @@ export interface EntertainmentEvent {
   avgRating?: number;
   /** Quantidade de avaliações */
   ratingCount?: number;
+  /** Última leitura de métricas de engajamento usada para notificar o criador */
+  engagementSnapshot?: {
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
+    lastNotifiedAt: number; // unix ms
+  };
 }
 
 export interface EventComment {
@@ -83,4 +92,6 @@ export const ENTERTAINMENT_CATEGORIES: Record<EntertainmentCategory, Entertainme
   show:       { label: 'Show',       emoji: '🎸', color: '#1565C0' },
   festival:   { label: 'Festival',   emoji: '🎪', color: '#AD1457' },
   club:       { label: 'Balada',     emoji: '🪩', color: '#4527A0' },
+  cultural:   { label: 'Cultural',   emoji: '🎭', color: '#00838F' },
+  sports:     { label: 'Esportes',   emoji: '⚽', color: '#F9A825' }, // âmbar — distinto de restaurant (#2E7D32)
 };

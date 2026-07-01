@@ -14,6 +14,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Marker } from 'react-native-maps';
+import { Dimensions } from 'react-native';
 import { EntertainmentEvent, ENTERTAINMENT_CATEGORIES } from '../types/entertainment';
 import { ZoomTier } from '../utils/mapZoom';
 import { DropPin, PremiumPin, LivePin, PromotedMarkerCard } from './ui/Pin';
@@ -105,12 +106,13 @@ export function EntertainmentMarker({ event, onPress, zoomTier = 'close' }: Prop
     : null;
   const hasPromoPhoto = !!promoPhotoUrl;
 
+  // zoomTier excluído intencionalmente: incluí-lo causava reset de tracksViewChanges
+  // em todos os markers simultaneamente a cada zoom/pan → freeze severo.
   const contentKey = [
     event.category,
     event.promotionTier ?? '',
     promoPhotoUrl ?? '',
     isLive ? 'L' : '',
-    zoomTier,
   ].join('|');
 
   // Resetar tracking quando o conteúdo muda
@@ -160,7 +162,14 @@ export function EntertainmentMarker({ event, onPress, zoomTier = 'close' }: Prop
   // ─── PROMOVIDO → PromotedMarkerCard (retângulo com foto + nome) ──────────────
   if (isPromoted) {
     // Dimensões pelo tier × zoom (hierarquia: Ouro > Prata > Bronze > orgânico)
-    const cardDims = PROMOTED_DIMS[tier][zoomTier];
+    // Clamp defensivo: card promovido nunca deve ocupar mais de 50% da largura
+    // da tela (map-marker-ux §3) — hoje nenhuma combinação tier×zoom excede isso
+    // (máx. 134px), mas isto evita regressão se os tamanhos forem aumentados depois.
+    const rawDims = PROMOTED_DIMS[tier][zoomTier];
+    const maxCardW = Dimensions.get('window').width * 0.5;
+    const cardDims = rawDims.cardW > maxCardW
+      ? { ...rawDims, cardW: maxCardW }
+      : rawDims;
 
     const borderColor    = TIER_RING[tier];
     const letterboxColor = borderColor + '28'; // ~16% opacidade
@@ -173,7 +182,7 @@ export function EntertainmentMarker({ event, onPress, zoomTier = 'close' }: Prop
         onPress={() => onPress(event)}
         tracksViewChanges={tracks}
         cluster={false}
-        zIndex={tier === 'ouro' ? 30 : tier === 'prata' ? 20 : 10}
+        zIndex={tier === 'ouro' ? 22 : tier === 'prata' ? 21 : 20}
       >
         <PromotedMarkerCard
           {...cardDims}
