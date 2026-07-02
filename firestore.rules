@@ -364,7 +364,9 @@ service cloud.firestore {
         // de valor absurdo pra desbloquear badge (ver src/utils/streakLogic.ts)
         && (!('currentStreak' in data) || (data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 3650))
         && (!('longestStreak' in data) || (data.longestStreak is int && data.longestStreak >= 0 && data.longestStreak <= 3650))
-        && (!('lastActiveDate' in data) || (data.lastActiveDate is string && data.lastActiveDate.size() == 10));
+        && (!('lastActiveDate' in data) || (data.lastActiveDate is string && data.lastActiveDate.size() == 10))
+        // ISO 3166-1 alpha-2 — usado p/ moeda de cobrança (Fase 2) e idioma de notificação (Fase 3)
+        && (!('countryCode' in data) || (data.countryCode is string && data.countryCode.size() == 2));
   }
 
   // ── Campos que apenas admin SDK pode alterar (créditos, status admin) ──────

@@ -91,6 +91,25 @@ export async function recordDailyActivity(uid: string): Promise<void> {
   }
 }
 
+/**
+ * Persiste o countryCode detectado (GPS/geocode) no perfil do usuário — é a
+ * única forma do servidor (Cloud Functions) saber o país de alguém, já que
+ * hoje esse dado só existe no client (appStore/AsyncStorage). Usado pela
+ * Fase 2 (moeda de cobrança) e Fase 3 (idioma de notificação) da expansão
+ * internacional. Early-return se não mudou — evita write redundante a cada
+ * detecção de localização (a cada abertura de tela, por exemplo).
+ */
+export async function persistUserCountry(uid: string, countryCode: string): Promise<void> {
+  try {
+    const ref = doc(db, USERS, uid);
+    const snap = await getDoc(ref);
+    if (snap.data()?.countryCode === countryCode) return;
+    await updateDoc(ref, { countryCode });
+  } catch (e) {
+    captureError(e, { where: 'userService.persistUserCountry' });
+  }
+}
+
 function docToProfile(uid: string, d: Record<string, any>): UserProfile {
   return {
     uid,
@@ -107,5 +126,6 @@ function docToProfile(uid: string, d: Record<string, any>): UserProfile {
     currentStreak: d.currentStreak ?? 0,
     longestStreak: d.longestStreak ?? 0,
     lastActiveDate: d.lastActiveDate ?? undefined,
+    countryCode: d.countryCode ?? undefined,
   };
 }

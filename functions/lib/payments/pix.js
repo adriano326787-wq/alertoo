@@ -6,10 +6,12 @@ const firestore_1 = require("firebase-admin/firestore");
 const shared_1 = require("../shared");
 const PIX_EXPIRY_MINUTES = 30;
 // ─── Criar pagamento PIX via Mercado Pago ─────────────────────────────────────
+// Pix é um sistema de pagamento exclusivo do Brasil.
 exports.createPixPayment = (0, https_1.onCall)({ secrets: [shared_1.MP_ACCESS_TOKEN, shared_1.ALERTOO_PIX_KEY_SECRET], region: 'us-central1' }, async (request) => {
     (0, shared_1.checkAppToken)(request, 'createPixPayment');
     const uid = request.auth?.uid;
     (0, shared_1.assertAuth)(uid);
+    await (0, shared_1.assertBrazilOnly)(uid, 'pix');
     await (0, shared_1.enforcePaymentCooldown)(uid);
     const packageId = (0, shared_1.sanitizeString)(request.data?.packageId, 20);
     const pkg = shared_1.CREDIT_PACKAGES[packageId];

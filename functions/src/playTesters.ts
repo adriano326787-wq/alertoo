@@ -1,5 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db, RESEND_API_KEY, readSecret } from './shared';
+import { normalizeLangCode, betaInviteEmailStrings } from './utils/i18nNotifications';
 
 /**
  * A Play Developer API (androidpublisher.edits.testers) NÃO suporta mais
@@ -16,16 +17,17 @@ import { db, RESEND_API_KEY, readSecret } from './shared';
 
 const OPT_IN_URL = 'https://play.google.com/apps/testing/com.alertoo.app';
 
-function buildInviteEmailHtml(): string {
+function buildInviteEmailHtml(strings: ReturnType<typeof betaInviteEmailStrings>): string {
+  // \n do body vira parágrafos — betaInviteEmailStrings usa \n\n como separador
+  const bodyHtml = strings.body.split('\n\n').map((p) => `<p>${p}</p>`).join('');
   return `
     <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2 style="color:#FF5722;">🧪 Bem-vindo ao programa de testes do Alertoo!</h2>
-      <p>Recebemos seu cadastro. Você terá acesso às novidades antes de todo mundo.</p>
-      <p><strong>Próximo passo:</strong> clique no botão abaixo pra aceitar o convite de testes do Google Play. Pode levar algumas horas até o seu e-mail ser liberado na nossa lista — se o link não funcionar de primeira, tente novamente mais tarde.</p>
+      <h2 style="color:#FF5722;">${strings.heading}</h2>
+      ${bodyHtml}
       <p style="text-align:center; margin: 32px 0;">
-        <a href="${OPT_IN_URL}" style="background:#FF5722;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;">Entrar no programa de testes</a>
+        <a href="${OPT_IN_URL}" style="background:#FF5722;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;">${strings.button}</a>
       </p>
-      <p style="color:#888;font-size:13px;">Se você não pediu isso, pode ignorar este e-mail.</p>
+      <p style="color:#888;font-size:13px;">${strings.footer}</p>
     </div>`;
 }
 
@@ -35,6 +37,9 @@ export const onBetaTesterAdded = onDocumentCreated(
     const snap = event.data;
     const email = snap?.data()?.email as string | undefined;
     if (!snap || !email) return;
+
+    const lang = normalizeLangCode(snap.data()?.lang as string | undefined);
+    const strings = betaInviteEmailStrings(lang);
 
     try {
       const resp = await fetch('https://api.resend.com/emails', {
@@ -46,8 +51,8 @@ export const onBetaTesterAdded = onDocumentCreated(
         body: JSON.stringify({
           from: 'Alertoo <noreply@alertoo.com.br>',
           to: [email],
-          subject: '🧪 Você entrou no programa de testes do Alertoo!',
-          html: buildInviteEmailHtml(),
+          subject: strings.subject,
+          html: buildInviteEmailHtml(strings),
         }),
       });
 

@@ -63,6 +63,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         currentStreak: d.currentStreak ?? 0,
         longestStreak: d.longestStreak ?? 0,
         lastActiveDate: d.lastActiveDate ?? undefined,
+        countryCode: d.countryCode ?? undefined,
       };
       const currentEmail = d.email ?? null;
       if (lastCheckedEmail !== currentEmail) {

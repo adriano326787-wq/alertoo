@@ -19,6 +19,7 @@ import { useT } from '../hooks/useT';
 import { createPixPaymentCloud, verifyPixPaymentCloud } from '../services/promotionService';
 import { CreditPackage } from '../types/promotion';
 import { getCurrentUser } from '../services/authService';
+import { formatPrice } from '../utils/currency';
 
 interface Props {
   visible: boolean;
@@ -164,7 +165,8 @@ export function PixPaymentModal({ visible, pkg, onClose, onApproved }: Props) {
 
           {pkg && (
             <Text style={styles.subtitle}>
-              {pkg.credits} crédito{pkg.credits !== 1 ? 's' : ''} · <Text style={styles.price}>R$ {pkg.price.toFixed(2)}</Text>
+              {/* Pix é exclusivo do Brasil (bloqueado no servidor pra outros países) — sempre BRL */}
+              {pkg.credits} crédito{pkg.credits !== 1 ? 's' : ''} · <Text style={styles.price}>{formatPrice(pkg.price, 'BRL')}</Text>
             </Text>
           )}
 

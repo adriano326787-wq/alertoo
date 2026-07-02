@@ -14,6 +14,7 @@ import { useAppStore } from '../store/appStore';
 import { captureError } from '../services/sentry';
 import { PixPaymentModal } from '../components/PixPaymentModal';
 import { StripePaymentModal } from '../components/StripePaymentModal';
+import { resolveCurrencyForCountry, isStripeOnlyCountry, formatPrice } from '../utils/currency';
 
 // Fallback: link genérico caso a Cloud Function falhe.
 // Nesse caso a verificação automática não é possível — o usuário é orientado
@@ -38,6 +39,10 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
   const [stripeModalVisible, setStripeModalVisible] = useState(false);
   const { ready: adReady, cooldownActive, unavailable: adUnavailable, show: showRewardedAd } = useRewardedAd();
   const { mpPaymentReturn, setMPPaymentReturn } = useAppStore();
+  const userCountryCode = useAppStore((s) => s.userCountryCode);
+  const currency = resolveCurrencyForCountry(userCountryCode);
+  const isStripeOnly = isStripeOnlyCountry(userCountryCode);
+  const priceOf = (pkg: CreditPackage) => (currency === 'USD' ? pkg.priceUSD : pkg.price);
 
   async function handleWatchAd() {
     if (!adReady) return; // Guard extra — ad ainda não carregou
@@ -275,7 +280,8 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
           <View style={styles.packages}>
             {CREDIT_PACKAGES.map((pkg) => {
               const isSelected = selected?.id === pkg.id;
-              const pricePerCredit = (pkg.price / pkg.credits).toFixed(2);
+              const price = priceOf(pkg);
+              const pricePerCredit = price / pkg.credits;
               return (
                 <TouchableOpacity
                   key={pkg.id}
@@ -294,8 +300,8 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
                       {pkg.credits === 1 ? t('pkg_credits').replace('{n}', '').trim() : t('pkg_credits_pl').replace('{n}', '').trim()}
                     </Text>
                   </View>
-                  <Text style={styles.packagePrice}>R$ {pkg.price.toFixed(2)}</Text>
-                  <Text style={styles.packagePerCredit}>R$ {pricePerCredit}/crédito</Text>
+                  <Text style={styles.packagePrice}>{formatPrice(price, currency)}</Text>
+                  <Text style={styles.packagePerCredit}>{formatPrice(pricePerCredit, currency)}/crédito</Text>
 
                   {isSelected && (
                     <View style={styles.selectedCheck}>
@@ -377,51 +383,57 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
             </View>
           ) : (
             <View style={styles.payOptions}>
-              {/* Botão PIX nativo */}
-              <TouchableOpacity
-                style={[styles.payBtn, styles.payBtnPix, !selected && styles.payBtnDisabled]}
-                onPress={() => { if (selected) setPixModalVisible(true); }}
-                disabled={!selected || loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Text style={styles.payBtnIcon}>💚</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.payBtnLabel}>PIX</Text>
-                      <Text style={styles.payBtnSub}>Instantâneo · QR Code no app</Text>
-                    </View>
-                    {selected && (
-                      <Text style={styles.payBtnAmount}>R$ {selected.price.toFixed(2)}</Text>
+              {/* PIX e Mercado Pago são exclusivos do Brasil — usuários de outros
+                  países veem apenas o cartão internacional via Stripe abaixo. */}
+              {!isStripeOnly && (
+                <>
+                  {/* Botão PIX nativo */}
+                  <TouchableOpacity
+                    style={[styles.payBtn, styles.payBtnPix, !selected && styles.payBtnDisabled]}
+                    onPress={() => { if (selected) setPixModalVisible(true); }}
+                    disabled={!selected || loading}
+                    activeOpacity={0.85}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Text style={styles.payBtnIcon}>💚</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.payBtnLabel}>PIX</Text>
+                          <Text style={styles.payBtnSub}>Instantâneo · QR Code no app</Text>
+                        </View>
+                        {selected && (
+                          <Text style={styles.payBtnAmount}>{formatPrice(priceOf(selected), currency)}</Text>
+                        )}
+                      </>
                     )}
-                  </>
-                )}
-              </TouchableOpacity>
+                  </TouchableOpacity>
 
-              {/* Botão Cartão via Checkout Pro (Mercado Pago — Brasil) */}
-              <TouchableOpacity
-                style={[styles.payBtn, !selected && styles.payBtnDisabled]}
-                onPress={handleBuyMercadoPago}
-                disabled={!selected || loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Text style={styles.payBtnIcon}>💳</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.payBtnLabel}>Cartão de crédito</Text>
-                      <Text style={styles.payBtnSub}>via Mercado Pago · Brasil</Text>
-                    </View>
-                    {selected && (
-                      <Text style={styles.payBtnAmount}>R$ {selected.price.toFixed(2)}</Text>
+                  {/* Botão Cartão via Checkout Pro (Mercado Pago — Brasil) */}
+                  <TouchableOpacity
+                    style={[styles.payBtn, !selected && styles.payBtnDisabled]}
+                    onPress={handleBuyMercadoPago}
+                    disabled={!selected || loading}
+                    activeOpacity={0.85}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Text style={styles.payBtnIcon}>💳</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.payBtnLabel}>Cartão de crédito</Text>
+                          <Text style={styles.payBtnSub}>via Mercado Pago · Brasil</Text>
+                        </View>
+                        {selected && (
+                          <Text style={styles.payBtnAmount}>{formatPrice(priceOf(selected), currency)}</Text>
+                        )}
+                      </>
                     )}
-                  </>
-                )}
-              </TouchableOpacity>
+                  </TouchableOpacity>
+                </>
+              )}
 
               {/* Botão Cartão Internacional via Stripe */}
               <TouchableOpacity
@@ -440,7 +452,7 @@ export function BuyCreditsScreen({ visible, onClose, onPurchased }: Props) {
                       <Text style={styles.payBtnSub}>Visa, Mastercard, Amex · Stripe</Text>
                     </View>
                     {selected && (
-                      <Text style={styles.payBtnAmount}>R$ {selected.price.toFixed(2)}</Text>
+                      <Text style={styles.payBtnAmount}>{formatPrice(priceOf(selected), currency)}</Text>
                     )}
                   </>
                 )}

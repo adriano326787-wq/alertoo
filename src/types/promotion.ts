@@ -150,17 +150,21 @@ export type CreditPackageId = 'pkg_1' | 'pkg_5' | 'pkg_10' | 'pkg_20';
 export interface CreditPackage {
   id: CreditPackageId;
   credits: number;
-  price: number;           // BRL
+  price: number;           // BRL — Mercado Pago/Pix (Brasil)
+  priceUSD: number;        // USD — Stripe (fora do Brasil)
   label: string;
   highlight?: string;      // ex: "Mais popular"
   googleProductId: string; // ID no Google Play Billing
 }
 
+// priceUSD mantém a mesma proporção entre pacotes que o BRL (não é conversão
+// cambial exata — são preços "redondos" comuns em compra dentro de app).
 export const CREDIT_PACKAGES: CreditPackage[] = [
   {
     id: 'pkg_1',
     credits: 1,
     price: 4.99,
+    priceUSD: 0.99,
     label: '1 crédito',
     googleProductId: 'promo_credits_1',
   },
@@ -168,6 +172,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     id: 'pkg_5',
     credits: 5,
     price: 19.99,
+    priceUSD: 3.99,
     label: '5 créditos',
     googleProductId: 'promo_credits_5',
   },
@@ -175,6 +180,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     id: 'pkg_10',
     credits: 10,
     price: 34.99,
+    priceUSD: 6.99,
     label: '10 créditos',
     highlight: '⭐ Mais popular',
     googleProductId: 'promo_credits_10',
@@ -183,6 +189,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     id: 'pkg_20',
     credits: 20,
     price: 59.99,
+    priceUSD: 11.99,
     label: '20 créditos',
     highlight: '🔥 Melhor valor',
     googleProductId: 'promo_credits_20',

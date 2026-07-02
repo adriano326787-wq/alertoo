@@ -4,6 +4,8 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { readSecret, sanitizeString } from './utils/text';
+import { isStripeOnlyCountry } from './utils/currency';
+import { resolveLangForCountry, brazilOnlyMessage, type BrazilOnlyMethod } from './utils/i18nNotifications';
 
 // Reexportadas por compatibilidade — implementação pura e testável vive em
 // ./utils/text.ts (sem o initializeApp() abaixo, que dispara side-effect no import)
@@ -31,11 +33,12 @@ export const MAX_DONATION_BRL = 500;
 export const MAX_FCM_TOKEN_LEN = 300;
 
 // ─── Pacotes válidos (manter em sincronia com src/types/promotion.ts) ─────────
-export const CREDIT_PACKAGES: Record<string, { credits: number; price: number; label: string }> = {
-  pkg_1:  { credits: 1,  price: 4.99,  label: '1 credito' },
-  pkg_5:  { credits: 5,  price: 19.99, label: '5 creditos' },
-  pkg_10: { credits: 10, price: 34.99, label: '10 creditos' },
-  pkg_20: { credits: 20, price: 59.99, label: '20 creditos' },
+// priceUSD é usado pelo Stripe fora do Brasil — ver functions/src/utils/currency.ts
+export const CREDIT_PACKAGES: Record<string, { credits: number; price: number; priceUSD: number; label: string }> = {
+  pkg_1:  { credits: 1,  price: 4.99,  priceUSD: 0.99,  label: '1 credito' },
+  pkg_5:  { credits: 5,  price: 19.99, priceUSD: 3.99,  label: '5 creditos' },
+  pkg_10: { credits: 10, price: 34.99, priceUSD: 6.99,  label: '10 creditos' },
+  pkg_20: { credits: 20, price: 59.99, priceUSD: 11.99, label: '20 creditos' },
 };
 
 
@@ -53,6 +56,18 @@ export async function enforcePaymentCooldown(uid: string): Promise<void> {
     throw new HttpsError('resource-exhausted', 'Aguarde alguns segundos antes de tentar novamente.');
   }
   await userRef.set({ lastPaymentAttemptAt: Date.now() }, { merge: true });
+}
+
+// ─── Bloqueia métodos de pagamento exclusivos do Brasil (Mercado Pago/Pix) ─
+// Chamar ANTES de enforcePaymentCooldown — senão um usuário rejeitado por
+// país ainda "gasta" a janela de cooldown à toa, podendo atrapalhar sua
+// próxima tentativa legítima via Stripe.
+export async function assertBrazilOnly(uid: string, method: BrazilOnlyMethod): Promise<void> {
+  const userSnap = await db.collection('users').doc(uid).get();
+  const countryCode = userSnap.data()?.countryCode;
+  if (isStripeOnlyCountry(countryCode)) {
+    throw new HttpsError('failed-precondition', brazilOnlyMessage(resolveLangForCountry(countryCode), method));
+  }
 }
 
 // ─── App Check — verificação de origem ────────────────────────────────────

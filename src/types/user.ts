@@ -54,6 +54,8 @@ export interface UserProfile {
   longestStreak?: number;
   /** 'YYYY-MM-DD' (dia local do dispositivo na última ação) */
   lastActiveDate?: string;
+  /** ISO 3166-1 alpha-2 detectado via GPS — usado p/ moeda de cobrança e idioma de notificação */
+  countryCode?: string;
 }
 
 export const POINTS = {

@@ -515,11 +515,14 @@
     const stripe = Stripe(STRIPE_PK);
 
     // Mesmos pacotes do app (manter em sincronia com src/types/promotion.ts)
+    // priceUSD é só para EXIBIÇÃO antes do pagamento — o valor cobrado de
+    // fato vem sempre do servidor (createStripePaymentIntent resolve a
+    // moeda pelo countryCode salvo no Firestore, nunca confia no client).
     const PACKAGES = [
-      { id: 'pkg_1',  credits: 1,  price: 4.99 },
-      { id: 'pkg_5',  credits: 5,  price: 19.99 },
-      { id: 'pkg_10', credits: 10, price: 34.99 },
-      { id: 'pkg_20', credits: 20, price: 59.99 },
+      { id: 'pkg_1',  credits: 1,  price: 4.99,  priceUSD: 0.99 },
+      { id: 'pkg_5',  credits: 5,  price: 19.99, priceUSD: 3.99 },
+      { id: 'pkg_10', credits: 10, price: 34.99, priceUSD: 6.99 },
+      { id: 'pkg_20', credits: 20, price: 59.99, priceUSD: 11.99 },
     ];
     const RANKS = [
       { label: 'Iniciante',    emoji: '🌱', min: 0 },
@@ -1221,7 +1224,10 @@
     let payMethod = 'card';
     let pixPollInterval = null, pixCountdownInterval = null;
 
-    // Pix é um método de pagamento exclusivo do Brasil (Mercado Pago/Pix nacional)
+    // Pix é um método de pagamento exclusivo do Brasil (Mercado Pago/Pix nacional).
+    // Heurística client-side só decide O QUE MOSTRAR (grid de métodos, preço estimado);
+    // quem decide de fato o que é PERMITIDO é sempre o servidor (createPixPayment/
+    // createMPPreference rejeitam por countryCode salvo no Firestore, não por isBrazil()).
     function isBrazil() {
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
@@ -1231,13 +1237,24 @@
       } catch { return false; }
     }
 
+    // Preço estimado ANTES de criar o PaymentIntent — depois disso sempre exibimos
+    // o valor/moeda REAIS confirmados pelo servidor (ver startCardPayment), nunca
+    // esta estimativa. Mesmo padrão do StripePaymentModal.tsx do app.
+    function fmtPrice(amount, currency) {
+      return currency === 'USD'
+        ? `US$ ${amount.toFixed(2)}`
+        : `R$ ${amount.toFixed(2).replace('.', ',')}`;
+    }
+
     function renderPackages() {
       const grid = $('pkgGrid');
       grid.innerHTML = '';
+      const brl = isBrazil();
       PACKAGES.forEach((p) => {
         const d = document.createElement('div');
         d.className = 'pkg';
-        d.innerHTML = `<b>${p.credits} 💎</b><div class="muted">${p.credits === 1 ? 'crédito' : 'créditos'}</div><div class="price">R$ ${p.price.toFixed(2).replace('.', ',')}</div>`;
+        const priceLabel = fmtPrice(brl ? p.price : p.priceUSD, brl ? 'BRL' : 'USD');
+        d.innerHTML = `<b>${p.credits} 💎</b><div class="muted">${p.credits === 1 ? 'crédito' : 'créditos'}</div><div class="price">${priceLabel}</div>`;
         d.onclick = () => selectPackage(p, d);
         grid.appendChild(d);
       });
@@ -1291,7 +1308,9 @@
         const payEl = elements.create('payment');
         payEl.mount('#payment-element');
         $('btnPay').style.display = 'block';
-        $('btnPay').textContent = `Pagar R$ ${pkg.price.toFixed(2).replace('.', ',')}`;
+        // Usa o valor/moeda REAIS confirmados pelo servidor (data.amount/data.currency),
+        // não pkg.price local — evita mostrar "Pagar R$ X" pra quem vai ser cobrado em USD.
+        $('btnPay').textContent = `Pagar ${fmtPrice(data.amount, data.currency)}`;
       } catch (e) {
         $('payment-element').innerHTML = '';
         msg.className = 'msg err';
@@ -1421,10 +1440,12 @@
           .forEach((p) => {
             const row = document.createElement('div');
             row.className = 'event-item';
+            // Compras antigas (antes da expansão internacional) não têm campo
+            // 'currency' salvo — nesse caso eram sempre BRL (Pix/MP/Stripe-BRL).
             row.innerHTML = `
               <div class="event-emoji">💎</div>
               <div class="event-info">
-                <b>${p.credits} crédito(s) — R$ ${(p.price ?? 0).toFixed(2).replace('.', ',')}</b>
+                <b>${p.credits} crédito(s) — ${fmtPrice(p.price ?? 0, p.currency ?? 'BRL')}</b>
                 <small>${new Date(p.createdAt).toLocaleDateString('pt-BR')} · ${p.paymentMethod}</small>
               </div>`;
             el.appendChild(row);

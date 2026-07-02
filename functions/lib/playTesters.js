@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.onBetaTesterAdded = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const shared_1 = require("./shared");
+const i18nNotifications_1 = require("./utils/i18nNotifications");
 /**
  * A Play Developer API (androidpublisher.edits.testers) NÃO suporta mais
  * listas de e-mail individuais — só Google Groups (que exigiria um domínio
@@ -16,16 +17,17 @@ const shared_1 = require("./shared");
  * precisa esperar nem perguntar nada, o link já chega.
  */
 const OPT_IN_URL = 'https://play.google.com/apps/testing/com.alertoo.app';
-function buildInviteEmailHtml() {
+function buildInviteEmailHtml(strings) {
+    // \n do body vira parágrafos — betaInviteEmailStrings usa \n\n como separador
+    const bodyHtml = strings.body.split('\n\n').map((p) => `<p>${p}</p>`).join('');
     return `
     <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2 style="color:#FF5722;">🧪 Bem-vindo ao programa de testes do Alertoo!</h2>
-      <p>Recebemos seu cadastro. Você terá acesso às novidades antes de todo mundo.</p>
-      <p><strong>Próximo passo:</strong> clique no botão abaixo pra aceitar o convite de testes do Google Play. Pode levar algumas horas até o seu e-mail ser liberado na nossa lista — se o link não funcionar de primeira, tente novamente mais tarde.</p>
+      <h2 style="color:#FF5722;">${strings.heading}</h2>
+      ${bodyHtml}
       <p style="text-align:center; margin: 32px 0;">
-        <a href="${OPT_IN_URL}" style="background:#FF5722;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;">Entrar no programa de testes</a>
+        <a href="${OPT_IN_URL}" style="background:#FF5722;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;">${strings.button}</a>
       </p>
-      <p style="color:#888;font-size:13px;">Se você não pediu isso, pode ignorar este e-mail.</p>
+      <p style="color:#888;font-size:13px;">${strings.footer}</p>
     </div>`;
 }
 exports.onBetaTesterAdded = (0, firestore_1.onDocumentCreated)({ document: 'beta_testers/{entryId}', region: 'us-central1', secrets: [shared_1.RESEND_API_KEY] }, async (event) => {
@@ -33,6 +35,8 @@ exports.onBetaTesterAdded = (0, firestore_1.onDocumentCreated)({ document: 'beta
     const email = snap?.data()?.email;
     if (!snap || !email)
         return;
+    const lang = (0, i18nNotifications_1.normalizeLangCode)(snap.data()?.lang);
+    const strings = (0, i18nNotifications_1.betaInviteEmailStrings)(lang);
     try {
         const resp = await fetch('https://api.resend.com/emails', {
             method: 'POST',
@@ -43,8 +47,8 @@ exports.onBetaTesterAdded = (0, firestore_1.onDocumentCreated)({ document: 'beta
             body: JSON.stringify({
                 from: 'Alertoo <noreply@alertoo.com.br>',
                 to: [email],
-                subject: '🧪 Você entrou no programa de testes do Alertoo!',
-                html: buildInviteEmailHtml(),
+                subject: strings.subject,
+                html: buildInviteEmailHtml(strings),
             }),
         });
         if (!resp.ok) {

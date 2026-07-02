@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CREDIT_PACKAGES = exports.MAX_FCM_TOKEN_LEN = exports.MAX_DONATION_BRL = exports.PAYMENT_ATTEMPT_COOLDOWN_MS = exports.VERIFICATION_EMAIL_COOLDOWN_MS = exports.OPENWEATHER_API_KEY = exports.RESEND_API_KEY = exports.ALERTOO_PIX_KEY_SECRET = exports.STRIPE_SECRET_KEY = exports.MP_ACCESS_TOKEN = exports.visionClient = exports.db = exports.sanitizeString = exports.readSecret = void 0;
 exports.assertAuth = assertAuth;
 exports.enforcePaymentCooldown = enforcePaymentCooldown;
+exports.assertBrazilOnly = assertBrazilOnly;
 exports.checkAppToken = checkAppToken;
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
@@ -12,6 +13,8 @@ const vision_1 = require("@google-cloud/vision");
 const text_1 = require("./utils/text");
 Object.defineProperty(exports, "readSecret", { enumerable: true, get: function () { return text_1.readSecret; } });
 Object.defineProperty(exports, "sanitizeString", { enumerable: true, get: function () { return text_1.sanitizeString; } });
+const currency_1 = require("./utils/currency");
+const i18nNotifications_1 = require("./utils/i18nNotifications");
 (0, app_1.initializeApp)();
 exports.db = (0, firestore_1.getFirestore)();
 exports.visionClient = new vision_1.ImageAnnotatorClient();
@@ -29,11 +32,12 @@ exports.PAYMENT_ATTEMPT_COOLDOWN_MS = 10 * 1000;
 exports.MAX_DONATION_BRL = 500;
 exports.MAX_FCM_TOKEN_LEN = 300;
 // ─── Pacotes válidos (manter em sincronia com src/types/promotion.ts) ─────────
+// priceUSD é usado pelo Stripe fora do Brasil — ver functions/src/utils/currency.ts
 exports.CREDIT_PACKAGES = {
-    pkg_1: { credits: 1, price: 4.99, label: '1 credito' },
-    pkg_5: { credits: 5, price: 19.99, label: '5 creditos' },
-    pkg_10: { credits: 10, price: 34.99, label: '10 creditos' },
-    pkg_20: { credits: 20, price: 59.99, label: '20 creditos' },
+    pkg_1: { credits: 1, price: 4.99, priceUSD: 0.99, label: '1 credito' },
+    pkg_5: { credits: 5, price: 19.99, priceUSD: 3.99, label: '5 creditos' },
+    pkg_10: { credits: 10, price: 34.99, priceUSD: 6.99, label: '10 creditos' },
+    pkg_20: { credits: 20, price: 59.99, priceUSD: 11.99, label: '20 creditos' },
 };
 // ─── Validação de UID Firebase ─────────────────────────────────────────────
 function assertAuth(uid) {
@@ -49,6 +53,17 @@ async function enforcePaymentCooldown(uid) {
         throw new https_1.HttpsError('resource-exhausted', 'Aguarde alguns segundos antes de tentar novamente.');
     }
     await userRef.set({ lastPaymentAttemptAt: Date.now() }, { merge: true });
+}
+// ─── Bloqueia métodos de pagamento exclusivos do Brasil (Mercado Pago/Pix) ─
+// Chamar ANTES de enforcePaymentCooldown — senão um usuário rejeitado por
+// país ainda "gasta" a janela de cooldown à toa, podendo atrapalhar sua
+// próxima tentativa legítima via Stripe.
+async function assertBrazilOnly(uid, method) {
+    const userSnap = await exports.db.collection('users').doc(uid).get();
+    const countryCode = userSnap.data()?.countryCode;
+    if ((0, currency_1.isStripeOnlyCountry)(countryCode)) {
+        throw new https_1.HttpsError('failed-precondition', (0, i18nNotifications_1.brazilOnlyMessage)((0, i18nNotifications_1.resolveLangForCountry)(countryCode), method));
+    }
 }
 // ─── App Check — verificação de origem ────────────────────────────────────
 function checkAppToken(request, fnName) {

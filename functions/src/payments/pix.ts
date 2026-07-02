@@ -8,6 +8,7 @@ import {
   readSecret,
   sanitizeString,
   assertAuth,
+  assertBrazilOnly,
   enforcePaymentCooldown,
   checkAppToken,
 } from '../shared';
@@ -15,12 +16,14 @@ import {
 const PIX_EXPIRY_MINUTES = 30;
 
 // ─── Criar pagamento PIX via Mercado Pago ─────────────────────────────────────
+// Pix é um sistema de pagamento exclusivo do Brasil.
 export const createPixPayment = onCall(
   { secrets: [MP_ACCESS_TOKEN, ALERTOO_PIX_KEY_SECRET], region: 'us-central1' },
   async (request) => {
     checkAppToken(request, 'createPixPayment');
     const uid = request.auth?.uid;
     assertAuth(uid);
+    await assertBrazilOnly(uid, 'pix');
     await enforcePaymentCooldown(uid);
 
     const packageId = sanitizeString(request.data?.packageId, 20);

@@ -14,6 +14,19 @@ import {
   assertAuth,
   checkAppToken,
 } from './shared';
+import {
+  resolveLangForCountry,
+  categoryLabel,
+  NOTIF_STATIC,
+  entertainmentCommentTitle,
+  entertainmentCommentBody,
+  roadEventConfirmedTitle,
+  roadEventConfirmedBody,
+  radarConfirmedTitle,
+  radarConfirmedBody,
+  verificationEmailStrings,
+  type NotifLang,
+} from './utils/i18nNotifications';
 
 // ─── E-mail de verificacao via Resend ────────────────────────────────────────
 export const sendVerificationEmail = onCall(
@@ -30,10 +43,14 @@ export const sendVerificationEmail = onCall(
 
     const userRef = db.collection('users').doc(uid);
     const userSnap = await userRef.get();
-    const lastSentAt = userSnap.data()?.lastVerificationEmailAt as number | undefined;
+    const userData = userSnap.data();
+    const lastSentAt = userData?.lastVerificationEmailAt as number | undefined;
     if (lastSentAt && Date.now() - lastSentAt < VERIFICATION_EMAIL_COOLDOWN_MS) {
       throw new HttpsError('resource-exhausted', 'Aguarde antes de reenviar o e-mail.');
     }
+
+    const lang = resolveLangForCountry(userData?.countryCode);
+    const strings = verificationEmailStrings(lang, userRecord.displayName ?? '');
 
     const link = await getAuth().generateEmailVerificationLink(email, {
       url: 'https://alertoo.com.br/',
@@ -48,8 +65,8 @@ export const sendVerificationEmail = onCall(
       body: JSON.stringify({
         from: 'Alertoo <noreply@alertoo.com.br>',
         to: [email],
-        subject: 'Confirme seu e-mail - Alertoo',
-        html: buildVerificationEmailHtml(userRecord.displayName ?? '', link),
+        subject: strings.subject,
+        html: buildVerificationEmailHtml(strings, link),
       }),
     });
 
@@ -65,26 +82,28 @@ export const sendVerificationEmail = onCall(
   },
 );
 
-function buildVerificationEmailHtml(displayName: string, link: string): string {
-  const greeting = displayName ? `Ola, ${displayName}!` : 'Ola!';
+function buildVerificationEmailHtml(
+  strings: ReturnType<typeof verificationEmailStrings>,
+  link: string,
+): string {
   return `
   <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background:#fff;">
     <div style="text-align:center; margin-bottom: 24px;">
       <span style="display:inline-block; width:56px; height:56px; line-height:56px; border-radius:50%; background:#FFF0E8; font-size:28px;">&#128276;</span>
       <h1 style="font-size:22px; font-weight:800; color:#1a1a1a; margin: 12px 0 0;">Alertoo</h1>
     </div>
-    <h2 style="font-size:20px; color:#1a1a1a;">${greeting}</h2>
+    <h2 style="font-size:20px; color:#1a1a1a;">${strings.greeting}</h2>
     <p style="font-size:15px; color:#475569; line-height:1.6;">
-      Confirme seu e-mail para ativar sua conta e comecar a receber alertas em tempo real da sua regiao.
+      ${strings.body}
     </p>
     <div style="text-align:center; margin: 32px 0;">
       <a href="${link}" style="background:#FF5722; color:#fff; text-decoration:none; font-weight:700; font-size:16px; padding:14px 32px; border-radius:12px; display:inline-block;">
-        Confirmar e-mail
+        ${strings.button}
       </a>
     </div>
     <p style="font-size:12px; color:#94A3B8; line-height:1.6;">
-      Se voce nao criou uma conta no Alertoo, pode ignorar este e-mail.<br>
-      Se o botao nao funcionar, copie e cole este link no navegador:<br>
+      ${strings.footerIgnore}<br>
+      ${strings.footerCopyLink}<br>
       <a href="${link}" style="color:#FF5722; word-break:break-all;">${link}</a>
     </p>
   </div>`;
@@ -292,6 +311,38 @@ function randomBlitzTargetTime(): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+/**
+ * Envia notificação em massa respeitando o idioma de cada usuário — um
+ * multicast do FCM manda o MESMO título/corpo pra todos os tokens, então
+ * pra localizar é preciso agrupar por idioma primeiro e mandar N multicasts
+ * (um por idioma presente no lote), em vez de 1 multicast global em português.
+ */
+async function sendMulticastPerLang(
+  tokensByLang: Partial<Record<NotifLang, string[]>>,
+  getNotification: (lang: NotifLang) => { title: string; body: string },
+  data: Record<string, string>,
+  channelId: string,
+  logLabel: string,
+): Promise<number> {
+  let sent = 0;
+  const BATCH = 500;
+  for (const [lang, tokens] of Object.entries(tokensByLang) as [NotifLang, string[]][]) {
+    if (!tokens || tokens.length === 0) continue;
+    const notification = getNotification(lang);
+    for (let i = 0; i < tokens.length; i += BATCH) {
+      const chunk = tokens.slice(i, i + BATCH);
+      await getMessaging().sendEachForMulticast({
+        tokens: chunk,
+        notification,
+        data,
+        android: { priority: 'high', notification: { channelId } },
+      }).catch((e) => console.error(`[FCM] ${logLabel} sendEachForMulticast error:`, e));
+      sent += chunk.length;
+    }
+  }
+  return sent;
+}
+
 export const blitzReminderScheduler = onSchedule(
   { schedule: '*/15 20-21 * * *', region: 'us-central1', timeZone: 'America/Sao_Paulo' },
   async () => {
@@ -309,7 +360,8 @@ export const blitzReminderScheduler = onSchedule(
 
     if (campaign.sentDate === today || now < targetTime) return;
 
-    const tokens: string[] = [];
+    const tokensByLang: Partial<Record<NotifLang, string[]>> = {};
+    let totalTokens = 0;
     let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | undefined;
     for (;;) {
       let q = db.collection('users')
@@ -322,30 +374,25 @@ export const blitzReminderScheduler = onSchedule(
         const data = d.data();
         if (data.notifPrefs?.engagementReminders === false) return;
         const fcmTokens = data.fcmTokens as string[] | undefined;
-        if (Array.isArray(fcmTokens)) tokens.push(...fcmTokens);
+        if (!Array.isArray(fcmTokens) || fcmTokens.length === 0) return;
+        const lang = resolveLangForCountry(data.countryCode);
+        (tokensByLang[lang] ??= []).push(...fcmTokens);
+        totalTokens += fcmTokens.length;
       });
       lastDoc = snap.docs[snap.docs.length - 1];
       if (snap.size < 500) break;
     }
 
-    if (tokens.length > 0) {
-      const BATCH = 500;
-      for (let i = 0; i < tokens.length; i += BATCH) {
-        const chunk = tokens.slice(i, i + BATCH);
-        await getMessaging().sendEachForMulticast({
-          tokens: chunk,
-          notification: {
-            title: '🚔 Viu alguma blitz hoje?',
-            body: 'Ajude outros motoristas — reporte blitz ou lei seca na sua região.',
-          },
-          data: { action: 'open_add_road_event', category: 'drunkcheck' },
-          android: { priority: 'high', notification: { channelId: 'default' } },
-        }).catch((e) => console.error('[FCM] blitzReminder sendEachForMulticast error:', e));
-      }
-    }
+    await sendMulticastPerLang(
+      tokensByLang,
+      (lang) => NOTIF_STATIC.blitzReminder[lang],
+      { action: 'open_add_road_event', category: 'drunkcheck' },
+      'default',
+      'blitzReminder',
+    );
 
     await campaignRef.set({ sentDate: today }, { merge: true });
-    console.log(`[blitzReminder] broadcast enviado para ${tokens.length} token(s) em ${today} ${now}.`);
+    console.log(`[blitzReminder] broadcast enviado para ${totalTokens} token(s) em ${today} ${now}.`);
   },
 );
 
@@ -370,28 +417,24 @@ export const streakReminderScheduler = onSchedule(
       return;
     }
 
-    let sent = 0;
-    const BATCH = 500;
     const docs = snap.docs.filter((d) => d.data().notifPrefs?.engagementReminders !== false);
 
-    for (let i = 0; i < docs.length; i += BATCH) {
-      const chunk = docs.slice(i, i + BATCH);
-      const tokens = chunk.flatMap((d) => (d.data().fcmTokens as string[] | undefined) ?? []);
-      if (tokens.length === 0) continue;
+    const tokensByLang: Partial<Record<NotifLang, string[]>> = {};
+    docs.forEach((d) => {
+      const data = d.data();
+      const fcmTokens = data.fcmTokens as string[] | undefined;
+      if (!Array.isArray(fcmTokens) || fcmTokens.length === 0) return;
+      const lang = resolveLangForCountry(data.countryCode);
+      (tokensByLang[lang] ??= []).push(...fcmTokens);
+    });
 
-      // Mensagem varia pelo streak médio do lote seria mais preciso por usuário,
-      // mas FCM multicast manda o mesmo corpo pra todos — generaliza pra "seu streak".
-      await getMessaging().sendEachForMulticast({
-        tokens,
-        notification: {
-          title: '🔥 Seu streak quebra à meia-noite!',
-          body: 'Faça qualquer report ou confirmação hoje pra manter sua sequência de dias ativos.',
-        },
-        data: { action: 'open_map' },
-        android: { priority: 'high', notification: { channelId: 'default' } },
-      }).catch((e) => console.error('[FCM] streakReminder sendEachForMulticast error:', e));
-      sent += tokens.length;
-    }
+    const sent = await sendMulticastPerLang(
+      tokensByLang,
+      (lang) => NOTIF_STATIC.streakReminder[lang],
+      { action: 'open_map' },
+      'default',
+      'streakReminder',
+    );
 
     console.log(`[streakReminder] ${docs.length} usuário(s) em risco, ${sent} token(s) notificados.`);
   },
@@ -468,11 +511,13 @@ export const onEntertainmentCommentCreated = onDocumentCreated(
     const fcmTokens = ownerData.fcmTokens as string[] | undefined;
     if (!Array.isArray(fcmTokens) || fcmTokens.length === 0) return;
 
+    const lang = resolveLangForCountry(ownerData.countryCode);
+
     await getMessaging().sendEachForMulticast({
       tokens: fcmTokens,
       notification: {
-        title: '💬 Novo comentário no seu evento',
-        body: `${data.displayName ?? 'Alguém'} comentou em "${eventData.title}".`,
+        title: entertainmentCommentTitle(lang),
+        body: entertainmentCommentBody(lang, data.displayName, eventData.title),
       },
       data: { eventId, eventType: 'entertainment' },
       android: { priority: 'high', notification: { channelId: 'default' } },
@@ -485,18 +530,6 @@ export const onEntertainmentCommentCreated = onDocumentCreated(
 // chamado por quem confirma em eventsStore.ts/radarsStore.ts) mas nunca fica
 // sabendo em tempo real — só descobre se for checar o perfil. Isso fecha
 // esse loop com uma notificação no momento da confirmação.
-
-const ROAD_CATEGORY_LABELS: Record<string, string> = {
-  drunkcheck: 'Lei Seca',
-  policeblitz: 'blitz',
-  accident: 'acidente',
-  roadwork: 'obras',
-  flood: 'alagamento',
-  closure: 'interdição',
-  traffic: 'congestionamento',
-  hazard: 'perigo na via',
-  radar: 'radar',
-};
 
 export const onRoadEventConfirmed = onDocumentWritten(
   { document: 'events/{eventId}', region: 'us-central1' },
@@ -519,15 +552,14 @@ export const onRoadEventConfirmed = onDocumentWritten(
     const fcmTokens = ownerData.fcmTokens as string[] | undefined;
     if (!Array.isArray(fcmTokens) || fcmTokens.length === 0) return;
 
-    const categoryLabel = ROAD_CATEGORY_LABELS[after.category as string] ?? 'alerta';
+    const lang = resolveLangForCountry(ownerData.countryCode);
+    const catLabel = categoryLabel(lang, after.category as string);
 
     await getMessaging().sendEachForMulticast({
       tokens: fcmTokens,
       notification: {
-        title: '✅ Alguém confirmou seu alerta',
-        body: newConfirmations === 1
-          ? `Seu report de ${categoryLabel} acabou de ser confirmado por outro motorista.`
-          : `Seu report de ${categoryLabel} já foi confirmado ${newConfirmations} vezes — você está ajudando muita gente!`,
+        title: roadEventConfirmedTitle(lang),
+        body: roadEventConfirmedBody(lang, catLabel, newConfirmations),
       },
       data: { eventId: event.params.eventId, eventType: 'road' },
       android: { priority: 'high', notification: { channelId: 'default' } },
@@ -556,13 +588,13 @@ export const onRadarConfirmed = onDocumentWritten(
     const fcmTokens = ownerData.fcmTokens as string[] | undefined;
     if (!Array.isArray(fcmTokens) || fcmTokens.length === 0) return;
 
+    const lang = resolveLangForCountry(ownerData.countryCode);
+
     await getMessaging().sendEachForMulticast({
       tokens: fcmTokens,
       notification: {
-        title: '✅ Alguém confirmou seu radar',
-        body: newConfirmations === 1
-          ? 'Outro motorista confirmou que seu radar reportado ainda está lá.'
-          : `Seu radar já foi confirmado ${newConfirmations} vezes — você está ajudando muita gente!`,
+        title: radarConfirmedTitle(lang),
+        body: radarConfirmedBody(lang, newConfirmations),
       },
       data: { radarId: event.params.radarId, eventType: 'radar' },
       android: { priority: 'high', notification: { channelId: 'default' } },

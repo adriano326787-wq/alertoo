@@ -2,7 +2,7 @@
 module.exports = {
   name: 'Alertoo',
   slug: 'road-events',
-  version: '1.1.19',
+  version: '1.2.0',
   scheme: 'alertoo',
   orientation: 'default',
   icon: './assets/icon.png',
@@ -64,7 +64,7 @@ module.exports = {
   },
   android: {
     package: 'com.alertoo.app',
-    versionCode: 41,
+    versionCode: 42,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#FF5722',

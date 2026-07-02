@@ -8,6 +8,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const stripe_1 = __importDefault(require("stripe"));
 const shared_1 = require("../shared");
+const currency_1 = require("../utils/currency");
 // ─── Stripe: Criar PaymentIntent para cartão internacional ───────────────────
 exports.createStripePaymentIntent = (0, https_1.onCall)({ secrets: [shared_1.STRIPE_SECRET_KEY], region: 'us-central1' }, async (request) => {
     (0, shared_1.checkAppToken)(request, 'createStripePaymentIntent');
@@ -18,9 +19,14 @@ exports.createStripePaymentIntent = (0, https_1.onCall)({ secrets: [shared_1.STR
     const pkg = shared_1.CREDIT_PACKAGES[packageId];
     if (!pkg)
         throw new https_1.HttpsError('invalid-argument', 'Pacote invalido.');
+    // Moeda vem do countryCode salvo no perfil do usuário (servidor), nunca do
+    // cliente — evita que alguém manipule o request pra pagar em USD sendo do Brasil.
+    const userSnap = await shared_1.db.collection('users').doc(uid).get();
+    const currency = (0, currency_1.resolveCurrencyForCountry)(userSnap.data()?.countryCode);
+    const price = currency === 'USD' ? pkg.priceUSD : pkg.price;
     const stripe = new stripe_1.default((0, shared_1.readSecret)(shared_1.STRIPE_SECRET_KEY), { apiVersion: '2026-04-22.dahlia' });
     const externalReference = `${uid}|${packageId}|${Date.now()}`;
-    const amountCents = Math.round(pkg.price * 100);
+    const amountCents = Math.round(price * 100);
     let customerId;
     try {
         const existing = await stripe.customers.search({
@@ -38,7 +44,7 @@ exports.createStripePaymentIntent = (0, https_1.onCall)({ secrets: [shared_1.STR
     try {
         paymentIntent = await stripe.paymentIntents.create({
             amount: amountCents,
-            currency: 'brl',
+            currency: currency.toLowerCase(),
             customer: customerId,
             metadata: {
                 firebaseUid: uid,
@@ -61,7 +67,8 @@ exports.createStripePaymentIntent = (0, https_1.onCall)({ secrets: [shared_1.STR
         externalReference,
         packageId,
         credits: pkg.credits,
-        price: pkg.price,
+        price,
+        currency,
         paymentMethod: 'stripe',
         status: 'pending',
         createdAt: Date.now(),
@@ -69,8 +76,8 @@ exports.createStripePaymentIntent = (0, https_1.onCall)({ secrets: [shared_1.STR
     return {
         paymentIntentId: paymentIntent.id,
         clientSecret: paymentIntent.client_secret,
-        amount: pkg.price,
-        currency: 'BRL',
+        amount: price,
+        currency,
     };
 });
 // ─── Stripe: Verificar e creditar após pagamento ──────────────────────────────
@@ -113,7 +120,11 @@ exports.verifyStripePayment = (0, https_1.onCall)({ secrets: [shared_1.STRIPE_SE
             userId: uid,
             packageId: pkgId,
             credits: pkg.credits,
-            price: pkg.price,
+            // Usa o valor/moeda REAIS cobrados pelo Stripe (pi.amount/pi.currency),
+            // não re-deriva de CREDIT_PACKAGES — evita divergência se o preço mudar
+            // entre a criação e a confirmação do pagamento.
+            price: pi.amount / 100,
+            currency: pi.currency.toUpperCase(),
             paymentMethod: 'stripe',
             paymentRef,
             createdAt: Date.now(),

@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useT } from '../hooks/useT';
 import { createStripePaymentIntentCloud, verifyStripePaymentCloud } from '../services/promotionService';
 import { CreditPackage } from '../types/promotion';
+import { useAppStore } from '../store/appStore';
+import { resolveCurrencyForCountry, formatPrice, type SupportedCurrency } from '../utils/currency';
 
 interface Props {
   visible: boolean;
@@ -34,6 +36,13 @@ export function StripePaymentModal({ visible, pkg, onClose, onApproved }: Props)
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'idle' | 'ready' | 'verifying'>('idle');
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  // Preço exibido ANTES da criação do PaymentIntent — estimativa local pelo
+  // país detectado. Depois de criar o PaymentIntent, usamos o valor/moeda
+  // REAIS confirmados pelo servidor (fonte da verdade — nunca diverge do que
+  // será cobrado de fato).
+  const userCountryCode = useAppStore((s) => s.userCountryCode);
+  const localCurrency = resolveCurrencyForCountry(userCountryCode);
+  const [confirmedPrice, setConfirmedPrice] = useState<{ amount: number; currency: SupportedCurrency } | null>(null);
 
   // Inicia quando o modal abre com um pacote selecionado
   async function handleOpen() {
@@ -41,11 +50,13 @@ export function StripePaymentModal({ visible, pkg, onClose, onApproved }: Props)
     setLoading(true);
     setStep('idle');
     setPaymentIntentId(null);
+    setConfirmedPrice(null);
 
     try {
       // 1. Cria PaymentIntent no backend
       const { clientSecret, paymentIntentId: pid, amount, currency } = await createStripePaymentIntentCloud(pkg.id);
       setPaymentIntentId(pid);
+      setConfirmedPrice({ amount, currency: currency as SupportedCurrency });
 
       // 2. Inicializa o Payment Sheet do Stripe
       const { error: initError } = await initPaymentSheet({
@@ -121,7 +132,11 @@ export function StripePaymentModal({ visible, pkg, onClose, onApproved }: Props)
 
           {pkg && (
             <Text style={styles.subtitle}>
-              {pkg.credits} crédito{pkg.credits !== 1 ? 's' : ''} · <Text style={styles.price}>R$ {pkg.price.toFixed(2)}</Text>
+              {pkg.credits} crédito{pkg.credits !== 1 ? 's' : ''} · <Text style={styles.price}>
+                {confirmedPrice
+                  ? formatPrice(confirmedPrice.amount, confirmedPrice.currency)
+                  : formatPrice(localCurrency === 'USD' ? pkg.priceUSD : pkg.price, localCurrency)}
+              </Text>
             </Text>
           )}
 
@@ -159,7 +174,11 @@ export function StripePaymentModal({ visible, pkg, onClose, onApproved }: Props)
                       <Text style={styles.payBtnLabel}>Pagar com cartão</Text>
                       <Text style={styles.payBtnSub}>Powered by Stripe</Text>
                     </View>
-                    {pkg && <Text style={styles.payBtnAmount}>R$ {pkg.price.toFixed(2)}</Text>}
+                    {pkg && (
+                      <Text style={styles.payBtnAmount}>
+                        {formatPrice(localCurrency === 'USD' ? pkg.priceUSD : pkg.price, localCurrency)}
+                      </Text>
+                    )}
                   </>
                 )}
               </TouchableOpacity>

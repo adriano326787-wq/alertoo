@@ -10,10 +10,15 @@ const firestore_1 = require("firebase-admin/firestore");
 const stripe_1 = __importDefault(require("stripe"));
 const shared_1 = require("../shared");
 // ─── Criar preferência de pagamento MP (Cartão via Checkout Pro) ──────────────
+// Mercado Pago só opera no Brasil — usuários de outros países (AR/CL/CO/PE/UY)
+// devem usar Stripe (createStripePaymentIntent).
 exports.createMPPreference = (0, https_1.onCall)({ secrets: [shared_1.MP_ACCESS_TOKEN], region: 'us-central1' }, async (request) => {
     (0, shared_1.checkAppToken)(request, 'createMPPreference');
     const uid = request.auth?.uid;
     (0, shared_1.assertAuth)(uid);
+    // Checa país ANTES do cooldown — rejeitado por país não deve "gastar"
+    // a janela de cooldown e atrapalhar a próxima tentativa via Stripe.
+    await (0, shared_1.assertBrazilOnly)(uid, 'mercadopago');
     await (0, shared_1.enforcePaymentCooldown)(uid);
     const packageId = (0, shared_1.sanitizeString)(request.data?.packageId, 20);
     const pkg = shared_1.CREDIT_PACKAGES[packageId];
@@ -145,10 +150,13 @@ exports.verifyMPPayment = (0, https_1.onCall)({ secrets: [shared_1.MP_ACCESS_TOK
     return { status: 'rejected' };
 });
 // ─── Criar preferência de doação ─────────────────────────────────────────────
+// Doações via Mercado Pago também são Brasil-only (não há equivalente Stripe
+// pra doação livre ainda — fora do escopo desta fase de expansão).
 exports.createDonationPreference = (0, https_1.onCall)({ secrets: [shared_1.MP_ACCESS_TOKEN], region: 'us-central1' }, async (request) => {
     (0, shared_1.checkAppToken)(request, 'createDonationPreference');
     const uid = request.auth?.uid;
     (0, shared_1.assertAuth)(uid);
+    await (0, shared_1.assertBrazilOnly)(uid, 'donation');
     await (0, shared_1.enforcePaymentCooldown)(uid);
     const amount = request.data?.amount;
     if (!amount || typeof amount !== 'number' || amount <= 0) {

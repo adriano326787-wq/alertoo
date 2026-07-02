@@ -10,17 +10,23 @@ import {
   readSecret,
   sanitizeString,
   assertAuth,
+  assertBrazilOnly,
   enforcePaymentCooldown,
   checkAppToken,
 } from '../shared';
 
 // ─── Criar preferência de pagamento MP (Cartão via Checkout Pro) ──────────────
+// Mercado Pago só opera no Brasil — usuários de outros países (AR/CL/CO/PE/UY)
+// devem usar Stripe (createStripePaymentIntent).
 export const createMPPreference = onCall(
   { secrets: [MP_ACCESS_TOKEN], region: 'us-central1' },
   async (request) => {
     checkAppToken(request, 'createMPPreference');
     const uid = request.auth?.uid;
     assertAuth(uid);
+    // Checa país ANTES do cooldown — rejeitado por país não deve "gastar"
+    // a janela de cooldown e atrapalhar a próxima tentativa via Stripe.
+    await assertBrazilOnly(uid, 'mercadopago');
     await enforcePaymentCooldown(uid);
 
     const packageId = sanitizeString(request.data?.packageId, 20);
@@ -174,12 +180,15 @@ export const verifyMPPayment = onCall(
 );
 
 // ─── Criar preferência de doação ─────────────────────────────────────────────
+// Doações via Mercado Pago também são Brasil-only (não há equivalente Stripe
+// pra doação livre ainda — fora do escopo desta fase de expansão).
 export const createDonationPreference = onCall(
   { secrets: [MP_ACCESS_TOKEN], region: 'us-central1' },
   async (request) => {
     checkAppToken(request, 'createDonationPreference');
     const uid = request.auth?.uid;
     assertAuth(uid);
+    await assertBrazilOnly(uid, 'donation');
     await enforcePaymentCooldown(uid);
 
     const amount = request.data?.amount as number;

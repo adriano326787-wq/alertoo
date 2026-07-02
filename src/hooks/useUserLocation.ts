@@ -15,6 +15,8 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resolveRegion } from '../utils/brazilGeo';
 import { useAppStore } from '../store/appStore';
+import { getCurrentUserId } from '../services/authService';
+import { persistUserCountry } from '../services/userService';
 
 const STATE_STORAGE_KEY = '@alertoo_stateUF';
 const COUNTRY_STORAGE_KEY = '@alertoo_countryCode';
@@ -84,6 +86,8 @@ export function useUserLocation() {
         if (countryCode) {
           setUserCountryCode(countryCode);
           await AsyncStorage.setItem(COUNTRY_STORAGE_KEY, countryCode).catch(() => {});
+          const uid = getCurrentUserId();
+          if (uid !== 'anonymous') persistUserCountry(uid, countryCode).catch(() => {});
         }
         if (stateUF) {
           setUserStateUF(stateUF);
